@@ -1,0 +1,10 @@
+# Compiled binaries
+*.hex
+*.elf
+*.bin
+
+# Arduino build directory
+build/
+
+# Personal configuration
+.vscode/
