@@ -58,6 +58,29 @@ void setupMQTT() {
   Serial.print("Using MQTT client ID: ");
   Serial.println(mqttClientId);
 
+  // If mqttTopicPrefix is still the default, append chip ID to make it unique
+  // This prevents conflicts when multiple controllers are on the same network
+  if (String(mqttTopicPrefix) == String(DEFAULT_MQTT_TOPIC_PREFIX) ||
+      String(mqttTopicPrefix).indexOf("_") == -1) {  // No underscore means no chip ID appended yet
+
+    uint64_t chipId = ESP.getEfuseMac();
+    String chipIdStr = String((uint32_t)(chipId >> 32), HEX) + String((uint32_t)chipId, HEX);
+
+    String uniqueTopicPrefix = String(mqttTopicPrefix) + "_" + chipIdStr;
+    if (uniqueTopicPrefix.length() >= MQTT_TOPIC_SIZE) {
+      int maxOriginalLength = MQTT_TOPIC_SIZE - chipIdStr.length() - 2;
+      String truncatedPrefix = String(mqttTopicPrefix).substring(0, maxOriginalLength);
+      uniqueTopicPrefix = truncatedPrefix + "_" + chipIdStr;
+    }
+
+    uniqueTopicPrefix.toCharArray(mqttTopicPrefix, MQTT_TOPIC_SIZE);
+
+    Serial.println("Generated unique MQTT topic prefix");
+  }
+
+  Serial.print("Using MQTT topic prefix: ");
+  Serial.println(mqttTopicPrefix);
+
   // Increase MQTT buffer size to handle larger discovery messages
   mqttClient.setBufferSize(2048);  // Increase to 2KB for safety
 

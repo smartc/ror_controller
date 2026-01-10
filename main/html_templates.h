@@ -1074,9 +1074,27 @@ inline String getRoofControlPage() {
   html += "<div class='status-card'>\n";
   html += "<h2>Roof Movement</h2>\n";
   html += "<div style='text-align: center; margin: 20px 0;'>\n";
-  html += "<button class='btn' onclick='roofControl(\"open\")' style='background-color: #2ecc71; margin: 5px;'>Open Roof</button>\n";
-  html += "<button class='btn' onclick='roofControl(\"stop\")' style='background-color: #e74c3c; margin: 5px;'>Stop</button>\n";
-  html += "<button class='btn' onclick='roofControl(\"close\")' style='background-color: #3498db; margin: 5px;'>Close Roof</button>\n";
+
+  // Determine button label and color based on current state
+  String buttonLabel;
+  String buttonColor;
+
+  if (statusString == "Opening" || statusString == "Closing") {
+    buttonLabel = "STOP";
+    buttonColor = "#e74c3c";  // Red for stop
+  } else if (statusString == "Closed") {
+    buttonLabel = "OPEN ROOF";
+    buttonColor = "#2ecc71";  // Green for open
+  } else if (statusString == "Open") {
+    buttonLabel = "CLOSE ROOF";
+    buttonColor = "#3498db";  // Blue for close
+  } else {
+    buttonLabel = "OPEN/CLOSE/STOP";
+    buttonColor = "#95a5a6";  // Gray for unknown state
+  }
+
+  html += "<button class='btn' onclick='roofButtonPress()' style='background-color: " + buttonColor + "; font-size: 20px; padding: 15px 30px; margin: 5px;'>" + buttonLabel + "</button>\n";
+  html += "<p style='font-size: 14px; color: #666; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
   html += "</div>\n";
   html += "</div>\n";
 
@@ -1111,6 +1129,13 @@ inline String getRoofControlPage() {
   html += "    headers: {'Content-Type': 'application/x-www-form-urlencoded'},\n";
   html += "    body: 'action=' + action\n";
   html += "  })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function roofButtonPress() {\n";
+  html += "  fetch('/roof_button', { method: 'POST' })\n";
   html += "    .then(response => response.text())\n";
   html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";

@@ -55,7 +55,8 @@ void handleInverterToggle();         // Toggle K1 inverter power relay
 void handleInverterButton();         // Send K3 soft-power button press
 void handleInverterStatus();         // Get inverter power states (JSON)
 
-// Roof control handler
+// Roof control handlers
 void handleRoofControl();            // Handle roof open/close/stop commands
+void handleRoofButton();             // Handle single roof button press (mimics physical button)
 
 #endif // WEB_UI_HANDLER_H
