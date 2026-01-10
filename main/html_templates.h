@@ -31,42 +31,43 @@ String getSystemManagementCard();
 String getStatusCard();
 String getParkSensorConfigCard();  // New function for park sensor configuration
 
-// Common CSS styles used across pages
+// Common CSS styles used across pages - Dark Theme
 inline String getCommonStyles() {
-  String styles = 
-    "body { font-family: Arial, sans-serif; margin: 20px; }\n"
-    "h1, h2 { color: #2c3e50; }\n"
-    "a { color: #3498db; text-decoration: none; }\n"
-    "a:hover { text-decoration: underline; }\n"
-    ".card { background: #f8f9fa; border-radius: 4px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n"
-    "label { display: block; margin-bottom: 5px; font-weight: bold; }\n"
-    "input[type=text], input[type=password], input[type=number] { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; }\n"
-    "input[type=submit] { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }\n"
-    "input[type=submit]:hover { background: #2980b9; }\n"
-    "button { background-color: #3498db; color: white; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; }\n"
-    "button:hover { background-color: #2980b9; }\n"
-    "button:disabled { background-color: #95a5a6; cursor: not-allowed; opacity: 0.5; }\n"
+  String styles =
+    "body { font-family: Arial, sans-serif; margin: 20px; background-color: #1a1a1a; color: #e0e0e0; }\n"
+    "h1, h2 { color: #4fc3f7; margin-top: 0; }\n"
+    "h3 { color: #81c784; }\n"
+    "a { color: #4fc3f7; text-decoration: none; }\n"
+    "a:hover { text-decoration: underline; color: #81d4fa; }\n"
+    ".card { background: #2d2d2d; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #404040; }\n"
+    "label { display: block; margin-bottom: 5px; font-weight: bold; color: #b0b0b0; }\n"
+    "input[type=text], input[type=password], input[type=number] { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #555; border-radius: 4px; background-color: #333; color: #e0e0e0; }\n"
+    "input[type=submit] { background: #4fc3f7; color: #000; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
+    "input[type=submit]:hover { background: #81d4fa; }\n"
+    "button { background-color: #4fc3f7; color: #000; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
+    "button:hover { background-color: #81d4fa; }\n"
+    "button:disabled { background-color: #555; color: #888; cursor: not-allowed; opacity: 0.5; }\n"
     "table { border-collapse: collapse; width: 100%; }\n"
-    "table, th, td { border: 1px solid #ddd; }\n"
+    "table, th, td { border: 1px solid #555; }\n"
     "th, td { padding: 8px; text-align: left; }\n"
-    "th { background-color: #f2f2f2; }\n"
-    ".status-open { color: blue; font-weight: bold; }\n"
-    ".status-closed { color: green; font-weight: bold; }\n"
-    ".status-moving { color: orange; font-weight: bold; }\n"
-    ".status-error { color: darkred; font-weight: bold; }\n"
+    "th { background-color: #333; color: #4fc3f7; font-weight: bold; }\n"
+    "td { background-color: #2d2d2d; }\n"
+    ".status-open { color: #64b5f6; font-weight: bold; }\n"
+    ".status-closed { color: #81c784; font-weight: bold; }\n"
+    ".status-moving { color: #ffb74d; font-weight: bold; }\n"
+    ".status-error { color: #e57373; font-weight: bold; }\n"
     ".button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }\n"
-    ".button-primary { background-color: #3498db; }\n"
-    ".button-warning { background-color: #f39c12; }\n"
-    ".button-danger { background-color: #e74c3c; }\n"
-    // Add new styles for telescope status indicator
+    ".button-primary { background-color: #4fc3f7; color: #000; }\n"
+    ".button-warning { background-color: #ffb74d; color: #000; }\n"
+    ".button-danger { background-color: #e57373; color: #000; }\n"
     ".telescope-status { display: inline-block; margin: 20px auto; text-align: center; }\n"
     ".status-indicator { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }\n"
     ".status-text { display: inline-block; font-weight: bold; vertical-align: middle; }\n"
-    ".indicator-red { background-color: #e74c3c; }\n" // Unparked
-    ".indicator-green { background-color: #2ecc71; }\n" // Parked
-    ".indicator-yellow { background-color: #f1c40f; animation: blink 1s infinite alternate; }\n" // Bypassed
+    ".indicator-red { background-color: #e57373; }\n"
+    ".indicator-green { background-color: #81c784; }\n"
+    ".indicator-yellow { background-color: #ffd54f; animation: blink 1s infinite alternate; }\n"
     "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n";
-  
+
   return styles;
 }
 
@@ -94,23 +95,23 @@ inline String getTelescopeStatusIndicator() {
   return html;
 }
 
-// Toggle switch CSS styles
+// Toggle switch CSS styles - Dark Theme
 inline String getToggleSwitchStyles() {
-  String styles = 
+  String styles =
     ".switch {position: relative; display: inline-block; width: 60px; height: 34px;}\n"
     ".switch input {opacity: 0; width: 0; height: 0;}\n"
-    ".slider {position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px;}\n"
-    ".slider:before {position: absolute; content: \"\"; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%;}\n"
-    "input:checked + .slider {background-color: #2196F3;}\n"
-    "input:focus + .slider {box-shadow: 0 0 1px #2196F3;}\n"
+    ".slider {position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .4s; border-radius: 34px;}\n"
+    ".slider:before {position: absolute; content: \"\"; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: #e0e0e0; transition: .4s; border-radius: 50%;}\n"
+    "input:checked + .slider {background-color: #4fc3f7;}\n"
+    "input:focus + .slider {box-shadow: 0 0 1px #4fc3f7;}\n"
     "input:checked + .slider:before {transform: translateX(26px);}\n"
-    "input.danger:checked + .slider {background-color: #f44336;}\n"
-    ".switch-label {display: inline-block; vertical-align: middle; margin-left: 10px; font-weight: bold;}\n"
+    "input.danger:checked + .slider {background-color: #e57373;}\n"
+    ".switch-label {display: inline-block; vertical-align: middle; margin-left: 10px; font-weight: bold; color: #e0e0e0;}\n"
     ".switch-container {margin-bottom: 20px; display: flex; align-items: center;}\n"
-    ".toggle-group { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 8px; }\n"
-    ".toggle-group h3 { margin-top: 0; color: #2c3e50; }\n"
+    ".toggle-group { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; padding: 15px; background-color: #333; border-radius: 8px; border: 1px solid #555; }\n"
+    ".toggle-group h3 { margin-top: 0; color: #81c784; }\n"
     ".toggle-row { display: flex; flex-wrap: wrap; gap: 20px; }\n";
-  
+
   return styles;
 }
 
@@ -210,7 +211,7 @@ inline String getControlJS() {
     "  .then(data => {\n"
     "    console.log(data);\n"
     "    document.getElementById('bypassText').innerHTML = checked ? '(ENABLED)' : '(DISABLED)';\n"
-    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#f44336' : '#333';\n"
+    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#e57373' : '#e0e0e0';\n"
     "  });\n"
     "}\n"
     
@@ -346,33 +347,36 @@ inline String getStatusDisplay(RoofStatus status) {
 inline String getHomePage(RoofStatus status, bool isApMode = false) {
   String html = getPageHeader("ESP32 Roll-Off Roof Status");
   
-  // Add custom styles for home page
+  // Add custom styles for home page - Dark Theme
   html += "<style>\n"
           "body { text-align: center; }\n"
-          ".status-card { background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: left; }\n"
-          ".open { background-color: #e6f2ff; color: #0047ab; }\n"
-          ".closed { background-color: #e6ffe6; color: green; }\n"
-          ".moving { background-color: #fff6e6; color: orange; }\n"
-          ".error { background-color: #ffcccc; color: darkred; }\n"
-          ".ap-mode-banner { background-color: #ffe66d; color: #5c4d00; padding: 10px; border-radius: 5px; margin: 10px 0; font-weight: bold; }\n"
-          ".nav-button { display: inline-block; margin: 5px; padding: 8px 15px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none; }\n"
-          ".nav-button:hover { background-color: #2980b9; text-decoration: none; color: white; }\n"
+          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
+          ".page-header { margin: 20px 0; }\n"
+          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
+          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
+          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
+          ".error { background-color: #3a1e1e; color: #e57373; }\n"
+          ".ap-mode-banner { background-color: #3a3a1e; color: #ffd54f; padding: 10px; border-radius: 5px; margin: 10px 0; font-weight: bold; border: 1px solid #555; }\n"
+          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
+          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
           ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
-          ".status-indicator.green { background-color: #2ecc71; }\n"
-          ".status-indicator.red { background-color: #e74c3c; }\n"
-          ".status-indicator.blue { background-color: #3498db; }\n"
-          ".status-indicator.orange { background-color: #f39c12; }\n"
+          ".status-indicator.green { background-color: #81c784; }\n"
+          ".status-indicator.red { background-color: #e57373; }\n"
+          ".status-indicator.blue { background-color: #64b5f6; }\n"
+          ".status-indicator.orange { background-color: #ffb74d; }\n"
           ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
-          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; }\n"
+          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
           ".status-table { width: 100%; margin-bottom: 15px; }\n"
-          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #f2f2f2; }\n"
-          ".status-table td { padding: 8px; }\n"
-          ".mqtt-json { background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; max-height: 150px; overflow-y: auto; }\n"
+          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
+          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
+          ".mqtt-json { background-color: #333; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; max-height: 150px; overflow-y: auto; color: #81c784; border: 1px solid #555; }\n"
           "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
           "</style>\n";
 
-  html += "<h1>ESP32 Roll-Off Roof Controller <span style='font-size: 14px; color: #666;'>(auto-updates every 2 seconds)</span></h1>\n"
-          "<p>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += "<div class='page-header'>\n";
+  html += "<h1>ESP32 Roll-Off Roof Controller</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
+  html += "</div>\n";
   
   // AP Mode Banner
   if (isApMode) {
@@ -529,6 +533,31 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "</td></tr>\n";
   
   html += "</table>\n";
+  html += "</div>\n";
+
+  // Inverter Status Card (v3) - Display only, no controls
+  html += "<div class='status-card'>\n";
+  html += "<h2>Inverter Status</h2>\n";
+  html += "<table class='status-table'>\n";
+
+  // Get inverter states
+  bool inverterRelay = getInverterRelayState();
+  bool inverterACPower = getInverterACPowerState();
+
+  // Inverter relay state (K1)
+  html += "<tr><th>Power Relay (K1)</th><td>";
+  html += "<span class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
+  html += inverterRelay ? "ON" : "OFF";
+  html += "</td></tr>\n";
+
+  // Inverter AC power state (via optocoupler)
+  html += "<tr><th>AC Power Detected</th><td>";
+  html += "<span class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
+  html += inverterACPower ? "ON" : "OFF";
+  html += "</td></tr>\n";
+
+  html += "</table>\n";
+  html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Use <a href='/control'>Roof Control</a> page to control inverter</p>\n";
   html += "</div>\n";
 
   // MQTT Information Card
@@ -768,10 +797,10 @@ inline String getSwitchConfigCard() {
   html += "<input type='checkbox' id='bypassToggle' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange=\"toggleBypass(this.checked)\">";
   html += "<span class='slider'></span>";
   html += "</label>";
-  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#f44336" : "#333") + ";'>";
+  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>";
   html += "Bypass Telescope Park Sensor <strong id='bypassText'>(" + String(bypassParkSensor ? "ENABLED" : "DISABLED") + ")</strong><br>";
   html += "<small>Warning: When enabled, allows roof to move regardless of telescope position</small><br>";
-  html += "<small style='color: #e67e22;'><strong>Note:</strong> This setting is not retained between restarts. Use a physical jumper on the PARK terminals if no sensor is installed.</small>";
+  html += "<small style='color: #ffb74d;'><strong>Note:</strong> This setting is not retained between restarts. Use a physical jumper on the PARK terminals if no sensor is installed.</small>";
   html += "</span>";
   html += "</div>";
   
@@ -939,10 +968,12 @@ inline String getSystemManagementCard() {
 // Complete setup page
 inline String getSetupPage() {
   String html = getPageHeader("ESP32 Roll-Off Roof Controller Setup");
-  
-  html += "<h1>ESP32 Roll-Off Roof Controller</h1>";
-  html += "<p>Version: " + String(DEVICE_VERSION) + "</p>";
-  
+
+  html += "<div class='page-header'>\n";
+  html += "<h1>Device Setup</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += "</div>\n";
+
   // Add navigation
   html += getNavBar();
   
@@ -991,15 +1022,17 @@ inline String getSetupPage() {
 inline String getRoofControlPage() {
   String html = getPageHeader("Roof Control");
 
-  html += "<h1>Roof Control</h1>";
-  html += "<p>Version: " + String(DEVICE_VERSION) + "</p>";
+  html += "<div class='page-header'>\n";
+  html += "<h1>Roof Control</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
+  html += "</div>\n";
 
   // Add navigation
   html += getNavBar();
 
   // Current Status Card
   html += "<div class='status-card'>\n";
-  html += "<h2>Current Status <span style='font-size: 14px; color: #666;'>(auto-updates every 2 seconds)</span></h2>\n";
+  html += "<h2>Current Status</h2>\n";
   html += "<table class='status-table'>\n";
 
   // Roof status - with IDs for dynamic updates
@@ -1071,7 +1104,7 @@ inline String getRoofControlPage() {
   html += "<input type='checkbox' id='bypassToggleControl' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange='toggleBypassControl(this.checked)'>\n";
   html += "<span class='slider'></span>\n";
   html += "</label>\n";
-  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#f44336" : "#333") + ";'>\n";
+  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>\n";
   html += "Bypass Park Sensor <strong>" + String(bypassParkSensor ? "(ENABLED)" : "(DISABLED)") + "</strong><br>\n";
   html += "<small>Enable to control roof regardless of telescope position</small>\n";
   html += "</span>\n";
@@ -1148,7 +1181,7 @@ inline String getRoofControlPage() {
   html += "    console.log(data);\n";
   html += "    const label = document.getElementById('bypassLabelControl');\n";
   html += "    if (label) {\n";
-  html += "      label.style.color = checked ? '#f44336' : '#333';\n";
+  html += "      label.style.color = checked ? '#e57373' : '#e0e0e0';\n";
   html += "      label.innerHTML = 'Bypass Park Sensor <strong>' + (checked ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "    }\n";
   html += "    updateStatus(); // Refresh status\n";
@@ -1265,19 +1298,22 @@ inline String getRoofControlPage() {
 // WiFi configuration page
 inline String getWifiConfigPage() {
   String html = getPageHeader("WiFi Configuration");
-  
-  // Add custom styles for the WiFi config page
+
+  // Add custom styles for the WiFi config page - Dark Theme
   html += "<style>\n"
-          "body { text-align: center; background-color: #f0f8ff; }\n"
-          ".container { max-width: 500px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }\n"
+          "body { text-align: center; }\n"
+          ".container { max-width: 600px; margin: 0 auto; background-color: #2d2d2d; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #404040; }\n"
           ".network-list { margin-bottom: 20px; text-align: left; }\n"
-          ".network { padding: 10px; margin-bottom: 5px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }\n"
-          ".network:hover { background-color: #f5f5f5; }\n"
+          ".network { padding: 10px; margin-bottom: 5px; border: 1px solid #555; border-radius: 4px; cursor: pointer; background-color: #333; color: #e0e0e0; }\n"
+          ".network:hover { background-color: #404040; }\n"
           ".back-link { margin-top: 20px; display: inline-block; }\n"
           "</style>\n";
-  
+
   html += "<div class='container'>";
-  html += "<h1>WiFi Configuration</h1>";
+  html += "<div class='page-header'>\n";
+  html += "<h1>WiFi Configuration</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += "</div>\n";
   
   // Add network scanning functionality
   html += "<div class='network-list'>";
