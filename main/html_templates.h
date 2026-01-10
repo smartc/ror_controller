@@ -369,10 +369,8 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
           ".mqtt-json { background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; max-height: 150px; overflow-y: auto; }\n"
           "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
           "</style>\n";
-          
-  html += "<meta http-equiv='refresh' content='10'>\n"; // Auto-refresh every 10 seconds
-  
-  html += "<h1>ESP32 Roll-Off Roof Controller</h1>\n"
+
+  html += "<h1>ESP32 Roll-Off Roof Controller <span style='font-size: 14px; color: #666;'>(auto-updates every 2 seconds)</span></h1>\n"
           "<p>Version: " + String(DEVICE_VERSION) + "</p>\n";
   
   // AP Mode Banner
@@ -406,9 +404,9 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   }
   
   // Status header
-  html += "<div class='status-header " + statusClass + "'>\n";
-  html += "<span class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: " + statusString;
+  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
+  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
+  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
   html += "</div>\n";
   
   // Navigation buttons
@@ -639,10 +637,51 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "      setTimeout(() => location.reload(), 500);\n";
   html += "    })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
-  html += "}\n";
+  html += "}\n\n";
+
+  // Add real-time status update function for home page
+  html += "function updateHomeStatus() {\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      // Update main status header\n";
+  html += "      const statusHeader = document.getElementById('mainStatusHeader');\n";
+  html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
+  html += "      const statusText = document.getElementById('mainStatusText');\n";
+  html += "      if (statusHeader && statusIndicator && statusText) {\n";
+  html += "        statusText.textContent = data.status;\n";
+  html += "        statusHeader.className = 'status-header ';\n";
+  html += "        statusIndicator.className = 'status-indicator ';\n";
+  html += "        if (data.status === 'Open') {\n";
+  html += "          statusHeader.className += 'open';\n";
+  html += "          statusIndicator.className += 'blue';\n";
+  html += "        } else if (data.status === 'Closed') {\n";
+  html += "          statusHeader.className += 'closed';\n";
+  html += "          statusIndicator.className += 'green';\n";
+  html += "        } else if (data.status === 'Opening') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'blue blink';\n";
+  html += "        } else if (data.status === 'Closing') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'green blink';\n";
+  html += "        } else {\n";
+  html += "          statusHeader.className += 'error';\n";
+  html += "          statusIndicator.className += 'red blink';\n";
+  html += "        }\n";
+  html += "      }\n";
+  html += "    })\n";
+  html += "    .catch(error => console.error('Error updating status:', error));\n";
+  html += "}\n\n";
+
+  // Start polling on page load
+  html += "// Start auto-updating when page loads\n";
+  html += "document.addEventListener('DOMContentLoaded', function() {\n";
+  html += "  updateHomeStatus(); // Initial update\n";
+  html += "  setInterval(updateHomeStatus, 2000); // Update every 2 seconds\n";
+  html += "});\n";
 
   html += "</script>\n";
-  
+
   html += "</body></html>";
   
   return html;
@@ -1073,8 +1112,23 @@ inline String getRoofControlPage() {
   // Roof Control Card
   html += "<div class='status-card'>\n";
   html += "<h2>Roof Movement</h2>\n";
+
+  // Add bypass toggle
+  html += "<div style='margin: 15px 0; padding: 15px; background-color: #f9f9f9; border-radius: 4px;'>\n";
+  html += "<div class='switch-container' style='display: flex; align-items: center; justify-content: center;'>\n";
+  html += "<label class='switch'>\n";
+  html += "<input type='checkbox' id='bypassToggleControl' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange='toggleBypassControl(this.checked)'>\n";
+  html += "<span class='slider'></span>\n";
+  html += "</label>\n";
+  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#f44336" : "#333") + ";'>\n";
+  html += "Bypass Park Sensor <strong>" + String(bypassParkSensor ? "(ENABLED)" : "(DISABLED)") + "</strong><br>\n";
+  html += "<small>Enable to control roof regardless of telescope position</small>\n";
+  html += "</span>\n";
+  html += "</div>\n";
+  html += "</div>\n";
+
   html += "<div style='text-align: center; margin: 20px 0;'>\n";
-  html += "<button class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'>ROOF CONTROL</button>\n";
+  html += "<button class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'>OPEN / CLOSE</button>\n";
   html += "<p style='font-size: 14px; color: #666; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
   html += "</div>\n";
   html += "</div>\n";
@@ -1122,6 +1176,28 @@ inline String getRoofControlPage() {
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
 
+  html += "function toggleBypassControl(checked) {\n";
+  html += "  fetch('/toggle_bypass', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+  html += "    body: 'bypass=' + checked\n";
+  html += "  })\n";
+  html += "  .then(response => response.text())\n";
+  html += "  .then(data => {\n";
+  html += "    console.log(data);\n";
+  html += "    const label = document.getElementById('bypassLabelControl');\n";
+  html += "    if (label) {\n";
+  html += "      label.style.color = checked ? '#f44336' : '#333';\n";
+  html += "      label.innerHTML = 'Bypass Park Sensor <strong>' + (checked ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
+  html += "    }\n";
+  html += "    updateStatus(); // Refresh status\n";
+  html += "  })\n";
+  html += "  .catch(error => {\n";
+  html += "    console.error('Error:', error);\n";
+  html += "    alert('Error toggling bypass: ' + error);\n";
+  html += "  });\n";
+  html += "}\n\n";
+
   // Add real-time status update function
   html += "function updateStatus() {\n";
   html += "  fetch('/api/status')\n";
@@ -1152,6 +1228,14 @@ inline String getRoofControlPage() {
   html += "      if (bypassInd && bypassText) {\n";
   html += "        bypassInd.className = 'status-indicator ' + (data.bypass_enabled ? 'red blink' : 'green');\n";
   html += "        bypassText.innerHTML = data.bypass_enabled ? \"<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>\" : 'Disabled';\n";
+  html += "      }\n";
+  html += "      // Update bypass toggle checkbox\n";
+  html += "      const bypassToggle = document.getElementById('bypassToggleControl');\n";
+  html += "      const bypassLabel = document.getElementById('bypassLabelControl');\n";
+  html += "      if (bypassToggle) bypassToggle.checked = data.bypass_enabled;\n";
+  html += "      if (bypassLabel) {\n";
+  html += "        bypassLabel.style.color = data.bypass_enabled ? '#f44336' : '#333';\n";
+  html += "        bypassLabel.innerHTML = 'Bypass Park Sensor <strong>' + (data.bypass_enabled ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "      }\n\n";
 
   html += "      // Update open limit switch\n";

@@ -710,50 +710,19 @@ void handleRoofControl() {
 void handleRoofButton() {
   Debug.println("Roof button pressed via web interface");
 
-  // If roof is currently moving, stop it
-  if (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) {
-    stopRoofMovement();
-    Debug.println("Roof button: Stopping roof movement");
-    webUiServer.send(200, "text/plain", "Roof stopped");
+  // Check telescope safety interlock - only if bypass is not enabled
+  if (!bypassParkSensor && !telescopeParked) {
+    Debug.println("Cannot control roof: Telescope not parked and bypass not enabled");
+    webUiServer.send(400, "text/plain", "Cannot control roof - telescope not parked. Enable bypass to override.");
     return;
   }
 
-  // Read limit switch states
-  bool isOpenSwitchTriggered = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
-  bool isClosedSwitchTriggered = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+  // Just send a button press - exactly like the physical button
+  // The roof controller hardware will handle the logic
+  sendButtonPress();
 
-  // Determine action based on current position
-  if (isClosedSwitchTriggered) {
-    // Roof is closed, so open it
-    bool success = startOpeningRoof();
-    if (success) {
-      Debug.println("Roof button: Opening roof");
-      webUiServer.send(200, "text/plain", "Roof opening");
-    } else {
-      Debug.println("Roof button: Cannot open - check safety interlocks");
-      webUiServer.send(400, "text/plain", "Cannot open roof - check telescope park status");
-    }
-  } else if (isOpenSwitchTriggered) {
-    // Roof is open, so close it
-    bool success = startClosingRoof();
-    if (success) {
-      Debug.println("Roof button: Closing roof");
-      webUiServer.send(200, "text/plain", "Roof closing");
-    } else {
-      Debug.println("Roof button: Cannot close - check safety interlocks");
-      webUiServer.send(400, "text/plain", "Cannot close roof - check telescope park status");
-    }
-  } else {
-    // Roof is partially open - default to closing for safety
-    bool success = startClosingRoof();
-    if (success) {
-      Debug.println("Roof button: Closing roof (was partially open)");
-      webUiServer.send(200, "text/plain", "Roof closing");
-    } else {
-      Debug.println("Roof button: Cannot close - check safety interlocks");
-      webUiServer.send(400, "text/plain", "Cannot close roof - check telescope park status");
-    }
-  }
+  Debug.println("Roof button press sent");
+  webUiServer.send(200, "text/plain", "Button press sent");
 }
 
 // API endpoint for real-time status updates (returns JSON)
