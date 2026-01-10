@@ -43,25 +43,31 @@ void loadConfiguration() {
     int savedMqttPort = preferences.getInt(PREF_MQTT_PORT, DEFAULT_MQTT_PORT);
     String savedMqttUser = preferences.getString(PREF_MQTT_USER, "");
     String savedMqttPassword = preferences.getString(PREF_MQTT_PASSWORD, "");
+    String savedMqttClientId = preferences.getString(PREF_MQTT_CLIENT_ID, "");
     String savedMqttTopicPrefix = preferences.getString(PREF_MQTT_TOPIC_PREFIX, "");
-    
+
     if (savedMqttServer.length() > 0) {
       strncpy(mqttServer, savedMqttServer.c_str(), sizeof(mqttServer) - 1);
       mqttServer[sizeof(mqttServer) - 1] = '\0';
     }
-    
+
     mqttPort = savedMqttPort;
-    
+
     if (savedMqttUser.length() > 0) {
       strncpy(mqttUser, savedMqttUser.c_str(), sizeof(mqttUser) - 1);
       mqttUser[sizeof(mqttUser) - 1] = '\0';
     }
-    
+
     if (savedMqttPassword.length() > 0) {
       strncpy(mqttPassword, savedMqttPassword.c_str(), sizeof(mqttPassword) - 1);
       mqttPassword[sizeof(mqttPassword) - 1] = '\0';
     }
-    
+
+    if (savedMqttClientId.length() > 0) {
+      strncpy(mqttClientId, savedMqttClientId.c_str(), sizeof(mqttClientId) - 1);
+      mqttClientId[sizeof(mqttClientId) - 1] = '\0';
+    }
+
     if (savedMqttTopicPrefix.length() > 0) {
       strncpy(mqttTopicPrefix, savedMqttTopicPrefix.c_str(), sizeof(mqttTopicPrefix) - 1);
       mqttTopicPrefix[sizeof(mqttTopicPrefix) - 1] = '\0';
@@ -127,6 +133,7 @@ void saveConfiguration() {
   preferences.putInt(PREF_MQTT_PORT, mqttPort);
   preferences.putString(PREF_MQTT_USER, mqttUser);
   preferences.putString(PREF_MQTT_PASSWORD, mqttPassword);
+  preferences.putString(PREF_MQTT_CLIENT_ID, mqttClientId);
   preferences.putString(PREF_MQTT_TOPIC_PREFIX, mqttTopicPrefix);
 
   // Save movement timeout
@@ -347,14 +354,15 @@ void handleSetupPost() {
   }
   
   // Process MQTT settings
-  if (webUiServer.hasArg("mqttServer") && webUiServer.hasArg("mqttPort") && 
+  if (webUiServer.hasArg("mqttServer") && webUiServer.hasArg("mqttPort") &&
       webUiServer.hasArg("mqttUser") && webUiServer.hasArg("mqttPassword") &&
-      webUiServer.hasArg("mqttTopicPrefix")) {
-    
+      webUiServer.hasArg("mqttClientId") && webUiServer.hasArg("mqttTopicPrefix")) {
+
     String newMqttServer = webUiServer.arg("mqttServer");
     int newMqttPort = webUiServer.arg("mqttPort").toInt();
     String newMqttUser = webUiServer.arg("mqttUser");
     String newMqttPassword = webUiServer.arg("mqttPassword");
+    String newMqttClientId = webUiServer.arg("mqttClientId");
     String newMqttTopicPrefix = webUiServer.arg("mqttTopicPrefix");
     
     if (newMqttServer.length() > 0 && strcmp(newMqttServer.c_str(), mqttServer) != 0) {
@@ -383,7 +391,14 @@ void handleSetupPost() {
       settingsChanged = true;
       Debug.println("MQTT password changed");
     }
-    
+
+    if (newMqttClientId.length() > 0 && strcmp(newMqttClientId.c_str(), mqttClientId) != 0) {
+      strncpy(mqttClientId, newMqttClientId.c_str(), sizeof(mqttClientId) - 1);
+      mqttClientId[sizeof(mqttClientId) - 1] = '\0';
+      settingsChanged = true;
+      Debug.println("MQTT client ID changed");
+    }
+
     if (newMqttTopicPrefix.length() > 0 && strcmp(newMqttTopicPrefix.c_str(), mqttTopicPrefix) != 0) {
       strncpy(mqttTopicPrefix, newMqttTopicPrefix.c_str(), sizeof(mqttTopicPrefix) - 1);
       mqttTopicPrefix[sizeof(mqttTopicPrefix) - 1] = '\0';

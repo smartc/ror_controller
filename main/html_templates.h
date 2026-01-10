@@ -723,6 +723,9 @@ inline String getMqttSettingsCard() {
   html += "<input type='text' id='mqttUser' name='mqttUser' value='" + String(mqttUser) + "'>";
   html += "<label for='mqttPassword'>MQTT Password:</label>";
   html += "<input type='password' id='mqttPassword' name='mqttPassword' value='" + String(mqttPassword) + "'>";
+  html += "<label for='mqttClientId'>MQTT Client ID:</label>";
+  html += "<input type='text' id='mqttClientId' name='mqttClientId' value='" + String(mqttClientId) + "'>";
+  html += "<p style='font-size: 0.8em; color: #666;'>Unique identifier for this controller. Change this to prevent conflicts when testing multiple controllers.</p>";
   html += "<label for='mqttTopicPrefix'>MQTT Topic Prefix:</label>";
   html += "<input type='text' id='mqttTopicPrefix' name='mqttTopicPrefix' value='" + String(mqttTopicPrefix) + "'>";
   html += "<p style='font-size: 0.8em; color: #666;'>Status and command topics will be created as [prefix]/status and [prefix]/command</p>";

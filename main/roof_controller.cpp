@@ -291,10 +291,18 @@ bool startOpeningRoof() {
   }
   
   // Check telescope safety interlock - only if bypass is not enabled
+  Debug.println("=== ROOF OPENING SAFETY CHECK ===");
+  Debug.printf("bypassParkSensor: %s\n", bypassParkSensor ? "TRUE (bypass enabled)" : "FALSE (bypass disabled)");
+  Debug.printf("telescopeParked: %s\n", telescopeParked ? "TRUE (parked)" : "FALSE (not parked)");
+  Debug.printf("Park sensor type: %d (0=Physical, 1=UDP, 2=Both)\n", parkSensorType);
+
   if (!bypassParkSensor && !telescopeParked) {
-    Debug.println("Cannot open roof: Telescope not parked and bypass not enabled");
+    Debug.println("SAFETY CHECK FAILED: Telescope not parked and bypass not enabled");
+    Debug.println("=== ROOF OPENING BLOCKED ===");
     return false; // Telescope not parked and bypass not enabled
-  } 
+  }
+
+  Debug.println("SAFETY CHECK PASSED: Opening roof"); 
   
   // Turn on the inverter (K1 relay)
   digitalWrite(INVERTER_PIN, HIGH);
@@ -331,10 +339,18 @@ bool startClosingRoof() {
   }
   
   // Check telescope safety interlock - only if bypass is not enabled
+  Debug.println("=== ROOF CLOSING SAFETY CHECK ===");
+  Debug.printf("bypassParkSensor: %s\n", bypassParkSensor ? "TRUE (bypass enabled)" : "FALSE (bypass disabled)");
+  Debug.printf("telescopeParked: %s\n", telescopeParked ? "TRUE (parked)" : "FALSE (not parked)");
+  Debug.printf("Park sensor type: %d (0=Physical, 1=UDP, 2=Both)\n", parkSensorType);
+
   if (!bypassParkSensor && !telescopeParked) {
-    Debug.println("Cannot close roof: Telescope not parked and bypass not enabled");
+    Debug.println("SAFETY CHECK FAILED: Telescope not parked and bypass not enabled");
+    Debug.println("=== ROOF CLOSING BLOCKED ===");
     return false; // Telescope not parked and bypass not enabled
   }
+
+  Debug.println("SAFETY CHECK PASSED: Closing roof");
 
   // Turn on the inverter (K1 relay)
   digitalWrite(INVERTER_PIN, HIGH);

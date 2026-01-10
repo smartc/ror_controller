@@ -35,23 +35,27 @@ void setupMQTT() {
     return;
   }
 
-  // Create a unique client ID by appending the ESP32's chip ID
-  uint64_t chipId = ESP.getEfuseMac(); // Gets the chip ID, which is essentially its serial number
-  String chipIdStr = String((uint32_t)(chipId >> 32), HEX) + String((uint32_t)chipId, HEX);
-  
-  // Make sure we don't exceed the buffer size
-  String uniqueClientId = String(mqttClientId) + "_" + chipIdStr;
-  if (uniqueClientId.length() >= MQTT_CLIENTID_SIZE) {
-    // If too long, truncate the original ID to make room for the MAC
-    int maxOriginalLength = MQTT_CLIENTID_SIZE - chipIdStr.length() - 2; // -2 for "_" and null terminator
-    String truncatedId = String(mqttClientId).substring(0, maxOriginalLength);
-    uniqueClientId = truncatedId + "_" + chipIdStr;
+  // If mqttClientId is still the default, append chip ID to make it unique
+  // This prevents conflicts when multiple controllers are on the same network
+  if (String(mqttClientId) == String(DEFAULT_MQTT_CLIENT_ID) ||
+      String(mqttClientId).indexOf("_") == -1) {  // No underscore means no chip ID appended yet
+
+    uint64_t chipId = ESP.getEfuseMac();
+    String chipIdStr = String((uint32_t)(chipId >> 32), HEX) + String((uint32_t)chipId, HEX);
+
+    String uniqueClientId = String(mqttClientId) + "_" + chipIdStr;
+    if (uniqueClientId.length() >= MQTT_CLIENTID_SIZE) {
+      int maxOriginalLength = MQTT_CLIENTID_SIZE - chipIdStr.length() - 2;
+      String truncatedId = String(mqttClientId).substring(0, maxOriginalLength);
+      uniqueClientId = truncatedId + "_" + chipIdStr;
+    }
+
+    uniqueClientId.toCharArray(mqttClientId, MQTT_CLIENTID_SIZE);
+
+    Serial.println("Generated unique MQTT client ID");
   }
-  
-  // Copy the unique ID to the mqttClientId buffer
-  uniqueClientId.toCharArray(mqttClientId, MQTT_CLIENTID_SIZE);
-  
-  Serial.print("Using unique MQTT client ID: ");
+
+  Serial.print("Using MQTT client ID: ");
   Serial.println(mqttClientId);
 
   // Increase MQTT buffer size to handle larger discovery messages
