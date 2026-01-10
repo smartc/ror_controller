@@ -133,7 +133,7 @@ inline String getPageHeader(String pageTitle) {
 // Navigation links
 inline String getNavBar() {
   String navbar =
-    "<div style='margin-bottom: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>\n"
+    "<div style='margin-bottom: 20px; padding: 10px; background-color: #2d2d2d; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'>\n"
     "<a href='/' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Home</a>\n"
     "<a href='/control' style='margin-right: 10px; padding: 8px 12px; background-color: #2ecc71; color: white; border-radius: 4px; text-decoration: none;'>Roof Control</a>\n"
     "<a href='/setup' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Setup</a>\n"
@@ -460,7 +460,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<tr><th>Park Sensor Bypass</th><td>";
   html += "<span class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
   html += bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled";
-  html += " <small style='margin-left: 10px; color: #666;'><a href='/setup'>Configure bypass in setup</a></small>";
+  html += " <small style='margin-left: 10px; color: #b0b0b0;'><a href='/setup'>Configure bypass in setup</a></small>";
   html += "</td></tr>\n";
   
   // Show telescope parked status based on park sensor type
@@ -744,10 +744,10 @@ inline String getMqttSettingsCard() {
   html += "<input type='password' id='mqttPassword' name='mqttPassword' value='" + String(mqttPassword) + "'>";
   html += "<label for='mqttClientId'>MQTT Client ID:</label>";
   html += "<input type='text' id='mqttClientId' name='mqttClientId' value='" + String(mqttClientId) + "'>";
-  html += "<p style='font-size: 0.8em; color: #666;'>Unique identifier for this controller. Change this to prevent conflicts when testing multiple controllers.</p>";
+  html += "<p style='font-size: 0.8em; color: #b0b0b0;'>Unique identifier for this controller. Change this to prevent conflicts when testing multiple controllers.</p>";
   html += "<label for='mqttTopicPrefix'>MQTT Topic Prefix:</label>";
   html += "<input type='text' id='mqttTopicPrefix' name='mqttTopicPrefix' value='" + String(mqttTopicPrefix) + "'>";
-  html += "<p style='font-size: 0.8em; color: #666;'>Status and command topics will be created as [prefix]/status and [prefix]/command</p>";
+  html += "<p style='font-size: 0.8em; color: #b0b0b0;'>Status and command topics will be created as [prefix]/status and [prefix]/command</p>";
   html += "<input type='submit' value='Save MQTT Settings'>";
   html += "</form>";
   html += "</div>";
@@ -809,15 +809,15 @@ inline String getSwitchConfigCard() {
 
   // Timing Settings
   html += "<h3>Timing Settings</h3>";
-  html += "<div style='margin-top: 10px; padding: 10px; background-color: #f9f9f9; border-radius: 4px;'>";
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
   html += "<label for='timeoutInput' style='display: block; margin-bottom: 5px;'><strong>Movement Timeout (seconds):</strong></label>";
   html += "<input type='number' id='timeoutInput' min='10' max='600' value='" + String(movementTimeout / 1000) + "' ";
   html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
-  html += "<p style='margin-top: 5px; font-size: 12px; color: #666;'>Time before roof movement times out (10-600 seconds, default: 90)</p>";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time before roof movement times out (10-600 seconds, default: 90)</p>";
   html += "</div>";
 
   // Current configuration
-  html += "<div style='margin-top: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 4px;'>";
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
   html += "<p><strong>Current Configuration:</strong><br>";
   html += "Trigger state: " + String(TRIGGERED == HIGH ? "HIGH" : "LOW") + "<br>";
   html += "Open switch pin: " + String(LIMIT_SWITCH_OPEN_PIN) + "<br>";
@@ -1098,7 +1098,7 @@ inline String getRoofControlPage() {
   html += "<h2>Roof Movement</h2>\n";
 
   // Add bypass toggle
-  html += "<div style='margin: 15px 0; padding: 15px; background-color: #f9f9f9; border-radius: 4px;'>\n";
+  html += "<div style='margin: 15px 0; padding: 15px; background-color: #2d2d2d; border-radius: 4px;'>\n";
   html += "<div class='switch-container' style='display: flex; align-items: center; justify-content: center;'>\n";
   html += "<label class='switch'>\n";
   html += "<input type='checkbox' id='bypassToggleControl' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange='toggleBypassControl(this.checked)'>\n";
@@ -1121,7 +1121,7 @@ inline String getRoofControlPage() {
   if (buttonDisabled) {
     html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>⚠ Telescope not parked - Enable bypass to control roof</p>\n";
   } else {
-    html += "<p style='font-size: 14px; color: #666; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
+    html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
   }
 
   html += "</div>\n";
