@@ -1,5 +1,5 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * MQTT Handler Implementation - Fixed Discovery Functions
  */
 
@@ -175,7 +175,11 @@ void publishStatusToMQTT() {
   doc["trigger_state"] = (TRIGGERED == HIGH ? "HIGH" : "LOW");
   doc["open_switch_pin"] = LIMIT_SWITCH_OPEN_PIN;
   doc["closed_switch_pin"] = LIMIT_SWITCH_CLOSED_PIN;
-  
+
+  // Add inverter power state information (NEW in v3)
+  doc["inverter_relay_state"] = getInverterRelayState();
+  doc["inverter_ac_power_state"] = getInverterACPowerState();
+
   // Add park sensor information
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
   doc["park_sensor_type_name"] = (parkSensorType == PARK_SENSOR_PHYSICAL ? "Physical" : 

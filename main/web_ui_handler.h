@@ -1,5 +1,5 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * Web UI Handler
  */
 
@@ -48,5 +48,10 @@ void handleParkSensorBypass();
 void handleParkSensorRemove();
 void handleParkSensorRemoveAll();
 void handleParkSensorType();
+
+// Inverter control handlers (NEW in v3)
+void handleInverterToggle();         // Toggle K1 inverter power relay
+void handleInverterButton();         // Send K3 soft-power button press
+void handleInverterStatus();         // Get inverter power states (JSON)
 
 #endif // WEB_UI_HANDLER_H

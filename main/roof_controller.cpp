@@ -1,5 +1,5 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * Roof Controller Implementation
  */
 
@@ -10,8 +10,8 @@
 #include <Arduino.h>
 
 // Define the global variables declared as extern in config.h
-int LIMIT_SWITCH_OPEN_PIN = DEFAULT_OPEN_SWITCH_PIN;    // Default to pin 34
-int LIMIT_SWITCH_CLOSED_PIN = DEFAULT_CLOSED_SWITCH_PIN; // Default to pin 35
+int LIMIT_SWITCH_OPEN_PIN = DEFAULT_OPEN_SWITCH_PIN;    // Default to pin 35
+int LIMIT_SWITCH_CLOSED_PIN = DEFAULT_CLOSED_SWITCH_PIN; // Default to pin 36
 int TRIGGERED = DEFAULT_TRIGGER_STATE;                  // Default to LOW trigger state
 int TELESCOPE_PARKED = DEFAULT_PARK_STATE;              // Park sensor is HIGH until triggered
 
@@ -36,6 +36,12 @@ bool swapLimitSwitches = false;                 // Flag for swapping limit switc
 unsigned long lastSwitchTime = 0;
 unsigned long movementStartTime = 0;
 
+// Inverter power state variables (NEW in v3)
+bool inverterRelayState = false;                // State of K1 (12V power relay)
+bool inverterACPowerState = false;              // State of AC power (detected via optocoupler)
+bool lastInverterACPowerState = false;          // Last AC power state for change detection
+unsigned long lastInverterACPowerChangeTime = 0;
+
 // Apply pin settings - useful after changing pin assignments or trigger state
 void applyPinSettings() {
   // Configure input pins with internal pull-ups
@@ -59,31 +65,44 @@ void applyPinSettings() {
 
 void initializeRoofController() {
   // Initialize GPIO pins
-  
-  // Configure power inverter relay
+
+  // Configure power inverter relay (K1)
   pinMode(INVERTER_PIN, OUTPUT);
   digitalWrite(INVERTER_PIN, LOW);  // Start with inverter OFF
-  
-  // Configure roof control button relay
+  inverterRelayState = false;
+
+  // Configure roof control button relay (K2)
   pinMode(ROOF_CONTROL_PIN, OUTPUT);
   digitalWrite(ROOF_CONTROL_PIN, LOW);  // Start with button NOT pressed
-  
+
+  // Configure inverter soft-power button relay (K3) - NEW in v3
+  pinMode(INVERTER_BUTTON_PIN, OUTPUT);
+  digitalWrite(INVERTER_BUTTON_PIN, LOW);  // Start with button NOT pressed
+
+  // Configure AC power detection input - NEW in v3
+  pinMode(INVERTER_AC_POWER_PIN, INPUT);
+  inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
+  lastInverterACPowerState = inverterACPowerState;
+  lastInverterACPowerChangeTime = millis() - SWITCH_STABLE_TIME - 1;
+
   // Apply pin settings
   applyPinSettings();
 
   // Print initial pin states for debugging
   Debug.println("Initial pin states:");
-  Debug.print("INVERTER_PIN: "); Debug.println(digitalRead(INVERTER_PIN));
-  Debug.print("ROOF_CONTROL_PIN: "); Debug.println(digitalRead(ROOF_CONTROL_PIN));
+  Debug.print("INVERTER_PIN (K1): "); Debug.println(digitalRead(INVERTER_PIN));
+  Debug.print("ROOF_CONTROL_PIN (K2): "); Debug.println(digitalRead(ROOF_CONTROL_PIN));
+  Debug.print("INVERTER_BUTTON_PIN (K3): "); Debug.println(digitalRead(INVERTER_BUTTON_PIN));
+  Debug.print("INVERTER_AC_POWER_PIN: "); Debug.println(digitalRead(INVERTER_AC_POWER_PIN));
   Debug.print("TELESCOPE_PARKED_PIN: "); Debug.println(digitalRead(TELESCOPE_PARKED_PIN));
   Debug.print("LIMIT_SWITCH_OPEN_PIN: "); Debug.println(digitalRead(LIMIT_SWITCH_OPEN_PIN));
   Debug.print("LIMIT_SWITCH_CLOSED_PIN: "); Debug.println(digitalRead(LIMIT_SWITCH_CLOSED_PIN));
   Debug.print("Trigger state: "); Debug.println(TRIGGERED == HIGH ? "HIGH" : "LOW");
   Debug.print("Switches swapped: "); Debug.println(swapLimitSwitches ? "YES" : "NO");
-  
+
   // Allow time for the pull-up resistors to fully settle
   delay(50);
-  
+
   // Initialize status variables for debouncing
   lastOpenSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
   lastClosedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
@@ -93,7 +112,7 @@ void initializeRoofController() {
   // Initialize telescope park state
   lastTelescopeParkedStateTime = millis() - SWITCH_STABLE_TIME - 1; // Make initial reading valid immediately
   updateTelescopeStatus();
-  
+
   // Explicitly check initial roof status based on limit switches with extra care
   determineInitialRoofStatus();
 }
@@ -184,21 +203,24 @@ void updateRoofStatus() {
     // Both switches triggered is an error condition
     roofStatus = ROOF_ERROR;
     digitalWrite(INVERTER_PIN, LOW); // Turn off inverter for safety
+    inverterRelayState = false;
     statusMessage = "ERROR: Both limit switches triggered!";
-  } 
+  }
   else if (isOpenLimitTriggered) {
     // If the open switch is triggered, the roof is open regardless of previous state
     if (roofStatus != ROOF_OPEN) {
       statusMessage = "Roof fully open";
       digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
+      inverterRelayState = false;
     }
     roofStatus = ROOF_OPEN;
-  } 
+  }
   else if (isClosedLimitTriggered) {
     // If the closed switch is triggered, the roof is closed regardless of previous state
     if (roofStatus != ROOF_CLOSED) {
       statusMessage = "Roof fully closed";
       digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
+      inverterRelayState = false;
     }
     roofStatus = ROOF_CLOSED;
   } 
@@ -273,22 +295,23 @@ bool startOpeningRoof() {
     return false; // Telescope not parked and bypass not enabled
   } 
   
-  // Turn on the inverter
+  // Turn on the inverter (K1 relay)
   digitalWrite(INVERTER_PIN, HIGH);
-  Debug.println("Inverter turned ON");
+  inverterRelayState = true;
+  Debug.println("Inverter turned ON (K1 relay energized)");
   delay(1000); // Give inverter time to start
-  
-  // Send a button press to the roof controller
+
+  // Send a button press to the roof controller (K2 relay)
   sendButtonPress();
-  
+
   // Update roof status
   roofStatus = ROOF_OPENING;
   movementStartTime = millis();
-  
+
   // Publish status change immediately
   publishStatusToMQTT();
   lastPublishedStatus = roofStatus;
-  
+
   Debug.println("Roof opening started");
   return true;
 }
@@ -310,44 +333,46 @@ bool startClosingRoof() {
   if (!bypassParkSensor && !telescopeParked) {
     Debug.println("Cannot close roof: Telescope not parked and bypass not enabled");
     return false; // Telescope not parked and bypass not enabled
-  } 
-    
-  // Turn on the inverter
+  }
+
+  // Turn on the inverter (K1 relay)
   digitalWrite(INVERTER_PIN, HIGH);
-  Debug.println("Inverter turned ON");
+  inverterRelayState = true;
+  Debug.println("Inverter turned ON (K1 relay energized)");
   delay(1000); // Give inverter time to start
-  
-  // Send a button press to the roof controller
+
+  // Send a button press to the roof controller (K2 relay)
   sendButtonPress();
-  
+
   // Update roof status
   roofStatus = ROOF_CLOSING;
   movementStartTime = millis();
-  
+
   // Publish status change immediately
   publishStatusToMQTT();
   lastPublishedStatus = roofStatus;
-  
+
   Debug.println("Roof closing started");
   return true;
 }
 
 // Stop roof movement
 bool stopRoofMovement() {
-  // Send a button press to stop the movement
+  // Send a button press to stop the movement (K2 relay)
   sendButtonPress();
-  
+
   // Update status based on limit switches
   updateRoofStatus();
-  
-  // Turn off the inverter if we've reached a limit
+
+  // Turn off the inverter if we've reached a limit (K1 relay)
   digitalWrite(INVERTER_PIN, LOW);
-  Debug.println("Inverter turned OFF");
-  
+  inverterRelayState = false;
+  Debug.println("Inverter turned OFF (K1 relay de-energized)");
+
   // Publish status change immediately
   publishStatusToMQTT();
   lastPublishedStatus = roofStatus;
-  
+
   Debug.println("Roof movement stopped");
   return true;
 }
@@ -446,5 +471,87 @@ void updateTelescopeStatus() {
       // Publish status to MQTT if telescope park state changed
       publishStatusToMQTT();
     }
+  }
+}
+
+// ========== NEW INVERTER CONTROL FUNCTIONS (v3 Hardware) ==========
+
+// Toggle K1 inverter power relay (manual control)
+void toggleInverterPower() {
+  inverterRelayState = !inverterRelayState;
+  digitalWrite(INVERTER_PIN, inverterRelayState ? HIGH : LOW);
+
+  Debug.print("Inverter power relay (K1) manually toggled to: ");
+  Debug.println(inverterRelayState ? "ON" : "OFF");
+
+  // Publish status change to MQTT
+  publishStatusToMQTT();
+}
+
+// Send K3 soft-power button press to inverter
+void sendInverterButtonPress() {
+  // For a normally open relay:
+  // LOW = Relay not energized = Button NOT pressed
+  // HIGH = Relay energized = Button pressed
+
+  Debug.println("Inverter button (K3) press initiated");
+
+  // Press button (energize relay)
+  digitalWrite(INVERTER_BUTTON_PIN, HIGH);
+  Debug.println("Inverter button PRESSED (K3 relay energized)");
+  delay(500); // Hold the button for half a second
+
+  // Release button (de-energize relay)
+  digitalWrite(INVERTER_BUTTON_PIN, LOW);
+  Debug.println("Inverter button RELEASED (K3 relay de-energized)");
+
+  // Give the inverter time to process the button press
+  delay(100);
+}
+
+// Get state of K1 inverter power relay
+bool getInverterRelayState() {
+  return inverterRelayState;
+}
+
+// Get state of AC power (via optocoupler on GPIO7)
+bool getInverterACPowerState() {
+  // Read the AC power detection pin
+  // When AC power is present, the optocoupler sends HIGH signal
+  return digitalRead(INVERTER_AC_POWER_PIN) == HIGH;
+}
+
+// Update and monitor inverter AC power state (call in main loop)
+void updateInverterPowerStatus() {
+  unsigned long currentTime = millis();
+
+  // Read current AC power state
+  bool currentACPowerState = getInverterACPowerState();
+
+  // Check if AC power state changed
+  if (currentACPowerState != lastInverterACPowerState) {
+    lastInverterACPowerState = currentACPowerState;
+    lastInverterACPowerChangeTime = currentTime;
+    Debug.println("AC power state CHANGED to: " + String(currentACPowerState ? "ON" : "OFF"));
+  }
+
+  // Only consider the state change valid if it has been stable for SWITCH_STABLE_TIME
+  if (currentTime - lastInverterACPowerChangeTime > SWITCH_STABLE_TIME) {
+    if (inverterACPowerState != currentACPowerState) {
+      inverterACPowerState = currentACPowerState;
+      Debug.println("AC power state UPDATED to: " + String(inverterACPowerState ? "ON" : "OFF"));
+
+      // Publish status to MQTT if AC power state changed
+      publishStatusToMQTT();
+    }
+  }
+
+  // Debug output every 30 seconds
+  static unsigned long lastDebugTime = 0;
+  if (currentTime - lastDebugTime > 30000) {
+    Debug.printf(2, "Inverter Status - Relay (K1): %s, AC Power: %s\n",
+                 inverterRelayState ? "ON" : "OFF",
+                 inverterACPowerState ? "ON" : "OFF");
+    lastDebugTime = currentTime;
   }
 }

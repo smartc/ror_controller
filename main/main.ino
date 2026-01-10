@@ -1,20 +1,25 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
- * 
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
+ *
  * This firmware implements an ASCOM Alpaca compatible Roll-Off Roof controller
- * using the ESP32 microcontroller. It implements the ASCOM Dome interface
+ * using the ESP32-S3 microcontroller. It implements the ASCOM Dome interface
  * for controlling the roof movement. It also provides MQTT integration for
  * Home Assistant.
  *
- * NOTES: v2 hardware (2024-08-05) is missing a pulldown resistor on D12.
- *        To use D12 as Park sensor input, jumper right-hand side of [PARK] terminal to ground with a 1M resistor and set TELESCOPE_PARKED to HIGH or use a Normally Closed limit switch.
- *        Should be resolved in later hardware versions, which align input configuration with the [OPEN] / [CLOSED] switches. (But you may need to set TELESCOPE_PARKED to LOW in that case.)
+ * HARDWARE: v3 (2026-01-07) - ESP32-S3 44-pin with 3 relays
+ *        - K1: Inverter 12V power relay (GPIO4)
+ *        - K2: Roof opener button relay (GPIO5)
+ *        - K3: Inverter soft-power button relay (GPIO6) - NEW
+ *        - AC Power Detection via optocoupler (GPIO7) - NEW
+ *        - Support for 12V snow/rain sensor - NEW
  *
- *        For the ESP32 S Devkit boards I have been using, compile using the `VintLabs ESP32 Devkit` board profile.
- *        - Set Flash Frequency to 40 MHz
- *        - Baud rate of 921600 seems to work with the USB-c version of the boards
- *        - 4MB with SPIFFS (default) seems to work
- *        - Compiling with other board profiles may not work or does not provide partition for OTA updates
+ * COMPILE SETTINGS for ESP32-S3:
+ *        - Board: ESP32-S3 Dev Module
+ *        - USB CDC On Boot: Enabled
+ *        - Flash Size: 4MB (or larger)
+ *        - Partition Scheme: Default 4MB with SPIFFS
+ *        - Upload Speed: 921600
+ *        - USB Mode: Hardware CDC and JTAG
  *
  */
 
@@ -46,7 +51,7 @@ unsigned long lastStatusUpdate = 0;
 void setup() {
   // Initialize debug output
   Debug.begin(115200);
-  Debug.println("ESP32 ASCOM Alpaca Roll-Off Roof Controller");
+  Debug.println("ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)");
   Debug.println("Version: " + String(DEVICE_VERSION));
   Debug.println("Manufacturer: " + String(DEVICE_MANUFACTURER));
   
@@ -90,10 +95,13 @@ void loop() {
   
   // Update roof status
   updateRoofStatus();
-  
+
   // Update telescope park status
   updateTelescopeStatus();
-  
+
+  // Update inverter power status (NEW in v3)
+  updateInverterPowerStatus();
+
   // Check for movement timeout
   checkMovementTimeout();
   

@@ -1,6 +1,7 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * Configuration Header File
+ * Hardware: ESP32-S3 44-pin with 3 relays
  */
 
 #ifndef CONFIG_H
@@ -12,23 +13,34 @@
 #define DEBUG_LEVEL 1  // 0=Off, 1=Basic, 2=Verbose
 
 // Version Information
-#define DEVICE_VERSION "2.1.0"  // Updated version number
+#define DEVICE_VERSION "3.0.0"  // v3 hardware with ESP32-S3
 #define DEVICE_MANUFACTURER "Corey Smart"
-#define DEVICE_NAME "ESP32 Roll-Off Roof Controller"
+#define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
-// GPIO pin definitions - these are default values, actual values may be adjusted in runtime settings
-// Control Pins
-const int INVERTER_PIN = 2;             // Inverter relay
-const int ROOF_CONTROL_PIN = 4;         // Opener push button 
-const int TELESCOPE_PARKED_PIN = 12;    // Safety interlock on telescope park position
+// GPIO pin definitions for ESP32-S3 v3 Hardware
+// Control Pins - Relays
+const int INVERTER_PIN = 4;                 // K1: Inverter 12V power relay
+const int ROOF_CONTROL_PIN = 5;             // K2: Roof opener button relay
+const int INVERTER_BUTTON_PIN = 6;          // K3: Inverter soft-power button relay (NEW in v3)
+
+// Input Pins - Status and Sensors
+const int INVERTER_AC_POWER_PIN = 7;        // AC power state detection via optocoupler (NEW in v3)
+const int TELESCOPE_PARKED_PIN = 42;        // Safety interlock on telescope park position
+const int RAIN_SENSOR_PIN = 37;             // RG9 Rain sensor input
+
+// Snow Sensor Pins (NEW in v3)
+const int SNOW_SENSOR_DIGITAL_PIN = 38;     // 12V Snow sensor digital input
+const int SNOW_SENSOR_RS485_RO = 41;        // RS485 RO (Receiver Output)
+const int SNOW_SENSOR_RS485_RE_DE = 39;     // RS485 RE/DE (Receiver Enable / Driver Enable)
+const int SNOW_SENSOR_RS485_DI = 40;        // RS485 DI (Driver Input)
 
 // Sensor Pins - defined as extern, will be set at runtime based on preferences
-extern int LIMIT_SWITCH_OPEN_PIN;       // Default: Pin 34 - Limit switch at roof open position
-extern int LIMIT_SWITCH_CLOSED_PIN;     // Default: Pin 35 - Limit switch at roof closed position
+extern int LIMIT_SWITCH_OPEN_PIN;           // Limit switch at roof open position
+extern int LIMIT_SWITCH_CLOSED_PIN;         // Limit switch at roof closed position
 
-// Default Pin Settings
+// Default Pin Settings for ESP32-S3
 const int DEFAULT_OPEN_SWITCH_PIN = 35;
-const int DEFAULT_CLOSED_SWITCH_PIN = 34;
+const int DEFAULT_CLOSED_SWITCH_PIN = 36;
 
 // Pin States
 extern int TRIGGERED;                   // Define whether pin is HIGH or LOW when limit switch is triggered

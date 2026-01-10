@@ -1,5 +1,5 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * Web UI Handler Implementation
  */
 
@@ -251,7 +251,12 @@ void initWebUI() {
   webUiServer.on("/park_sensor_remove", HTTP_POST, handleParkSensorRemove);
   webUiServer.on("/park_sensor_remove_all", HTTP_POST, handleParkSensorRemoveAll);
   webUiServer.on("/park_sensor_type", HTTP_POST, handleParkSensorType);
-  
+
+  // Inverter control endpoints (NEW in v3)
+  webUiServer.on("/inverter_toggle", HTTP_POST, handleInverterToggle);
+  webUiServer.on("/inverter_button", HTTP_POST, handleInverterButton);
+  webUiServer.on("/inverter_status", HTTP_GET, handleInverterStatus);
+
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
   webUiServer.on("/wificonfig", HTTP_POST, handleWifiConfigPost);
@@ -565,4 +570,39 @@ void handleParkSensorType() {
     webUiServer.send(400, "text/plain", "Missing type parameter");
     Debug.println("Park sensor type error: Missing parameter");
   }
+}
+
+// ========== NEW INVERTER CONTROL HANDLERS (v3 Hardware) ==========
+
+// Handler for toggling K1 inverter power relay
+void handleInverterToggle() {
+  toggleInverterPower();
+
+  bool state = getInverterRelayState();
+  String stateStr = state ? "ON" : "OFF";
+
+  Debug.printf("Inverter power relay toggled via web interface to: %s\n", stateStr.c_str());
+  webUiServer.send(200, "text/plain", "Inverter power relay: " + stateStr);
+}
+
+// Handler for sending K3 soft-power button press
+void handleInverterButton() {
+  sendInverterButtonPress();
+
+  Debug.println("Inverter button press sent via web interface");
+  webUiServer.send(200, "text/plain", "Inverter button pressed");
+}
+
+// Handler for getting inverter power states
+void handleInverterStatus() {
+  bool relayState = getInverterRelayState();
+  bool acPowerState = getInverterACPowerState();
+
+  // Create JSON response
+  String json = "{";
+  json += "\"relay_state\":" + String(relayState ? "true" : "false") + ",";
+  json += "\"ac_power_state\":" + String(acPowerState ? "true" : "false");
+  json += "}";
+
+  webUiServer.send(200, "application/json", json);
 }
