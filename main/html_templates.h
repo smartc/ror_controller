@@ -45,6 +45,7 @@ inline String getCommonStyles() {
     "input[type=submit]:hover { background: #2980b9; }\n"
     "button { background-color: #3498db; color: white; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; }\n"
     "button:hover { background-color: #2980b9; }\n"
+    "button:disabled { background-color: #95a5a6; cursor: not-allowed; opacity: 0.5; }\n"
     "table { border-collapse: collapse; width: 100%; }\n"
     "table, th, td { border: 1px solid #ddd; }\n"
     "th, td { padding: 8px; text-align: left; }\n"
@@ -1128,8 +1129,18 @@ inline String getRoofControlPage() {
   html += "</div>\n";
 
   html += "<div style='text-align: center; margin: 20px 0;'>\n";
-  html += "<button class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'>OPEN / CLOSE</button>\n";
-  html += "<p style='font-size: 14px; color: #666; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
+
+  // Determine if button should be disabled
+  bool buttonDisabled = !bypassParkSensor && !telescopeParked;
+
+  html += "<button id='roofControlButton' class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">OPEN / CLOSE</button>\n";
+
+  if (buttonDisabled) {
+    html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>⚠ Telescope not parked - Enable bypass to control roof</p>\n";
+  } else {
+    html += "<p style='font-size: 14px; color: #666; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
+  }
+
   html += "</div>\n";
   html += "</div>\n";
 
@@ -1236,6 +1247,20 @@ inline String getRoofControlPage() {
   html += "      if (bypassLabel) {\n";
   html += "        bypassLabel.style.color = data.bypass_enabled ? '#f44336' : '#333';\n";
   html += "        bypassLabel.innerHTML = 'Bypass Park Sensor <strong>' + (data.bypass_enabled ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
+  html += "      }\n\n";
+
+  html += "      // Update roof control button disabled state\n";
+  html += "      const roofButton = document.getElementById('roofControlButton');\n";
+  html += "      if (roofButton) {\n";
+  html += "        const shouldDisable = !data.bypass_enabled && !data.telescope_parked;\n";
+  html += "        roofButton.disabled = shouldDisable;\n";
+  html += "        if (shouldDisable) {\n";
+  html += "          roofButton.style.opacity = '0.5';\n";
+  html += "          roofButton.style.cursor = 'not-allowed';\n";
+  html += "        } else {\n";
+  html += "          roofButton.style.opacity = '1';\n";
+  html += "          roofButton.style.cursor = 'pointer';\n";
+  html += "        }\n";
   html += "      }\n\n";
 
   html += "      // Update open limit switch\n";
