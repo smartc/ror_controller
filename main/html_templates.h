@@ -1009,10 +1009,10 @@ inline String getRoofControlPage() {
 
   // Current Status Card
   html += "<div class='status-card'>\n";
-  html += "<h2>Current Status</h2>\n";
+  html += "<h2>Current Status <span style='font-size: 14px; color: #666;'>(auto-updates every 2 seconds)</span></h2>\n";
   html += "<table class='status-table'>\n";
 
-  // Roof status
+  // Roof status - with IDs for dynamic updates
   String statusString = getRoofStatusString();
   String statusClass = "";
   if (statusString == "Open") {
@@ -1025,46 +1025,46 @@ inline String getRoofControlPage() {
     statusClass = "status-error";
   }
 
-  html += "<tr><th>Roof Status</th><td class='" + statusClass + "'>" + statusString + "</td></tr>\n";
+  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + statusClass + "'>" + statusString + "</td></tr>\n";
 
   // Park sensor status
-  html += "<tr><th>Telescope Parked</th><td>";
-  html += "<span class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
-  html += telescopeParked ? "Yes" : "No";
+  html += "<tr><th>Telescope Parked</th><td id='telescopeParked'>";
+  html += "<span id='telescopeParkedIndicator' class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
+  html += "<span id='telescopeParkedText'>" + String(telescopeParked ? "Yes" : "No") + "</span>";
   html += "</td></tr>\n";
 
   // Bypass state
-  html += "<tr><th>Park Sensor Bypass</th><td>";
-  html += "<span class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
-  html += bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled";
+  html += "<tr><th>Park Sensor Bypass</th><td id='bypassEnabled'>";
+  html += "<span id='bypassIndicator' class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
+  html += "<span id='bypassText'>" + String(bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled") + "</span>";
   html += "</td></tr>\n";
 
   // Limit switch states
   bool openSwitchTriggered = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
   bool closedSwitchTriggered = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
 
-  html += "<tr><th>Open Limit Switch</th><td>";
-  html += "<span class='status-indicator " + String(openSwitchTriggered ? "green" : "red") + "'></span> ";
-  html += openSwitchTriggered ? "Triggered" : "Not Triggered";
+  html += "<tr><th>Open Limit Switch</th><td id='openLimit'>";
+  html += "<span id='openLimitIndicator' class='status-indicator " + String(openSwitchTriggered ? "green" : "red") + "'></span> ";
+  html += "<span id='openLimitText'>" + String(openSwitchTriggered ? "Triggered" : "Not Triggered") + "</span>";
   html += "</td></tr>\n";
 
-  html += "<tr><th>Closed Limit Switch</th><td>";
-  html += "<span class='status-indicator " + String(closedSwitchTriggered ? "green" : "red") + "'></span> ";
-  html += closedSwitchTriggered ? "Triggered" : "Not Triggered";
+  html += "<tr><th>Closed Limit Switch</th><td id='closedLimit'>";
+  html += "<span id='closedLimitIndicator' class='status-indicator " + String(closedSwitchTriggered ? "green" : "red") + "'></span> ";
+  html += "<span id='closedLimitText'>" + String(closedSwitchTriggered ? "Triggered" : "Not Triggered") + "</span>";
   html += "</td></tr>\n";
 
   // Inverter states
   bool inverterRelay = getInverterRelayState();
   bool inverterACPower = getInverterACPowerState();
 
-  html += "<tr><th>Inverter Relay (K1)</th><td>";
-  html += "<span class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
-  html += inverterRelay ? "ON" : "OFF";
+  html += "<tr><th>Inverter Relay (K1)</th><td id='inverterRelay'>";
+  html += "<span id='inverterRelayIndicator' class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
+  html += "<span id='inverterRelayText'>" + String(inverterRelay ? "ON" : "OFF") + "</span>";
   html += "</td></tr>\n";
 
-  html += "<tr><th>Inverter AC Power</th><td>";
-  html += "<span class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
-  html += inverterACPower ? "ON" : "OFF";
+  html += "<tr><th>Inverter AC Power</th><td id='inverterACPower'>";
+  html += "<span id='inverterACPowerIndicator' class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
+  html += "<span id='inverterACPowerText'>" + String(inverterACPower ? "ON" : "OFF") + "</span>";
   html += "</td></tr>\n";
 
   html += "</table>\n";
@@ -1074,26 +1074,7 @@ inline String getRoofControlPage() {
   html += "<div class='status-card'>\n";
   html += "<h2>Roof Movement</h2>\n";
   html += "<div style='text-align: center; margin: 20px 0;'>\n";
-
-  // Determine button label and color based on current state
-  String buttonLabel;
-  String buttonColor;
-
-  if (statusString == "Opening" || statusString == "Closing") {
-    buttonLabel = "STOP";
-    buttonColor = "#e74c3c";  // Red for stop
-  } else if (statusString == "Closed") {
-    buttonLabel = "OPEN ROOF";
-    buttonColor = "#2ecc71";  // Green for open
-  } else if (statusString == "Open") {
-    buttonLabel = "CLOSE ROOF";
-    buttonColor = "#3498db";  // Blue for close
-  } else {
-    buttonLabel = "OPEN/CLOSE/STOP";
-    buttonColor = "#95a5a6";  // Gray for unknown state
-  }
-
-  html += "<button class='btn' onclick='roofButtonPress()' style='background-color: " + buttonColor + "; font-size: 20px; padding: 15px 30px; margin: 5px;'>" + buttonLabel + "</button>\n";
+  html += "<button class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'>ROOF CONTROL</button>\n";
   html += "<p style='font-size: 14px; color: #666; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
   html += "</div>\n";
   html += "</div>\n";
@@ -1112,14 +1093,14 @@ inline String getRoofControlPage() {
   html += "function toggleInverterPower() {\n";
   html += "  fetch('/inverter_toggle', { method: 'POST' })\n";
   html += "    .then(response => response.text())\n";
-  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .then(data => { console.log('Inverter toggle:', data); updateStatus(); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
 
   html += "function sendInverterButton() {\n";
   html += "  fetch('/inverter_button', { method: 'POST' })\n";
   html += "    .then(response => response.text())\n";
-  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .then(data => { console.log('Inverter button:', data); updateStatus(); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
 
@@ -1137,9 +1118,84 @@ inline String getRoofControlPage() {
   html += "function roofButtonPress() {\n";
   html += "  fetch('/roof_button', { method: 'POST' })\n";
   html += "    .then(response => response.text())\n";
-  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .then(data => { console.log('Roof button pressed:', data); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
-  html += "}\n";
+  html += "}\n\n";
+
+  // Add real-time status update function
+  html += "function updateStatus() {\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      // Update roof status\n";
+  html += "      const statusEl = document.getElementById('roofStatus');\n";
+  html += "      if (statusEl) {\n";
+  html += "        statusEl.textContent = data.status;\n";
+  html += "        statusEl.className = '';\n";
+  html += "        if (data.status === 'Open') statusEl.className = 'status-open';\n";
+  html += "        else if (data.status === 'Closed') statusEl.className = 'status-closed';\n";
+  html += "        else if (data.status === 'Opening' || data.status === 'Closing') statusEl.className = 'status-moving';\n";
+  html += "        else statusEl.className = 'status-error';\n";
+  html += "      }\n\n";
+
+  html += "      // Update telescope parked\n";
+  html += "      const tpInd = document.getElementById('telescopeParkedIndicator');\n";
+  html += "      const tpText = document.getElementById('telescopeParkedText');\n";
+  html += "      if (tpInd && tpText) {\n";
+  html += "        tpInd.className = 'status-indicator ' + (data.telescope_parked ? 'green' : 'red');\n";
+  html += "        tpText.textContent = data.telescope_parked ? 'Yes' : 'No';\n";
+  html += "      }\n\n";
+
+  html += "      // Update bypass status\n";
+  html += "      const bypassInd = document.getElementById('bypassIndicator');\n";
+  html += "      const bypassText = document.getElementById('bypassText');\n";
+  html += "      if (bypassInd && bypassText) {\n";
+  html += "        bypassInd.className = 'status-indicator ' + (data.bypass_enabled ? 'red blink' : 'green');\n";
+  html += "        bypassText.innerHTML = data.bypass_enabled ? \"<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>\" : 'Disabled';\n";
+  html += "      }\n\n";
+
+  html += "      // Update open limit switch\n";
+  html += "      const openInd = document.getElementById('openLimitIndicator');\n";
+  html += "      const openText = document.getElementById('openLimitText');\n";
+  html += "      if (openInd && openText) {\n";
+  html += "        openInd.className = 'status-indicator ' + (data.limit_open ? 'green' : 'red');\n";
+  html += "        openText.textContent = data.limit_open ? 'Triggered' : 'Not Triggered';\n";
+  html += "      }\n\n";
+
+  html += "      // Update closed limit switch\n";
+  html += "      const closedInd = document.getElementById('closedLimitIndicator');\n";
+  html += "      const closedText = document.getElementById('closedLimitText');\n";
+  html += "      if (closedInd && closedText) {\n";
+  html += "        closedInd.className = 'status-indicator ' + (data.limit_closed ? 'green' : 'red');\n";
+  html += "        closedText.textContent = data.limit_closed ? 'Triggered' : 'Not Triggered';\n";
+  html += "      }\n\n";
+
+  html += "      // Update inverter relay\n";
+  html += "      const invRelayInd = document.getElementById('inverterRelayIndicator');\n";
+  html += "      const invRelayText = document.getElementById('inverterRelayText');\n";
+  html += "      if (invRelayInd && invRelayText) {\n";
+  html += "        invRelayInd.className = 'status-indicator ' + (data.inverter_relay ? 'green' : 'red');\n";
+  html += "        invRelayText.textContent = data.inverter_relay ? 'ON' : 'OFF';\n";
+  html += "      }\n\n";
+
+  html += "      // Update inverter AC power\n";
+  html += "      const invACInd = document.getElementById('inverterACPowerIndicator');\n";
+  html += "      const invACText = document.getElementById('inverterACPowerText');\n";
+  html += "      if (invACInd && invACText) {\n";
+  html += "        invACInd.className = 'status-indicator ' + (data.inverter_ac_power ? 'green' : 'red');\n";
+  html += "        invACText.textContent = data.inverter_ac_power ? 'ON' : 'OFF';\n";
+  html += "      }\n";
+  html += "    })\n";
+  html += "    .catch(error => console.error('Error updating status:', error));\n";
+  html += "}\n\n";
+
+  // Start polling on page load
+  html += "// Start auto-updating when page loads\n";
+  html += "document.addEventListener('DOMContentLoaded', function() {\n";
+  html += "  updateStatus(); // Initial update\n";
+  html += "  setInterval(updateStatus, 2000); // Update every 2 seconds\n";
+  html += "});\n";
+
   html += "</script>\n";
 
   html += "</body></html>";

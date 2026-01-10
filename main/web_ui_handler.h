@@ -59,4 +59,7 @@ void handleInverterStatus();         // Get inverter power states (JSON)
 void handleRoofControl();            // Handle roof open/close/stop commands
 void handleRoofButton();             // Handle single roof button press (mimics physical button)
 
+// API endpoint for real-time status updates
+void handleApiStatus();              // Return JSON status for AJAX polling
+
 #endif // WEB_UI_HANDLER_H

@@ -302,6 +302,9 @@ void initWebUI() {
   webUiServer.on("/roof_control", HTTP_POST, handleRoofControl);
   webUiServer.on("/roof_button", HTTP_POST, handleRoofButton);
 
+  // API endpoint for real-time status
+  webUiServer.on("/api/status", HTTP_GET, handleApiStatus);
+
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
   webUiServer.on("/wificonfig", HTTP_POST, handleWifiConfigPost);
@@ -751,4 +754,30 @@ void handleRoofButton() {
       webUiServer.send(400, "text/plain", "Cannot close roof - check telescope park status");
     }
   }
+}
+
+// API endpoint for real-time status updates (returns JSON)
+void handleApiStatus() {
+  DynamicJsonDocument doc(512);
+
+  // Roof status
+  doc["status"] = getRoofStatusString();
+  doc["telescope_parked"] = telescopeParked;
+  doc["bypass_enabled"] = bypassParkSensor;
+
+  // Limit switch states
+  doc["limit_open"] = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+  doc["limit_closed"] = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+
+  // Inverter states
+  doc["inverter_relay"] = getInverterRelayState();
+  doc["inverter_ac_power"] = getInverterACPowerState();
+
+  // Park sensor type
+  doc["park_sensor_type"] = static_cast<int>(parkSensorType);
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+
+  webUiServer.send(200, "application/json", jsonResponse);
 }
