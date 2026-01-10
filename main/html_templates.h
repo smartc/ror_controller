@@ -969,13 +969,42 @@ inline String getSystemManagementCard() {
 inline String getSetupPage() {
   String html = getPageHeader("ESP32 Roll-Off Roof Controller Setup");
 
-  html += "<div class='page-header'>\n";
-  html += "<h1>Device Setup</h1>\n";
-  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  // Get current status for header
+  String statusString = getRoofStatusString();
+  String statusClass = "";
+  String indicatorClass = "";
+
+  if (statusString == "Open") {
+    statusClass = "open";
+    indicatorClass = "blue";
+  } else if (statusString == "Closed") {
+    statusClass = "closed";
+    indicatorClass = "green";
+  } else if (statusString == "Opening") {
+    statusClass = "moving";
+    indicatorClass = "blue blink";
+  } else if (statusString == "Closing") {
+    statusClass = "moving";
+    indicatorClass = "green blink";
+  } else {
+    statusClass = "error";
+    indicatorClass = "red blink";
+  }
+
+  // Status header (matching home page)
+  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
+  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
+  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
   html += "</div>\n";
 
-  // Add navigation
-  html += getNavBar();
+  // Navigation buttons (matching home page)
+  html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
+  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
+  html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
+  html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
+  html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
+  html += "</div>\n";
   
   // Status Card
   html += getStatusCard();
@@ -1022,33 +1051,61 @@ inline String getSetupPage() {
 inline String getRoofControlPage() {
   String html = getPageHeader("Roof Control");
 
-  html += "<div class='page-header'>\n";
-  html += "<h1>Roof Control</h1>\n";
-  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
+  // Get current status for header
+  String statusString = getRoofStatusString();
+  String statusClass = "";
+  String indicatorClass = "";
+
+  if (statusString == "Open") {
+    statusClass = "open";
+    indicatorClass = "blue";
+  } else if (statusString == "Closed") {
+    statusClass = "closed";
+    indicatorClass = "green";
+  } else if (statusString == "Opening") {
+    statusClass = "moving";
+    indicatorClass = "blue blink";
+  } else if (statusString == "Closing") {
+    statusClass = "moving";
+    indicatorClass = "green blink";
+  } else {
+    statusClass = "error";
+    indicatorClass = "red blink";
+  }
+
+  // Status header (matching home page)
+  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
+  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
+  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
   html += "</div>\n";
 
-  // Add navigation
-  html += getNavBar();
+  // Navigation buttons (matching home page)
+  html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
+  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
+  html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
+  html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
+  html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
+  html += "</div>\n";
 
   // Current Status Card
   html += "<div class='status-card'>\n";
   html += "<h2>Current Status</h2>\n";
   html += "<table class='status-table'>\n";
 
-  // Roof status - with IDs for dynamic updates
-  String statusString = getRoofStatusString();
-  String statusClass = "";
+  // Roof status - with IDs for dynamic updates (reuse statusClass from above)
+  String tableStatusClass = "";
   if (statusString == "Open") {
-    statusClass = "status-open";
+    tableStatusClass = "status-open";
   } else if (statusString == "Closed") {
-    statusClass = "status-closed";
+    tableStatusClass = "status-closed";
   } else if (statusString == "Opening" || statusString == "Closing") {
-    statusClass = "status-moving";
+    tableStatusClass = "status-moving";
   } else {
-    statusClass = "status-error";
+    tableStatusClass = "status-error";
   }
 
-  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + statusClass + "'>" + statusString + "</td></tr>\n";
+  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + tableStatusClass + "'>" + statusString + "</td></tr>\n";
 
   // Park sensor status
   html += "<tr><th>Telescope Parked</th><td id='telescopeParked'>";
@@ -1106,7 +1163,7 @@ inline String getRoofControlPage() {
   html += "</label>\n";
   html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>\n";
   html += "Bypass Park Sensor <strong>" + String(bypassParkSensor ? "(ENABLED)" : "(DISABLED)") + "</strong><br>\n";
-  html += "<small>Enable to control roof regardless of telescope position</small>\n";
+  html += "<small style='color: #e0e0e0;'>Enable to control roof regardless of telescope position</small>\n";
   html += "</span>\n";
   html += "</div>\n";
   html += "</div>\n";
