@@ -531,37 +531,6 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "</table>\n";
   html += "</div>\n";
 
-  // Inverter Control Card (NEW in v3)
-  html += "<div class='status-card'>\n";
-  html += "<h2>Inverter Control (v3)</h2>\n";
-  html += "<table class='status-table'>\n";
-
-  // Get inverter states
-  bool inverterRelay = getInverterRelayState();
-  bool inverterACPower = getInverterACPowerState();
-
-  // Inverter relay state (K1)
-  html += "<tr><th>Power Relay (K1)</th><td>";
-  html += "<span class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
-  html += inverterRelay ? "ON" : "OFF";
-  html += "</td></tr>\n";
-
-  // Inverter AC power state (via optocoupler)
-  html += "<tr><th>AC Power State</th><td>";
-  html += "<span class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
-  html += inverterACPower ? "ON" : "OFF";
-  html += "</td></tr>\n";
-
-  html += "</table>\n";
-
-  // Manual control buttons
-  html += "<div style='margin-top: 15px; text-align: center;'>\n";
-  html += "<button class='btn' onclick='toggleInverterPower()'>Toggle Power Relay (K1)</button>\n";
-  html += "<button class='btn' onclick='sendInverterButton()' style='margin-left: 10px;'>Press Soft-Power Button (K3)</button>\n";
-  html += "</div>\n";
-
-  html += "</div>\n";
-
   // MQTT Information Card
   html += "<div class='status-card'>\n";
   html += "<h2>MQTT Information</h2>\n";
@@ -602,30 +571,11 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "</table>\n";
   html += "</div>\n";
   
-  // Simple JavaScript to handle page refresh and inverter controls
+  // Simple JavaScript for real-time status updates
   html += "<script>\n";
   html += "document.addEventListener('DOMContentLoaded', function() {\n";
   html += "  console.log('Page loaded, auto-refresh enabled');\n";
   html += "});\n\n";
-
-  // Inverter control functions (NEW in v3)
-  html += "function toggleInverterPower() {\n";
-  html += "  fetch('/inverter_toggle', { method: 'POST' })\n";
-  html += "    .then(response => response.text())\n";
-  html += "    .then(data => {\n";
-  html += "      setTimeout(() => location.reload(), 500);\n";
-  html += "    })\n";
-  html += "    .catch(error => alert('Error: ' + error));\n";
-  html += "}\n\n";
-
-  html += "function sendInverterButton() {\n";
-  html += "  fetch('/inverter_button', { method: 'POST' })\n";
-  html += "    .then(response => response.text())\n";
-  html += "    .then(data => {\n";
-  html += "      setTimeout(() => location.reload(), 500);\n";
-  html += "    })\n";
-  html += "    .catch(error => alert('Error: ' + error));\n";
-  html += "}\n\n";
 
   html += "function roofControl(action) {\n";
   html += "  fetch('/roof_control', {\n";
