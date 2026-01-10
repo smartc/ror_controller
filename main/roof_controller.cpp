@@ -14,6 +14,7 @@ int LIMIT_SWITCH_OPEN_PIN = DEFAULT_OPEN_SWITCH_PIN;    // Default to pin 35
 int LIMIT_SWITCH_CLOSED_PIN = DEFAULT_CLOSED_SWITCH_PIN; // Default to pin 36
 int TRIGGERED = DEFAULT_TRIGGER_STATE;                  // Default to LOW trigger state
 int TELESCOPE_PARKED = DEFAULT_PARK_STATE;              // Park sensor is HIGH until triggered
+unsigned long movementTimeout = DEFAULT_MOVEMENT_TIMEOUT; // Movement timeout in ms
 
 // Limit switch states
 bool lastOpenSwitchState = false;
@@ -262,8 +263,8 @@ void updateRoofStatus() {
 // Check for movement timeout
 void checkMovementTimeout() {
   // Check for timeout during roof movement
-  if ((roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) && 
-      (millis() - movementStartTime > MOVEMENT_TIMEOUT)) {
+  if ((roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) &&
+      (millis() - movementStartTime > movementTimeout)) {
     
     // Stop the roof due to timeout
     Debug.println("Roof movement timed out!");

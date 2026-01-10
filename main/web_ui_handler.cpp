@@ -102,10 +102,16 @@ void loadConfiguration() {
   if (preferences.isKey(PREF_BYPASS_SENSOR)) {
     bypassParkSensor = preferences.getBool(PREF_BYPASS_SENSOR, false);
   }
-  
+
+  // Load movement timeout setting
+  if (preferences.isKey(PREF_MOVEMENT_TIMEOUT)) {
+    movementTimeout = preferences.getULong(PREF_MOVEMENT_TIMEOUT, DEFAULT_MOVEMENT_TIMEOUT);
+  }
+
   preferences.end();
-  
+
   Debug.println("Configuration loaded from preferences");
+  Debug.printf("Movement timeout: %lu ms (%lu seconds)\n", movementTimeout, movementTimeout / 1000);
 }
 
 // Save configuration to preferences
@@ -122,9 +128,12 @@ void saveConfiguration() {
   preferences.putString(PREF_MQTT_USER, mqttUser);
   preferences.putString(PREF_MQTT_PASSWORD, mqttPassword);
   preferences.putString(PREF_MQTT_TOPIC_PREFIX, mqttTopicPrefix);
-  
+
+  // Save movement timeout
+  preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
+
   preferences.end();
-  
+
   Debug.println("Configuration saved to preferences");
 }
 
@@ -206,6 +215,28 @@ void handleSetPins() {
     }
   }
 
+  // Check for timeout parameter
+  if (webUiServer.hasArg("timeout")) {
+    unsigned long newTimeout = webUiServer.arg("timeout").toInt() * 1000; // Convert seconds to ms
+    if (newTimeout >= 10000 && newTimeout <= 600000) { // 10 seconds to 10 minutes
+      if (newTimeout != movementTimeout) {
+        movementTimeout = newTimeout;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Movement timeout set to " + String(movementTimeout / 1000) + " seconds. ";
+        Debug.printf("Movement timeout set to %lu seconds\n", movementTimeout / 1000);
+      }
+    } else {
+      message += "Invalid timeout value (must be 10-600 seconds). ";
+      Debug.println("Invalid timeout value received");
+    }
+  }
+
   if (settingsChanged) {
     // Apply new pin settings
     applyPinSettings();
@@ -227,7 +258,10 @@ void initWebUI() {
   // Handle setup page
   webUiServer.on("/setup", HTTP_GET, handleSetup);
   webUiServer.on("/setup", HTTP_POST, handleSetupPost);
-  
+
+  // Handle roof control page
+  webUiServer.on("/control", HTTP_GET, handleControl);
+
   // Force discovery handler
   webUiServer.on("/force_discovery", HTTP_GET, handleForceDiscovery);
   
@@ -256,6 +290,9 @@ void initWebUI() {
   webUiServer.on("/inverter_toggle", HTTP_POST, handleInverterToggle);
   webUiServer.on("/inverter_button", HTTP_POST, handleInverterButton);
   webUiServer.on("/inverter_status", HTTP_GET, handleInverterStatus);
+
+  // Roof control endpoint
+  webUiServer.on("/roof_control", HTTP_POST, handleRoofControl);
 
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
@@ -605,4 +642,47 @@ void handleInverterStatus() {
   json += "}";
 
   webUiServer.send(200, "application/json", json);
+}
+
+// Handler for roof control page
+void handleControl() {
+  String html = getRoofControlPage();
+  webUiServer.send(200, "text/html", html);
+}
+
+// Handler for roof control commands
+void handleRoofControl() {
+  if (webUiServer.hasArg("action")) {
+    String action = webUiServer.arg("action");
+
+    if (action == "open") {
+      bool success = startOpeningRoof();
+      if (success) {
+        Debug.println("Roof opening command sent via web interface");
+        webUiServer.send(200, "text/plain", "Roof opening");
+      } else {
+        Debug.println("Roof opening command failed - check safety interlocks");
+        webUiServer.send(400, "text/plain", "Cannot open roof - check telescope park status");
+      }
+    } else if (action == "close") {
+      bool success = startClosingRoof();
+      if (success) {
+        Debug.println("Roof closing command sent via web interface");
+        webUiServer.send(200, "text/plain", "Roof closing");
+      } else {
+        Debug.println("Roof closing command failed - check safety interlocks");
+        webUiServer.send(400, "text/plain", "Cannot close roof - check telescope park status");
+      }
+    } else if (action == "stop") {
+      stopRoofMovement();
+      Debug.println("Roof stop command sent via web interface");
+      webUiServer.send(200, "text/plain", "Roof stopped");
+    } else {
+      webUiServer.send(400, "text/plain", "Invalid action");
+      Debug.println("Roof control error: Invalid action");
+    }
+  } else {
+    webUiServer.send(400, "text/plain", "Missing action parameter");
+    Debug.println("Roof control error: Missing parameter");
+  }
 }

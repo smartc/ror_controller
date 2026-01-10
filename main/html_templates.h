@@ -22,6 +22,7 @@ String getStatusDisplay(RoofStatus status);
 String getControlJS();
 String getHomePage(RoofStatus status, bool isApMode);
 String getSetupPage();
+String getRoofControlPage();
 String getWifiConfigPage();
 String getWifiSettingsCard();
 String getMqttSettingsCard();
@@ -127,17 +128,17 @@ inline String getPageHeader(String pageTitle) {
   return header;
 }
 
-// Navigation links 
+// Navigation links
 inline String getNavBar() {
-  String navbar = 
+  String navbar =
     "<div style='margin-bottom: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>\n"
     "<a href='/' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Home</a>\n"
+    "<a href='/control' style='margin-right: 10px; padding: 8px 12px; background-color: #2ecc71; color: white; border-radius: 4px; text-decoration: none;'>Roof Control</a>\n"
     "<a href='/setup' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Setup</a>\n"
     "<a href='/wificonfig' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>WiFi Config</a>\n"
-    "<a href='http://" + WiFi.localIP().toString() + ":" + String(ALPACA_PORT) + "/setup/v1/dome/0/setup' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>ASCOM Controls</a>\n"
-    "<a href='/update' style='padding: 8px 12px; background-color: #f39c12; color: white; border-radius: 4px; text-decoration: none;'>Update</a>\n" 
+    "<a href='/update' style='padding: 8px 12px; background-color: #f39c12; color: white; border-radius: 4px; text-decoration: none;'>Update</a>\n"
     "</div>\n";
-  
+
   return navbar;
 }
 
@@ -163,11 +164,12 @@ inline String getControlJS() {
     "    const triggerState = document.getElementById('triggerState').checked ? 'high' : 'low';\n"
     "    const swapSwitches = document.getElementById('swapSwitches').checked ? 'true' : 'false';\n"
     "    const mqttEnabled = document.getElementById('mqttEnabled').checked ? 'true' : 'false';\n"
+    "    const timeout = document.getElementById('timeoutInput').value;\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&timeout=' + timeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -411,9 +413,9 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   // Navigation buttons
   html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
   html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
   html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
-  html += "<a href='http://" + WiFi.localIP().toString() + ":" + String(ALPACA_PORT) + "/setup/v1/dome/0/setup' class='nav-button' style='background-color: #3498db;'>ASCOM Controls</a>\n";
   html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
   html += "</div>\n";
   
@@ -609,27 +611,34 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
 
   // Inverter control functions (NEW in v3)
   html += "function toggleInverterPower() {\n";
-  html += "  if (confirm('Toggle inverter power relay (K1)?')) {\n";
-  html += "    fetch('/inverter_toggle', { method: 'POST' })\n";
-  html += "      .then(response => response.text())\n";
-  html += "      .then(data => {\n";
-  html += "        alert(data);\n";
-  html += "        setTimeout(() => location.reload(), 1000);\n";
-  html += "      })\n";
-  html += "      .catch(error => alert('Error: ' + error));\n";
-  html += "  }\n";
+  html += "  fetch('/inverter_toggle', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => {\n";
+  html += "      setTimeout(() => location.reload(), 500);\n";
+  html += "    })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
 
   html += "function sendInverterButton() {\n";
-  html += "  if (confirm('Send inverter soft-power button press (K3)?')) {\n";
-  html += "    fetch('/inverter_button', { method: 'POST' })\n";
-  html += "      .then(response => response.text())\n";
-  html += "      .then(data => {\n";
-  html += "        alert(data);\n";
-  html += "        setTimeout(() => location.reload(), 1000);\n";
-  html += "      })\n";
-  html += "      .catch(error => alert('Error: ' + error));\n";
-  html += "  }\n";
+  html += "  fetch('/inverter_button', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => {\n";
+  html += "      setTimeout(() => location.reload(), 500);\n";
+  html += "    })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function roofControl(action) {\n";
+  html += "  fetch('/roof_control', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: {'Content-Type': 'application/x-www-form-urlencoded'},\n";
+  html += "    body: 'action=' + action\n";
+  html += "  })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => {\n";
+  html += "      setTimeout(() => location.reload(), 500);\n";
+  html += "    })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n";
 
   html += "</script>\n";
@@ -775,20 +784,30 @@ inline String getSwitchConfigCard() {
   
   html += "</div>"; // End toggle-row
   html += "</div>"; // End toggle-group
-  
+
+  // Timing Settings
+  html += "<h3>Timing Settings</h3>";
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #f9f9f9; border-radius: 4px;'>";
+  html += "<label for='timeoutInput' style='display: block; margin-bottom: 5px;'><strong>Movement Timeout (seconds):</strong></label>";
+  html += "<input type='number' id='timeoutInput' min='10' max='600' value='" + String(movementTimeout / 1000) + "' ";
+  html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #666;'>Time before roof movement times out (10-600 seconds, default: 90)</p>";
+  html += "</div>";
+
   // Current configuration
   html += "<div style='margin-top: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 4px;'>";
   html += "<p><strong>Current Configuration:</strong><br>";
   html += "Trigger state: " + String(TRIGGERED == HIGH ? "HIGH" : "LOW") + "<br>";
   html += "Open switch pin: " + String(LIMIT_SWITCH_OPEN_PIN) + "<br>";
   html += "Closed switch pin: " + String(LIMIT_SWITCH_CLOSED_PIN) + "<br>";
-  html += "Park sensor bypass: " + String(bypassParkSensor ? "Enabled" : "Disabled") + "</p>";
+  html += "Park sensor bypass: " + String(bypassParkSensor ? "Enabled" : "Disabled") + "<br>";
+  html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
   html += "</div>";
-  
+
   // Apply button
   html += "<button onclick='applyPinSettings()' class='button-danger' style='margin-top: 15px;'>Apply Settings</button>";
   html += "</div>";
-  
+
   return html;
 }
 
@@ -971,7 +990,132 @@ inline String getSetupPage() {
   html += "</script>";
   
   html += "</body></html>";
-  
+
+  return html;
+}
+
+// Roof Control page (v3)
+inline String getRoofControlPage() {
+  String html = getPageHeader("Roof Control");
+
+  html += "<h1>Roof Control</h1>";
+  html += "<p>Version: " + String(DEVICE_VERSION) + "</p>";
+
+  // Add navigation
+  html += getNavBar();
+
+  // Current Status Card
+  html += "<div class='status-card'>\n";
+  html += "<h2>Current Status</h2>\n";
+  html += "<table class='status-table'>\n";
+
+  // Roof status
+  String statusString = getRoofStatusString();
+  String statusClass = "";
+  if (statusString == "Open") {
+    statusClass = "status-open";
+  } else if (statusString == "Closed") {
+    statusClass = "status-closed";
+  } else if (statusString == "Opening" || statusString == "Closing") {
+    statusClass = "status-moving";
+  } else {
+    statusClass = "status-error";
+  }
+
+  html += "<tr><th>Roof Status</th><td class='" + statusClass + "'>" + statusString + "</td></tr>\n";
+
+  // Park sensor status
+  html += "<tr><th>Telescope Parked</th><td>";
+  html += "<span class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
+  html += telescopeParked ? "Yes" : "No";
+  html += "</td></tr>\n";
+
+  // Bypass state
+  html += "<tr><th>Park Sensor Bypass</th><td>";
+  html += "<span class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
+  html += bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled";
+  html += "</td></tr>\n";
+
+  // Limit switch states
+  bool openSwitchTriggered = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+  bool closedSwitchTriggered = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+
+  html += "<tr><th>Open Limit Switch</th><td>";
+  html += "<span class='status-indicator " + String(openSwitchTriggered ? "green" : "red") + "'></span> ";
+  html += openSwitchTriggered ? "Triggered" : "Not Triggered";
+  html += "</td></tr>\n";
+
+  html += "<tr><th>Closed Limit Switch</th><td>";
+  html += "<span class='status-indicator " + String(closedSwitchTriggered ? "green" : "red") + "'></span> ";
+  html += closedSwitchTriggered ? "Triggered" : "Not Triggered";
+  html += "</td></tr>\n";
+
+  // Inverter states
+  bool inverterRelay = getInverterRelayState();
+  bool inverterACPower = getInverterACPowerState();
+
+  html += "<tr><th>Inverter Relay (K1)</th><td>";
+  html += "<span class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
+  html += inverterRelay ? "ON" : "OFF";
+  html += "</td></tr>\n";
+
+  html += "<tr><th>Inverter AC Power</th><td>";
+  html += "<span class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
+  html += inverterACPower ? "ON" : "OFF";
+  html += "</td></tr>\n";
+
+  html += "</table>\n";
+  html += "</div>\n";
+
+  // Roof Control Card
+  html += "<div class='status-card'>\n";
+  html += "<h2>Roof Movement</h2>\n";
+  html += "<div style='text-align: center; margin: 20px 0;'>\n";
+  html += "<button class='btn' onclick='roofControl(\"open\")' style='background-color: #2ecc71; margin: 5px;'>Open Roof</button>\n";
+  html += "<button class='btn' onclick='roofControl(\"stop\")' style='background-color: #e74c3c; margin: 5px;'>Stop</button>\n";
+  html += "<button class='btn' onclick='roofControl(\"close\")' style='background-color: #3498db; margin: 5px;'>Close Roof</button>\n";
+  html += "</div>\n";
+  html += "</div>\n";
+
+  // Inverter Control Card
+  html += "<div class='status-card'>\n";
+  html += "<h2>Inverter Control</h2>\n";
+  html += "<div style='text-align: center; margin: 20px 0;'>\n";
+  html += "<button class='btn' onclick='toggleInverterPower()' style='margin: 5px;'>Toggle Power Relay (K1)</button>\n";
+  html += "<button class='btn' onclick='sendInverterButton()' style='margin: 5px;'>Press Soft-Power Button (K3)</button>\n";
+  html += "</div>\n";
+  html += "</div>\n";
+
+  // Add JavaScript for control functions
+  html += "<script>\n";
+  html += "function toggleInverterPower() {\n";
+  html += "  fetch('/inverter_toggle', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function sendInverterButton() {\n";
+  html += "  fetch('/inverter_button', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function roofControl(action) {\n";
+  html += "  fetch('/roof_control', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: {'Content-Type': 'application/x-www-form-urlencoded'},\n";
+  html += "    body: 'action=' + action\n";
+  html += "  })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n";
+  html += "</script>\n";
+
+  html += "</body></html>";
+
   return html;
 }
 

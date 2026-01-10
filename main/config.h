@@ -51,7 +51,8 @@ const int DEFAULT_PARK_STATE = HIGH;    // Default park sensor state
 // Timing Settings
 const uint32_t DEBOUNCE_DELAY = 100;        // Debounce delay in ms
 const unsigned long SWITCH_STABLE_TIME = 500; // Time in ms a switch must be stable
-const unsigned long MOVEMENT_TIMEOUT = 90000; // 90 seconds for roof movement timeout
+extern unsigned long movementTimeout;        // Roof movement timeout in ms (configurable)
+const unsigned long DEFAULT_MOVEMENT_TIMEOUT = 90000; // Default: 90 seconds
 
 // Safety Settings
 extern bool bypassParkSensor;           // Software bypass state for telescope park sensors
@@ -100,6 +101,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_PARK_STATE "parkState"
 #define PREF_SWAP_SWITCHES "swapSwitches"
 #define PREF_BYPASS_SENSOR "bypassParkSensor"
+#define PREF_MOVEMENT_TIMEOUT "moveTimeout"
 #define PREF_WIFI_SSID "ssid"
 #define PREF_WIFI_PASSWORD "wifiPassword"
 #define PREF_MQTT_SERVER "mqttServer"

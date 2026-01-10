@@ -34,6 +34,7 @@ void saveConfiguration();
 void initWebUI();
 void handleWebUI();
 void handleRoot();
+void handleControl();  // Roof control page
 void handleSetup();
 void handleSetupPost();
 void handleForceDiscovery();
@@ -53,5 +54,8 @@ void handleParkSensorType();
 void handleInverterToggle();         // Toggle K1 inverter power relay
 void handleInverterButton();         // Send K3 soft-power button press
 void handleInverterStatus();         // Get inverter power states (JSON)
+
+// Roof control handler
+void handleRoofControl();            // Handle roof open/close/stop commands
 
 #endif // WEB_UI_HANDLER_H
