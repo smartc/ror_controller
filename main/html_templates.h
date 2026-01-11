@@ -1306,11 +1306,11 @@ inline String getRoofControlPage() {
   // Determine if buttons should be disabled
   bool buttonDisabled = !bypassParkSensor && !telescopeParked;
 
+  // Intelligent button - uses ASCOM/MQTT logic (always enabled, has built-in safety checks)
+  html += "<button id='roofOpenCloseButton' class='btn' onclick='roofOpenClose()' style='background-color: #2ecc71; font-size: 20px; padding: 15px 30px; margin: 5px;'>OPEN / CLOSE</button>\n";
+
   // Manual button - mimics physical button press
   html += "<button id='roofControlButton' class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">START / STOP</button>\n";
-
-  // Intelligent button - uses ASCOM/MQTT logic
-  html += "<button id='roofOpenCloseButton' class='btn' onclick='roofOpenClose()' style='background-color: #2ecc71; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">OPEN / CLOSE</button>\n";
 
   if (buttonDisabled) {
     html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>⚠ Telescope not parked - Enable bypass to control roof</p>\n";
