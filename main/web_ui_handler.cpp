@@ -114,9 +114,14 @@ void loadConfiguration() {
     movementTimeout = preferences.getULong(PREF_MOVEMENT_TIMEOUT, DEFAULT_MOVEMENT_TIMEOUT);
   }
 
-  // Load inverter auto-power setting
-  if (preferences.isKey(PREF_INVERTER_AUTO_POWER)) {
-    inverterAutoPower = preferences.getBool(PREF_INVERTER_AUTO_POWER, true);  // Default to true
+  // Load inverter relay enabled setting
+  if (preferences.isKey(PREF_INVERTER_RELAY_ENABLED)) {
+    inverterRelayEnabled = preferences.getBool(PREF_INVERTER_RELAY_ENABLED, true);  // Default to true
+  }
+
+  // Load inverter soft-power enabled setting
+  if (preferences.isKey(PREF_INVERTER_SOFTPWR_ENABLED)) {
+    inverterSoftPwrEnabled = preferences.getBool(PREF_INVERTER_SOFTPWR_ENABLED, true);  // Default to true
   }
 
   preferences.end();
@@ -144,8 +149,11 @@ void saveConfiguration() {
   // Save movement timeout
   preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
 
-  // Save inverter auto-power setting
-  preferences.putBool(PREF_INVERTER_AUTO_POWER, inverterAutoPower);
+  // Save inverter relay enabled setting
+  preferences.putBool(PREF_INVERTER_RELAY_ENABLED, inverterRelayEnabled);
+
+  // Save inverter soft-power enabled setting
+  preferences.putBool(PREF_INVERTER_SOFTPWR_ENABLED, inverterSoftPwrEnabled);
 
   preferences.end();
 
@@ -252,20 +260,37 @@ void handleSetPins() {
     }
   }
 
-  // Check for inverter auto-power parameter
-  if (webUiServer.hasArg("inverterAutoPower")) {
-    bool newInverterAutoPower = webUiServer.arg("inverterAutoPower").equals("true");
-    if (newInverterAutoPower != inverterAutoPower) {
-      inverterAutoPower = newInverterAutoPower;
+  // Check for inverter relay enabled parameter
+  if (webUiServer.hasArg("inverterRelay")) {
+    bool newInverterRelayEnabled = webUiServer.arg("inverterRelay").equals("true");
+    if (newInverterRelayEnabled != inverterRelayEnabled) {
+      inverterRelayEnabled = newInverterRelayEnabled;
 
       // Save the setting
       preferences.begin(PREFERENCES_NAMESPACE, false);
-      preferences.putBool(PREF_INVERTER_AUTO_POWER, inverterAutoPower);
+      preferences.putBool(PREF_INVERTER_RELAY_ENABLED, inverterRelayEnabled);
       preferences.end();
 
       settingsChanged = true;
-      message += "Inverter auto-power " + String(inverterAutoPower ? "enabled" : "disabled") + ". ";
-      Debug.printf("Inverter auto-power %s\n", inverterAutoPower ? "enabled" : "disabled");
+      message += "Inverter relay control " + String(inverterRelayEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Inverter relay control %s\n", inverterRelayEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  // Check for inverter soft-power enabled parameter
+  if (webUiServer.hasArg("inverterSoftPwr")) {
+    bool newInverterSoftPwrEnabled = webUiServer.arg("inverterSoftPwr").equals("true");
+    if (newInverterSoftPwrEnabled != inverterSoftPwrEnabled) {
+      inverterSoftPwrEnabled = newInverterSoftPwrEnabled;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_INVERTER_SOFTPWR_ENABLED, inverterSoftPwrEnabled);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Inverter soft-power button " + String(inverterSoftPwrEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Inverter soft-power button %s\n", inverterSoftPwrEnabled ? "enabled" : "disabled");
     }
   }
 

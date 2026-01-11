@@ -166,13 +166,14 @@ inline String getControlJS() {
     "    const triggerState = document.getElementById('triggerState').checked ? 'high' : 'low';\n"
     "    const swapSwitches = document.getElementById('swapSwitches').checked ? 'true' : 'false';\n"
     "    const mqttEnabled = document.getElementById('mqttEnabled').checked ? 'true' : 'false';\n"
-    "    const inverterAutoPower = document.getElementById('inverterAutoPowerToggle').checked ? 'true' : 'false';\n"
+    "    const inverterRelay = document.getElementById('inverterRelayToggle').checked ? 'true' : 'false';\n"
+    "    const inverterSoftPwr = document.getElementById('inverterSoftPwrToggle').checked ? 'true' : 'false';\n"
     "    const timeout = document.getElementById('timeoutInput').value;\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterAutoPower=' + inverterAutoPower + '&timeout=' + timeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&timeout=' + timeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -811,16 +812,31 @@ inline String getSwitchConfigCard() {
   html += "<h3>Inverter Settings</h3>";
   html += "<div class='toggle-row'>";
 
-  // Inverter auto-power toggle
+  // Inverter relay (K1) toggle
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
-  html += "<input type='checkbox' id='inverterAutoPowerToggle'" + String(inverterAutoPower ? " checked" : "") + " onchange=\"updateToggleLabel('inverterAutoPowerToggle', 'inverterAutoPowerText', 'ENABLED', 'DISABLED')\">";
+  html += "<input type='checkbox' id='inverterRelayToggle'" + String(inverterRelayEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED')\">";
   html += "<span class='slider'></span>";
   html += "</label>";
   html += "<span class='switch-label'>";
-  html += "Auto-Power Inverter for Roof Movement <strong id='inverterAutoPowerText'>(" + String(inverterAutoPower ? "ENABLED" : "DISABLED") + ")</strong><br>";
-  html += "<small>When enabled, automatically powers inverter (K1) and sends soft-power button (K3) when opening/closing roof</small><br>";
-  html += "<small style='color: #b0b0b0;'>Disable if you don't have an inverter or only need roof button control</small>";
+  html += "Enable Power Relay (K1) <strong id='inverterRelayText'>(" + String(inverterRelayEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Auto-control K1 relay to power inverter when opening/closing roof</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>"; // End toggle-row
+
+  html += "<div class='toggle-row'>";
+
+  // Inverter soft-power button (K3) toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='inverterSoftPwrToggle'" + String(inverterSoftPwrEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Enable Soft-Power Button (K3) <strong id='inverterSoftPwrText'>(" + String(inverterSoftPwrEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Auto-press K3 soft-power button if no AC power detected when opening/closing roof</small>";
   html += "</span>";
   html += "</div>";
 
@@ -843,7 +859,8 @@ inline String getSwitchConfigCard() {
   html += "Open switch pin: " + String(LIMIT_SWITCH_OPEN_PIN) + "<br>";
   html += "Closed switch pin: " + String(LIMIT_SWITCH_CLOSED_PIN) + "<br>";
   html += "Park sensor bypass: " + String(bypassParkSensor ? "Enabled" : "Disabled") + "<br>";
-  html += "Inverter auto-power: " + String(inverterAutoPower ? "Enabled" : "Disabled") + "<br>";
+  html += "Inverter relay (K1): " + String(inverterRelayEnabled ? "Enabled" : "Disabled") + "<br>";
+  html += "Soft-power button (K3): " + String(inverterSoftPwrEnabled ? "Enabled" : "Disabled") + "<br>";
   html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
   html += "</div>";
 
@@ -1084,7 +1101,8 @@ inline String getSetupPage() {
   html += "  updateToggleLabel('triggerState', 'triggerStateText', 'HIGH', 'LOW');";
   html += "  updateToggleLabel('swapSwitches', 'swapSwitchesText', 'Swapped', 'Default');";
   html += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
-  html += "  updateToggleLabel('inverterAutoPowerToggle', 'inverterAutoPowerText', 'ENABLED', 'DISABLED');";
+  html += "  updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED');";
+  html += "  updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED');";
   html += "  const bypassToggle = document.getElementById('bypassToggle');";
   html += "  const bypassText = document.getElementById('bypassText');";
   html += "  if (bypassToggle && bypassText) {";

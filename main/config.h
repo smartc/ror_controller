@@ -110,7 +110,8 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_MQTT_PASSWORD "mqttPassword"
 #define PREF_MQTT_CLIENT_ID "mqttClientId"
 #define PREF_MQTT_TOPIC_PREFIX "mqttTopicPrefix"
-#define PREF_INVERTER_AUTO_POWER "inverterAutoPower"
+#define PREF_INVERTER_RELAY_ENABLED "inverterRelayEn"
+#define PREF_INVERTER_SOFTPWR_ENABLED "inverterSoftEn"
 
 // Enum for roof status - matches ASCOM ShutterStatus values
 enum RoofStatus {

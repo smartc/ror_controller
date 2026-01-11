@@ -30,7 +30,8 @@ extern bool inverterRelayState;      // State of K1 (12V power relay)
 extern bool inverterACPowerState;    // State of AC power (detected via optocoupler)
 extern bool lastInverterACPowerState; // Last AC power state for change detection
 extern unsigned long lastInverterACPowerChangeTime;
-extern bool inverterAutoPower;       // Auto-power inverter when opening/closing roof
+extern bool inverterRelayEnabled;    // Enable K1 power relay control for roof movement
+extern bool inverterSoftPwrEnabled;  // Enable K3 soft-power button control for roof movement
 
 // Function prototypes
 void initializeRoofController();

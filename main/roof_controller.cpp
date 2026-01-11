@@ -42,7 +42,8 @@ bool inverterRelayState = false;                // State of K1 (12V power relay)
 bool inverterACPowerState = false;              // State of AC power (detected via optocoupler)
 bool lastInverterACPowerState = false;          // Last AC power state for change detection
 unsigned long lastInverterACPowerChangeTime = 0;
-bool inverterAutoPower = true;                  // Auto-power inverter when opening/closing roof (default: enabled)
+bool inverterRelayEnabled = true;               // Enable K1 power relay control for roof movement (default: enabled)
+bool inverterSoftPwrEnabled = true;             // Enable K3 soft-power button control for roof movement (default: enabled)
 
 // Apply pin settings - useful after changing pin assignments or trigger state
 void applyPinSettings() {
@@ -305,17 +306,23 @@ bool startOpeningRoof() {
 
   Debug.println("SAFETY CHECK PASSED: Opening roof");
 
-  // Auto-power inverter if enabled
-  if (inverterAutoPower) {
-    Debug.println("Inverter auto-power enabled - powering up inverter");
-
-    // Turn on the inverter power (K1 relay)
+  // Step 1: Power relay control (K1)
+  if (inverterRelayEnabled) {
+    Debug.println("Inverter relay enabled - turning on K1 power relay");
     digitalWrite(INVERTER_PIN, HIGH);
     inverterRelayState = true;
-    Debug.println("Inverter K1 relay turned ON");
+    Debug.println("K1 relay turned ON");
 
     // Wait 750ms for inverter to initialize
     delay(750);
+    Debug.println("750ms delay complete");
+  } else {
+    Debug.println("Inverter relay disabled - skipping K1 relay control");
+  }
+
+  // Step 2: Soft-power button control (K3)
+  if (inverterSoftPwrEnabled) {
+    Debug.println("Soft-power button enabled - checking AC power state");
 
     // Check if AC power is detected
     inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
@@ -325,14 +332,18 @@ bool startOpeningRoof() {
     if (!inverterACPowerState) {
       Debug.println("No AC power detected - sending soft-power button press (K3)");
       sendInverterButtonPress();
+
+      // Wait 1.5 seconds after soft-power button before roof control
+      delay(1500);
+      Debug.println("1500ms delay after soft-power button complete");
     } else {
       Debug.println("AC power already detected - skipping soft-power button press");
     }
   } else {
-    Debug.println("Inverter auto-power disabled - skipping inverter control");
+    Debug.println("Soft-power button disabled - skipping K3 button control");
   }
 
-  // Send a button press to the roof controller (K2 relay)
+  // Step 3: Send roof control button press (K2 relay)
   sendButtonPress();
 
   // Update roof status
@@ -374,17 +385,23 @@ bool startClosingRoof() {
 
   Debug.println("SAFETY CHECK PASSED: Closing roof");
 
-  // Auto-power inverter if enabled
-  if (inverterAutoPower) {
-    Debug.println("Inverter auto-power enabled - powering up inverter");
-
-    // Turn on the inverter power (K1 relay)
+  // Step 1: Power relay control (K1)
+  if (inverterRelayEnabled) {
+    Debug.println("Inverter relay enabled - turning on K1 power relay");
     digitalWrite(INVERTER_PIN, HIGH);
     inverterRelayState = true;
-    Debug.println("Inverter K1 relay turned ON");
+    Debug.println("K1 relay turned ON");
 
     // Wait 750ms for inverter to initialize
     delay(750);
+    Debug.println("750ms delay complete");
+  } else {
+    Debug.println("Inverter relay disabled - skipping K1 relay control");
+  }
+
+  // Step 2: Soft-power button control (K3)
+  if (inverterSoftPwrEnabled) {
+    Debug.println("Soft-power button enabled - checking AC power state");
 
     // Check if AC power is detected
     inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
@@ -394,14 +411,18 @@ bool startClosingRoof() {
     if (!inverterACPowerState) {
       Debug.println("No AC power detected - sending soft-power button press (K3)");
       sendInverterButtonPress();
+
+      // Wait 1.5 seconds after soft-power button before roof control
+      delay(1500);
+      Debug.println("1500ms delay after soft-power button complete");
     } else {
       Debug.println("AC power already detected - skipping soft-power button press");
     }
   } else {
-    Debug.println("Inverter auto-power disabled - skipping inverter control");
+    Debug.println("Soft-power button disabled - skipping K3 button control");
   }
 
-  // Send a button press to the roof controller (K2 relay)
+  // Step 3: Send roof control button press (K2 relay)
   sendButtonPress();
 
   // Update roof status
@@ -424,13 +445,13 @@ bool stopRoofMovement() {
   // Update status based on limit switches
   updateRoofStatus();
 
-  // Turn off the inverter if auto-power is enabled (K1 relay)
-  if (inverterAutoPower) {
+  // Turn off the inverter if relay control is enabled (K1 relay)
+  if (inverterRelayEnabled) {
     digitalWrite(INVERTER_PIN, LOW);
     inverterRelayState = false;
     Debug.println("Inverter turned OFF (K1 relay de-energized)");
   } else {
-    Debug.println("Inverter auto-power disabled - leaving inverter in current state");
+    Debug.println("Inverter relay control disabled - leaving inverter in current state");
   }
 
   // Publish status change immediately
