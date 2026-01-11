@@ -114,6 +114,11 @@ void loadConfiguration() {
     movementTimeout = preferences.getULong(PREF_MOVEMENT_TIMEOUT, DEFAULT_MOVEMENT_TIMEOUT);
   }
 
+  // Load inverter auto-power setting
+  if (preferences.isKey(PREF_INVERTER_AUTO_POWER)) {
+    inverterAutoPower = preferences.getBool(PREF_INVERTER_AUTO_POWER, true);  // Default to true
+  }
+
   preferences.end();
 
   Debug.println("Configuration loaded from preferences");
@@ -138,6 +143,9 @@ void saveConfiguration() {
 
   // Save movement timeout
   preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
+
+  // Save inverter auto-power setting
+  preferences.putBool(PREF_INVERTER_AUTO_POWER, inverterAutoPower);
 
   preferences.end();
 
@@ -241,6 +249,23 @@ void handleSetPins() {
     } else {
       message += "Invalid timeout value (must be 10-600 seconds). ";
       Debug.println("Invalid timeout value received");
+    }
+  }
+
+  // Check for inverter auto-power parameter
+  if (webUiServer.hasArg("inverterAutoPower")) {
+    bool newInverterAutoPower = webUiServer.arg("inverterAutoPower").equals("true");
+    if (newInverterAutoPower != inverterAutoPower) {
+      inverterAutoPower = newInverterAutoPower;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_INVERTER_AUTO_POWER, inverterAutoPower);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Inverter auto-power " + String(inverterAutoPower ? "enabled" : "disabled") + ". ";
+      Debug.printf("Inverter auto-power %s\n", inverterAutoPower ? "enabled" : "disabled");
     }
   }
 

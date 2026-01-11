@@ -166,12 +166,13 @@ inline String getControlJS() {
     "    const triggerState = document.getElementById('triggerState').checked ? 'high' : 'low';\n"
     "    const swapSwitches = document.getElementById('swapSwitches').checked ? 'true' : 'false';\n"
     "    const mqttEnabled = document.getElementById('mqttEnabled').checked ? 'true' : 'false';\n"
+    "    const inverterAutoPower = document.getElementById('inverterAutoPowerToggle').checked ? 'true' : 'false';\n"
     "    const timeout = document.getElementById('timeoutInput').value;\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&timeout=' + timeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterAutoPower=' + inverterAutoPower + '&timeout=' + timeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -805,6 +806,25 @@ inline String getSwitchConfigCard() {
   html += "</div>";
   
   html += "</div>"; // End toggle-row
+
+  // Add a new section for inverter settings
+  html += "<h3>Inverter Settings</h3>";
+  html += "<div class='toggle-row'>";
+
+  // Inverter auto-power toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='inverterAutoPowerToggle'" + String(inverterAutoPower ? " checked" : "") + " onchange=\"updateToggleLabel('inverterAutoPowerToggle', 'inverterAutoPowerText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Auto-Power Inverter for Roof Movement <strong id='inverterAutoPowerText'>(" + String(inverterAutoPower ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>When enabled, automatically powers inverter (K1) and sends soft-power button (K3) when opening/closing roof</small><br>";
+  html += "<small style='color: #b0b0b0;'>Disable if you don't have an inverter or only need roof button control</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>"; // End toggle-row
   html += "</div>"; // End toggle-group
 
   // Timing Settings
@@ -823,6 +843,7 @@ inline String getSwitchConfigCard() {
   html += "Open switch pin: " + String(LIMIT_SWITCH_OPEN_PIN) + "<br>";
   html += "Closed switch pin: " + String(LIMIT_SWITCH_CLOSED_PIN) + "<br>";
   html += "Park sensor bypass: " + String(bypassParkSensor ? "Enabled" : "Disabled") + "<br>";
+  html += "Inverter auto-power: " + String(inverterAutoPower ? "Enabled" : "Disabled") + "<br>";
   html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
   html += "</div>";
 
@@ -997,9 +1018,8 @@ inline String getSetupPage() {
   html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
   html += "</div>\n";
 
-  // Navigation buttons (matching home page)
+  // Navigation buttons
   html += "<div style='margin: 20px 0;'>\n";
-  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
   html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
   html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
   html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
@@ -1034,6 +1054,7 @@ inline String getSetupPage() {
   html += "  updateToggleLabel('triggerState', 'triggerStateText', 'HIGH', 'LOW');";
   html += "  updateToggleLabel('swapSwitches', 'swapSwitchesText', 'Swapped', 'Default');";
   html += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
+  html += "  updateToggleLabel('inverterAutoPowerToggle', 'inverterAutoPowerText', 'ENABLED', 'DISABLED');";
   html += "  const bypassToggle = document.getElementById('bypassToggle');";
   html += "  const bypassText = document.getElementById('bypassText');";
   html += "  if (bypassToggle && bypassText) {";
@@ -1079,9 +1100,8 @@ inline String getRoofControlPage() {
   html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
   html += "</div>\n";
 
-  // Navigation buttons (matching home page)
+  // Navigation buttons
   html += "<div style='margin: 20px 0;'>\n";
-  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
   html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
   html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
   html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";

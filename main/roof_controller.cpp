@@ -42,6 +42,7 @@ bool inverterRelayState = false;                // State of K1 (12V power relay)
 bool inverterACPowerState = false;              // State of AC power (detected via optocoupler)
 bool lastInverterACPowerState = false;          // Last AC power state for change detection
 unsigned long lastInverterACPowerChangeTime = 0;
+bool inverterAutoPower = true;                  // Auto-power inverter when opening/closing roof (default: enabled)
 
 // Apply pin settings - useful after changing pin assignments or trigger state
 void applyPinSettings() {
@@ -302,13 +303,34 @@ bool startOpeningRoof() {
     return false; // Telescope not parked and bypass not enabled
   }
 
-  Debug.println("SAFETY CHECK PASSED: Opening roof"); 
-  
-  // Turn on the inverter (K1 relay)
-  digitalWrite(INVERTER_PIN, HIGH);
-  inverterRelayState = true;
-  Debug.println("Inverter turned ON (K1 relay energized)");
-  delay(1000); // Give inverter time to start
+  Debug.println("SAFETY CHECK PASSED: Opening roof");
+
+  // Auto-power inverter if enabled
+  if (inverterAutoPower) {
+    Debug.println("Inverter auto-power enabled - powering up inverter");
+
+    // Turn on the inverter power (K1 relay)
+    digitalWrite(INVERTER_PIN, HIGH);
+    inverterRelayState = true;
+    Debug.println("Inverter K1 relay turned ON");
+
+    // Wait 750ms for inverter to initialize
+    delay(750);
+
+    // Check if AC power is detected
+    inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
+    Debug.printf("AC power detected: %s\n", inverterACPowerState ? "YES" : "NO");
+
+    // If no AC power detected, send soft-power button press
+    if (!inverterACPowerState) {
+      Debug.println("No AC power detected - sending soft-power button press (K3)");
+      sendInverterButtonPress();
+    } else {
+      Debug.println("AC power already detected - skipping soft-power button press");
+    }
+  } else {
+    Debug.println("Inverter auto-power disabled - skipping inverter control");
+  }
 
   // Send a button press to the roof controller (K2 relay)
   sendButtonPress();
@@ -352,11 +374,32 @@ bool startClosingRoof() {
 
   Debug.println("SAFETY CHECK PASSED: Closing roof");
 
-  // Turn on the inverter (K1 relay)
-  digitalWrite(INVERTER_PIN, HIGH);
-  inverterRelayState = true;
-  Debug.println("Inverter turned ON (K1 relay energized)");
-  delay(1000); // Give inverter time to start
+  // Auto-power inverter if enabled
+  if (inverterAutoPower) {
+    Debug.println("Inverter auto-power enabled - powering up inverter");
+
+    // Turn on the inverter power (K1 relay)
+    digitalWrite(INVERTER_PIN, HIGH);
+    inverterRelayState = true;
+    Debug.println("Inverter K1 relay turned ON");
+
+    // Wait 750ms for inverter to initialize
+    delay(750);
+
+    // Check if AC power is detected
+    inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
+    Debug.printf("AC power detected: %s\n", inverterACPowerState ? "YES" : "NO");
+
+    // If no AC power detected, send soft-power button press
+    if (!inverterACPowerState) {
+      Debug.println("No AC power detected - sending soft-power button press (K3)");
+      sendInverterButtonPress();
+    } else {
+      Debug.println("AC power already detected - skipping soft-power button press");
+    }
+  } else {
+    Debug.println("Inverter auto-power disabled - skipping inverter control");
+  }
 
   // Send a button press to the roof controller (K2 relay)
   sendButtonPress();
@@ -381,10 +424,14 @@ bool stopRoofMovement() {
   // Update status based on limit switches
   updateRoofStatus();
 
-  // Turn off the inverter if we've reached a limit (K1 relay)
-  digitalWrite(INVERTER_PIN, LOW);
-  inverterRelayState = false;
-  Debug.println("Inverter turned OFF (K1 relay de-energized)");
+  // Turn off the inverter if auto-power is enabled (K1 relay)
+  if (inverterAutoPower) {
+    digitalWrite(INVERTER_PIN, LOW);
+    inverterRelayState = false;
+    Debug.println("Inverter turned OFF (K1 relay de-energized)");
+  } else {
+    Debug.println("Inverter auto-power disabled - leaving inverter in current state");
+  }
 
   // Publish status change immediately
   publishStatusToMQTT();
