@@ -1303,15 +1303,19 @@ inline String getRoofControlPage() {
 
   html += "<div style='text-align: center; margin: 20px 0;'>\n";
 
-  // Determine if button should be disabled
+  // Determine if buttons should be disabled
   bool buttonDisabled = !bypassParkSensor && !telescopeParked;
 
-  html += "<button id='roofControlButton' class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">OPEN / CLOSE</button>\n";
+  // Manual button - mimics physical button press
+  html += "<button id='roofControlButton' class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">START / STOP</button>\n";
+
+  // Intelligent button - uses ASCOM/MQTT logic
+  html += "<button id='roofOpenCloseButton' class='btn' onclick='roofOpenClose()' style='background-color: #2ecc71; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">OPEN / CLOSE</button>\n";
 
   if (buttonDisabled) {
     html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>⚠ Telescope not parked - Enable bypass to control roof</p>\n";
   } else {
-    html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'>Press button to control roof (mimics physical button)</p>\n";
+    html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'><strong>START/STOP:</strong> Mimics physical button | <strong>OPEN/CLOSE:</strong> Intelligent control</p>\n";
   }
 
   html += "</div>\n";
@@ -1357,6 +1361,13 @@ inline String getRoofControlPage() {
   html += "  fetch('/roof_button', { method: 'POST' })\n";
   html += "    .then(response => response.text())\n";
   html += "    .then(data => { console.log('Roof button pressed:', data); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function roofOpenClose() {\n";
+  html += "  fetch('/roof_openclose', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { console.log('Intelligent roof control:', data); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
 

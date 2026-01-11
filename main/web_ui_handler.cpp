@@ -408,6 +408,7 @@ void initWebUI() {
   // Roof control endpoint
   webUiServer.on("/roof_control", HTTP_POST, handleRoofControl);
   webUiServer.on("/roof_button", HTTP_POST, handleRoofButton);
+  webUiServer.on("/roof_openclose", HTTP_POST, handleRoofOpenClose);
 
   // API endpoint for real-time status
   webUiServer.on("/api/status", HTTP_GET, handleApiStatus);
@@ -830,6 +831,45 @@ void handleRoofButton() {
 
   Debug.println("Roof button press sent");
   webUiServer.send(200, "text/plain", "Button press sent");
+}
+
+// Handle intelligent open/close command (replicates ASCOM/MQTT logic)
+void handleRoofOpenClose() {
+  Debug.println("Intelligent roof control via web interface");
+
+  // Check telescope safety interlock - only if bypass is not enabled
+  if (!bypassParkSensor && !telescopeParked) {
+    Debug.println("Cannot control roof: Telescope not parked and bypass not enabled");
+    webUiServer.send(400, "text/plain", "Cannot control roof - telescope not parked. Enable bypass to override.");
+    return;
+  }
+
+  // Determine action based on current roof state
+  bool success = false;
+  String action = "";
+
+  if (roofStatus == ROOF_CLOSED || roofStatus == ROOF_CLOSING) {
+    // Roof is closed or closing, so open it
+    action = "Opening";
+    success = startOpeningRoof();
+  } else if (roofStatus == ROOF_OPEN || roofStatus == ROOF_OPENING) {
+    // Roof is open or opening, so close it
+    action = "Closing";
+    success = startClosingRoof();
+  } else {
+    // Unknown state - return error
+    Debug.println("Cannot determine roof action - unknown state");
+    webUiServer.send(400, "text/plain", "Cannot control roof - unknown state");
+    return;
+  }
+
+  if (success) {
+    Debug.printf("Intelligent roof control: %s roof\n", action.c_str());
+    webUiServer.send(200, "text/plain", action + " roof");
+  } else {
+    Debug.printf("Intelligent roof control failed: Cannot %s roof\n", action.c_str());
+    webUiServer.send(400, "text/plain", "Cannot " + action + " roof - check safety interlocks");
+  }
 }
 
 // API endpoint for real-time status updates (returns JSON)
