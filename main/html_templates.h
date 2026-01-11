@@ -871,6 +871,7 @@ inline String getSwitchConfigCard() {
   html += "<h3>Timing Settings</h3>";
 
   // Limit switch timeout monitoring toggle
+  html += "<div style='display: flex; justify-content: center; margin-bottom: 10px;'>";
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
   html += "<input type='checkbox' id='limitSwitchTimeoutEnabledToggle'" + String(limitSwitchTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED')\">";
@@ -881,6 +882,7 @@ inline String getSwitchConfigCard() {
   html += "<small>Turn off inverter if limit switch doesn't change state within timeout after movement starts</small>";
   html += "</span>";
   html += "</div>";
+  html += "</div>";
 
   html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
   html += "<label for='limitSwitchTimeoutInput' style='display: block; margin-bottom: 5px;'><strong>Limit Switch Timeout (seconds):</strong></label>";
@@ -890,6 +892,7 @@ inline String getSwitchConfigCard() {
   html += "</div>";
 
   // Movement timeout monitoring toggle
+  html += "<div style='display: flex; justify-content: center; margin-bottom: 10px;'>";
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
   html += "<input type='checkbox' id='timeoutEnabledToggle'" + String(movementTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED')\">";
@@ -899,6 +902,7 @@ inline String getSwitchConfigCard() {
   html += "Monitor Total Movement Time <strong id='timeoutEnabledText'>(" + String(movementTimeoutEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
   html += "<small>Automatically stop and turn off inverter if roof doesn't fully open/close within total timeout period</small>";
   html += "</span>";
+  html += "</div>";
   html += "</div>";
 
   html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
