@@ -17,6 +17,7 @@ int TELESCOPE_PARKED = DEFAULT_PARK_STATE;              // Park sensor is HIGH u
 unsigned long movementTimeout = DEFAULT_MOVEMENT_TIMEOUT; // Movement timeout in ms
 bool movementTimeoutEnabled = DEFAULT_TIMEOUT_ENABLED;  // Timeout monitoring enabled (default: true)
 unsigned long limitSwitchTimeout = DEFAULT_LIMIT_SWITCH_TIMEOUT; // Limit switch change timeout (default: 5 seconds)
+bool limitSwitchTimeoutEnabled = DEFAULT_LIMIT_SWITCH_TIMEOUT_ENABLED; // Limit switch timeout monitoring enabled (default: true)
 unsigned long inverterDelay1 = DEFAULT_INVERTER_DELAY1; // Delay between K1 and K3 (default: 750ms)
 unsigned long inverterDelay2 = DEFAULT_INVERTER_DELAY2; // Delay between inverter power-on and K2 (default: 1500ms)
 
@@ -217,8 +218,8 @@ void updateRoofStatus() {
     // If the open switch is triggered, the roof is open regardless of previous state
     if (roofStatus != ROOF_OPEN) {
       statusMessage = "Roof fully open";
-      // Only turn off inverter if monitoring is enabled OR if this is a genuine state change
-      if (movementTimeoutEnabled || (roofStatus == ROOF_OPENING)) {
+      // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
+      if (limitSwitchTimeoutEnabled || (roofStatus == ROOF_OPENING)) {
         digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
         inverterRelayState = false;
       }
@@ -229,8 +230,8 @@ void updateRoofStatus() {
     // If the closed switch is triggered, the roof is closed regardless of previous state
     if (roofStatus != ROOF_CLOSED) {
       statusMessage = "Roof fully closed";
-      // Only turn off inverter if monitoring is enabled OR if this is a genuine state change
-      if (movementTimeoutEnabled || (roofStatus == ROOF_CLOSING)) {
+      // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
+      if (limitSwitchTimeoutEnabled || (roofStatus == ROOF_CLOSING)) {
         digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
         inverterRelayState = false;
       }

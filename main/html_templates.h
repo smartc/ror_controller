@@ -168,16 +168,17 @@ inline String getControlJS() {
     "    const mqttEnabled = document.getElementById('mqttEnabled').checked ? 'true' : 'false';\n"
     "    const inverterRelay = document.getElementById('inverterRelayToggle').checked ? 'true' : 'false';\n"
     "    const inverterSoftPwr = document.getElementById('inverterSoftPwrToggle').checked ? 'true' : 'false';\n"
+    "    const limitSwitchTimeoutEnabled = document.getElementById('limitSwitchTimeoutEnabledToggle').checked ? 'true' : 'false';\n"
     "    const timeoutEnabled = document.getElementById('timeoutEnabledToggle').checked ? 'true' : 'false';\n"
     "    const delay1 = document.getElementById('delay1Input').value;\n"
     "    const delay2 = document.getElementById('delay2Input').value;\n"
-    "    const timeout = document.getElementById('timeoutInput').value;\n"
     "    const limitSwitchTimeout = document.getElementById('limitSwitchTimeoutInput').value;\n"
+    "    const timeout = document.getElementById('timeoutInput').value;\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&timeout=' + timeout + '&limitSwitchTimeout=' + limitSwitchTimeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&limitSwitchTimeoutEnabled=' + limitSwitchTimeoutEnabled + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&limitSwitchTimeout=' + limitSwitchTimeout + '&timeout=' + timeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -869,6 +870,25 @@ inline String getSwitchConfigCard() {
   // Timing Settings
   html += "<h3>Timing Settings</h3>";
 
+  // Limit switch timeout monitoring toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='limitSwitchTimeoutEnabledToggle'" + String(limitSwitchTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Monitor Limit Switch Changes <strong id='limitSwitchTimeoutEnabledText'>(" + String(limitSwitchTimeoutEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Turn off inverter if limit switch doesn't change state within timeout after movement starts</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
+  html += "<label for='limitSwitchTimeoutInput' style='display: block; margin-bottom: 5px;'><strong>Limit Switch Timeout (seconds):</strong></label>";
+  html += "<input type='number' id='limitSwitchTimeoutInput' min='1' max='30' value='" + String(limitSwitchTimeout / 1000) + "' ";
+  html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time to wait for limit switch state to change after movement starts (1-30 seconds, default: 5)</p>";
+  html += "</div>";
+
   // Movement timeout monitoring toggle
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
@@ -876,8 +896,8 @@ inline String getSwitchConfigCard() {
   html += "<span class='slider'></span>";
   html += "</label>";
   html += "<span class='switch-label'>";
-  html += "Monitor Roof Movement <strong id='timeoutEnabledText'>(" + String(movementTimeoutEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
-  html += "<small>Automatically stop and turn off inverter if no roof movement detected within timeout period</small>";
+  html += "Monitor Total Movement Time <strong id='timeoutEnabledText'>(" + String(movementTimeoutEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Automatically stop and turn off inverter if roof doesn't fully open/close within total timeout period</small>";
   html += "</span>";
   html += "</div>";
 
@@ -886,13 +906,6 @@ inline String getSwitchConfigCard() {
   html += "<input type='number' id='timeoutInput' min='10' max='600' value='" + String(movementTimeout / 1000) + "' ";
   html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
   html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Total time allowed for roof to fully open or close (10-600 seconds, default: 90)</p>";
-  html += "</div>";
-
-  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
-  html += "<label for='limitSwitchTimeoutInput' style='display: block; margin-bottom: 5px;'><strong>Limit Switch Timeout (seconds):</strong></label>";
-  html += "<input type='number' id='limitSwitchTimeoutInput' min='1' max='30' value='" + String(limitSwitchTimeout / 1000) + "' ";
-  html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
-  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time to wait for limit switch state to change after movement starts (1-30 seconds, default: 5)</p>";
   html += "</div>";
 
   // Current configuration
@@ -906,9 +919,10 @@ inline String getSwitchConfigCard() {
   html += "Soft-power button (K3): " + String(inverterSoftPwrEnabled ? "Enabled" : "Disabled") + "<br>";
   html += "Inverter Delay 1: " + String(inverterDelay1) + "ms<br>";
   html += "Inverter Delay 2: " + String(inverterDelay2) + "ms<br>";
+  html += "Limit switch timeout monitoring: " + String(limitSwitchTimeoutEnabled ? "Enabled" : "Disabled") + "<br>";
+  html += "Limit switch timeout: " + String(limitSwitchTimeout / 1000) + " seconds<br>";
   html += "Movement timeout monitoring: " + String(movementTimeoutEnabled ? "Enabled" : "Disabled") + "<br>";
-  html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds<br>";
-  html += "Limit switch timeout: " + String(limitSwitchTimeout / 1000) + " seconds</p>";
+  html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
   html += "</div>";
 
   // Apply button
@@ -1196,6 +1210,7 @@ inline String getSetupPage() {
   html += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
   html += "  updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED');";
   html += "  updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED');";
+  html += "  updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED');";
   html += "  updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED');";
   html += "  const bypassToggle = document.getElementById('bypassToggle');";
   html += "  const bypassText = document.getElementById('bypassText');";

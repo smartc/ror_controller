@@ -124,6 +124,11 @@ void loadConfiguration() {
     limitSwitchTimeout = preferences.getULong(PREF_LIMIT_SWITCH_TIMEOUT, DEFAULT_LIMIT_SWITCH_TIMEOUT);
   }
 
+  // Load limit switch timeout enabled setting
+  if (preferences.isKey(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED)) {
+    limitSwitchTimeoutEnabled = preferences.getBool(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED, DEFAULT_LIMIT_SWITCH_TIMEOUT_ENABLED);
+  }
+
   // Load inverter relay enabled setting
   if (preferences.isKey(PREF_INVERTER_RELAY_ENABLED)) {
     inverterRelayEnabled = preferences.getBool(PREF_INVERTER_RELAY_ENABLED, true);  // Default to true
@@ -173,6 +178,9 @@ void saveConfiguration() {
 
   // Save limit switch timeout
   preferences.putULong(PREF_LIMIT_SWITCH_TIMEOUT, limitSwitchTimeout);
+
+  // Save limit switch timeout enabled setting
+  preferences.putBool(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED, limitSwitchTimeoutEnabled);
 
   // Save inverter relay enabled setting
   preferences.putBool(PREF_INVERTER_RELAY_ENABLED, inverterRelayEnabled);
@@ -325,6 +333,23 @@ void handleSetPins() {
     } else {
       message += "Invalid limit switch timeout value (must be 1-30 seconds). ";
       Debug.println("Invalid limit switch timeout value received");
+    }
+  }
+
+  // Check for limit switch timeout enabled parameter
+  if (webUiServer.hasArg("limitSwitchTimeoutEnabled")) {
+    bool newLimitSwitchTimeoutEnabled = webUiServer.arg("limitSwitchTimeoutEnabled").equals("true");
+    if (newLimitSwitchTimeoutEnabled != limitSwitchTimeoutEnabled) {
+      limitSwitchTimeoutEnabled = newLimitSwitchTimeoutEnabled;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED, limitSwitchTimeoutEnabled);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Limit switch timeout monitoring " + String(limitSwitchTimeoutEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Limit switch timeout monitoring %s\n", limitSwitchTimeoutEnabled ? "enabled" : "disabled");
     }
   }
 

@@ -57,6 +57,8 @@ extern bool movementTimeoutEnabled;          // Enable/disable movement timeout 
 const bool DEFAULT_TIMEOUT_ENABLED = true;   // Default: enabled
 extern unsigned long limitSwitchTimeout;     // Time to wait for limit switch state change after movement starts (configurable)
 const unsigned long DEFAULT_LIMIT_SWITCH_TIMEOUT = 5000; // Default: 5 seconds
+extern bool limitSwitchTimeoutEnabled;       // Enable/disable limit switch timeout monitoring (configurable)
+const bool DEFAULT_LIMIT_SWITCH_TIMEOUT_ENABLED = true; // Default: enabled
 
 // Inverter Timing Settings (NEW in v3)
 extern unsigned long inverterDelay1;         // Delay between K1 relay and K3 soft-power button (ms)
@@ -114,6 +116,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_MOVEMENT_TIMEOUT "moveTimeout"
 #define PREF_TIMEOUT_ENABLED "timeoutEnabled"
 #define PREF_LIMIT_SWITCH_TIMEOUT "limitSwitchTimeout"
+#define PREF_LIMIT_SWITCH_TIMEOUT_ENABLED "limitSwitchTimeoutEn"
 #define PREF_WIFI_SSID "ssid"
 #define PREF_WIFI_PASSWORD "wifiPassword"
 #define PREF_MQTT_SERVER "mqttServer"
