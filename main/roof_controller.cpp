@@ -175,7 +175,8 @@ void updateRoofStatus() {
   unsigned long currentTime = millis();
 
   // Check whether we have just started moving the roof.  If so, give it time before we revise the roof state.
-  if (currentTime - movementStartTime < limitSwitchTimeout) {
+  // Skip this check if timeout monitoring is disabled
+  if (movementTimeoutEnabled && (currentTime - movementStartTime < limitSwitchTimeout)) {
     return;     // Movement started recently.  Let's wait for limit switch state to change!
   }
 
