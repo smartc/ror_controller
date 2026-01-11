@@ -55,6 +55,8 @@ extern unsigned long movementTimeout;        // Roof movement timeout in ms (con
 const unsigned long DEFAULT_MOVEMENT_TIMEOUT = 90000; // Default: 90 seconds
 extern bool movementTimeoutEnabled;          // Enable/disable movement timeout monitoring (configurable)
 const bool DEFAULT_TIMEOUT_ENABLED = true;   // Default: enabled
+extern unsigned long limitSwitchTimeout;     // Time to wait for limit switch state change after movement starts (configurable)
+const unsigned long DEFAULT_LIMIT_SWITCH_TIMEOUT = 5000; // Default: 5 seconds
 
 // Inverter Timing Settings (NEW in v3)
 extern unsigned long inverterDelay1;         // Delay between K1 relay and K3 soft-power button (ms)
@@ -111,6 +113,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_BYPASS_SENSOR "bypassParkSensor"
 #define PREF_MOVEMENT_TIMEOUT "moveTimeout"
 #define PREF_TIMEOUT_ENABLED "timeoutEnabled"
+#define PREF_LIMIT_SWITCH_TIMEOUT "limitSwitchTimeout"
 #define PREF_WIFI_SSID "ssid"
 #define PREF_WIFI_PASSWORD "wifiPassword"
 #define PREF_MQTT_SERVER "mqttServer"

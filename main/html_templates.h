@@ -172,11 +172,12 @@ inline String getControlJS() {
     "    const delay1 = document.getElementById('delay1Input').value;\n"
     "    const delay2 = document.getElementById('delay2Input').value;\n"
     "    const timeout = document.getElementById('timeoutInput').value;\n"
+    "    const limitSwitchTimeout = document.getElementById('limitSwitchTimeoutInput').value;\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&timeout=' + timeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&timeout=' + timeout + '&limitSwitchTimeout=' + limitSwitchTimeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -884,7 +885,14 @@ inline String getSwitchConfigCard() {
   html += "<label for='timeoutInput' style='display: block; margin-bottom: 5px;'><strong>Movement Timeout (seconds):</strong></label>";
   html += "<input type='number' id='timeoutInput' min='10' max='600' value='" + String(movementTimeout / 1000) + "' ";
   html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
-  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time before roof movement times out (10-600 seconds, default: 90)</p>";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Total time allowed for roof to fully open or close (10-600 seconds, default: 90)</p>";
+  html += "</div>";
+
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
+  html += "<label for='limitSwitchTimeoutInput' style='display: block; margin-bottom: 5px;'><strong>Limit Switch Timeout (seconds):</strong></label>";
+  html += "<input type='number' id='limitSwitchTimeoutInput' min='1' max='30' value='" + String(limitSwitchTimeout / 1000) + "' ";
+  html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time to wait for limit switch state to change after movement starts (1-30 seconds, default: 5)</p>";
   html += "</div>";
 
   // Current configuration
@@ -899,7 +907,8 @@ inline String getSwitchConfigCard() {
   html += "Inverter Delay 1: " + String(inverterDelay1) + "ms<br>";
   html += "Inverter Delay 2: " + String(inverterDelay2) + "ms<br>";
   html += "Movement timeout monitoring: " + String(movementTimeoutEnabled ? "Enabled" : "Disabled") + "<br>";
-  html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
+  html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds<br>";
+  html += "Limit switch timeout: " + String(limitSwitchTimeout / 1000) + " seconds</p>";
   html += "</div>";
 
   // Apply button

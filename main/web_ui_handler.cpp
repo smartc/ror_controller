@@ -119,6 +119,11 @@ void loadConfiguration() {
     movementTimeoutEnabled = preferences.getBool(PREF_TIMEOUT_ENABLED, DEFAULT_TIMEOUT_ENABLED);
   }
 
+  // Load limit switch timeout setting
+  if (preferences.isKey(PREF_LIMIT_SWITCH_TIMEOUT)) {
+    limitSwitchTimeout = preferences.getULong(PREF_LIMIT_SWITCH_TIMEOUT, DEFAULT_LIMIT_SWITCH_TIMEOUT);
+  }
+
   // Load inverter relay enabled setting
   if (preferences.isKey(PREF_INVERTER_RELAY_ENABLED)) {
     inverterRelayEnabled = preferences.getBool(PREF_INVERTER_RELAY_ENABLED, true);  // Default to true
@@ -165,6 +170,9 @@ void saveConfiguration() {
 
   // Save movement timeout enabled setting
   preferences.putBool(PREF_TIMEOUT_ENABLED, movementTimeoutEnabled);
+
+  // Save limit switch timeout
+  preferences.putULong(PREF_LIMIT_SWITCH_TIMEOUT, limitSwitchTimeout);
 
   // Save inverter relay enabled setting
   preferences.putBool(PREF_INVERTER_RELAY_ENABLED, inverterRelayEnabled);
@@ -295,6 +303,28 @@ void handleSetPins() {
       settingsChanged = true;
       message += "Movement timeout monitoring " + String(movementTimeoutEnabled ? "enabled" : "disabled") + ". ";
       Debug.printf("Movement timeout monitoring %s\n", movementTimeoutEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  // Check for limit switch timeout parameter
+  if (webUiServer.hasArg("limitSwitchTimeout")) {
+    unsigned long newLimitSwitchTimeout = webUiServer.arg("limitSwitchTimeout").toInt() * 1000; // Convert seconds to ms
+    if (newLimitSwitchTimeout >= 1000 && newLimitSwitchTimeout <= 30000) { // 1 to 30 seconds
+      if (newLimitSwitchTimeout != limitSwitchTimeout) {
+        limitSwitchTimeout = newLimitSwitchTimeout;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_LIMIT_SWITCH_TIMEOUT, limitSwitchTimeout);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Limit switch timeout set to " + String(limitSwitchTimeout / 1000) + " seconds. ";
+        Debug.printf("Limit switch timeout set to %lu seconds\n", limitSwitchTimeout / 1000);
+      }
+    } else {
+      message += "Invalid limit switch timeout value (must be 1-30 seconds). ";
+      Debug.println("Invalid limit switch timeout value received");
     }
   }
 

@@ -16,6 +16,7 @@ int TRIGGERED = DEFAULT_TRIGGER_STATE;                  // Default to LOW trigge
 int TELESCOPE_PARKED = DEFAULT_PARK_STATE;              // Park sensor is HIGH until triggered
 unsigned long movementTimeout = DEFAULT_MOVEMENT_TIMEOUT; // Movement timeout in ms
 bool movementTimeoutEnabled = DEFAULT_TIMEOUT_ENABLED;  // Timeout monitoring enabled (default: true)
+unsigned long limitSwitchTimeout = DEFAULT_LIMIT_SWITCH_TIMEOUT; // Limit switch change timeout (default: 5 seconds)
 unsigned long inverterDelay1 = DEFAULT_INVERTER_DELAY1; // Delay between K1 and K3 (default: 750ms)
 unsigned long inverterDelay2 = DEFAULT_INVERTER_DELAY2; // Delay between inverter power-on and K2 (default: 1500ms)
 
@@ -172,10 +173,10 @@ void determineInitialRoofStatus() {
 // Update roof status based on limit switches
 void updateRoofStatus() {
   unsigned long currentTime = millis();
-  
+
   // Check whether we have just started moving the roof.  If so, give it time before we revise the roof state.
-  if (currentTime - movementStartTime < 5000) {
-    return;     // Movement started less than 5 seconds ago.  Let's wait!
+  if (currentTime - movementStartTime < limitSwitchTimeout) {
+    return;     // Movement started recently.  Let's wait for limit switch state to change!
   }
 
   // Read current switch states
