@@ -6,6 +6,19 @@ An ASCOM Alpaca compatible roll-off roof controller for remote observatory autom
 ![Hardware](https://img.shields.io/badge/hardware-ESP32--S3-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
+## ⚠️ IMPORTANT SAFETY WARNING
+
+**DO NOT attempt to power the inverter or roof motors directly through this controller board!**
+
+This board is designed for **low-power control signals only**. The relays control:
+- K1: Inverter 12V DC power relay (control signal)
+- K2: Roof opener button press (control signal)
+- K3: Inverter soft-power button press (control signal)
+
+**High-power devices must be powered separately**. The relays on this board should only switch low-voltage control circuits, not main power to motors or inverters. Attempting to pass high current through this board will damage components and create a serious safety hazard.
+
+**Proper Setup**: Use external contactors or relays rated for your motor/inverter power requirements. This controller sends control signals to those external devices.
+
 ## 📋 Table of Contents
 
 - [Overview](#overview)
@@ -74,10 +87,10 @@ This project provides a complete solution for controlling a roll-off observatory
 - 5V regulator: Improved design with larger input capacitors
 - Fuse: Upsized for better protection
 
-**Relays**: 3x HFD4/3 12V relays
-- K1: Inverter power (12V DC control)
-- K2: Roof opener button
-- K3: Inverter soft-power button
+**Relays**: 3x HFD4/3 12V relays (⚠️ **Control signals only - not for high-power loads**)
+- K1: Inverter power relay control (triggers external contactor)
+- K2: Roof opener button control
+- K3: Inverter soft-power button control
 
 **Sensors**:
 - 2x Limit switches (open/closed positions)
@@ -127,6 +140,19 @@ This project provides a complete solution for controlling a roll-off observatory
 | GPIO20 | I2C SCL | I2C expansion port |
 
 ## 💻 Installation
+
+### ⚠️ Safety and Power Requirements
+
+**Before Installation**:
+1. **This controller is for LOW-VOLTAGE CONTROL SIGNALS ONLY**
+2. **DO NOT connect high-power loads (motors, inverters) directly to relay outputs**
+3. Use external contactors or power relays rated for your equipment
+4. This board's relays control those external devices, not the motors directly
+5. Consult a qualified electrician for high-voltage/high-current installations
+
+**Proper Wiring**:
+- Controller relays → External contactors → High-power equipment
+- Never: Controller relays → High-power equipment directly
 
 ### Prerequisites
 
@@ -385,24 +411,24 @@ mqtt:
 
 ## 📦 PCB Files
 
-The `PCB Files/` directory contains all manufacturing files for v2.4 hardware:
+The `PCB Files/` directory contains all manufacturing files for v3.0 hardware:
 
 | File | Description |
 |------|-------------|
-| `Schematic_v2.4.pdf` | Complete schematic diagram |
-| `PCB_v2.4.pdf` | PCB layout and dimensions |
-| `3D_PCB_v2.4.png` | 3D rendering of assembled board |
-| `3D_PCB_v2.4.step` | 3D CAD model (STEP format) |
-| `Gerber_PCB_v2.4.zip` | Gerber files for PCB manufacturing |
-| `BOM_Board_v2.4_Schematic_v2.4.xlsx` | Bill of Materials |
-| `PickAndPlace_PCB_v2.4.xlsx` | Pick and place coordinates for assembly |
-| `FlyingProbeTesting_PCB_v2_4.zip` | Flying probe test files |
+| `Schematic_v3.0.pdf` | Complete schematic diagram |
+| `PCB_v3.0.pdf` | PCB layout and dimensions |
+| `3D_PCB_v3.0.png` | 3D rendering of assembled board |
+| `3D_PCB_v3.0.step` | 3D CAD model (STEP format) |
+| `Gerber_PCB_v3.0/` | Gerber files for PCB manufacturing |
+| `BOM_Board_v3.0_Schematic_v3.0.xlsx` | Bill of Materials |
+| `PickAndPlace_PCB_v3.0.xlsx` | Pick and place coordinates for assembly |
+| `FlyingProbeTesting_PCB_v3.0/` | Flying probe test files |
 
 ### Manufacturing
 
 **PCB Specifications**:
 - Layers: 2
-- Board Size: Custom (see PCB_v2.4.pdf)
+- Board Size: Custom (see PCB_v3.0.pdf)
 - PCB Thickness: 1.6mm
 - Copper Weight: 1oz
 - Silkscreen: Both sides
@@ -413,19 +439,22 @@ The `PCB Files/` directory contains all manufacturing files for v2.4 hardware:
 - PCBWay
 - OSH Park
 
-Simply upload the Gerber zip file and BOM/Pick&Place for assembly services.
+Simply upload the Gerber files and BOM/Pick&Place for assembly services.
+
+**⚠️ Important**: Review the schematic and ensure all external power connections are properly isolated. The board relays are for control signals only - do not connect high-power loads directly to relay outputs.
 
 ## 📝 Changelog
 
-### v3.0.0 (2026-01-07)
+### v3.0.0 (2026-01-11)
 
 **Hardware**:
 - Migrated from ESP32 to ESP32-S3 (44-pin)
 - Added K3 relay for inverter soft-power button
 - Added AC power detection via optocoupler (GPIO7)
 - Added support for 12V snow sensor (digital + RS485)
-- Improved power supply design
+- Improved power supply design with larger capacitors
 - Updated all GPIO pin assignments
+- PCB updated to v3.0
 
 **Software**:
 - Implemented dual inverter power state monitoring
@@ -435,11 +464,31 @@ Simply upload the Gerber zip file and BOM/Pick&Place for assembly services.
 - Added API endpoints for inverter control
 - Updated firmware to v3.0.0
 
-**Features**:
+**Inverter Control Features**:
 - `toggleInverterPower()` - Manual K1 relay control
 - `sendInverterButtonPress()` - K3 button press control
 - Real-time AC power monitoring
 - Web UI buttons for manual inverter control
+- Separate enable/disable toggles for K1 relay and K3 soft-power button
+- Configurable inverter delays (750ms and 1500ms defaults)
+
+**Roof Control Enhancements**:
+- Added intelligent "OPEN/CLOSE" button with ASCOM/MQTT logic
+- Renamed physical button control to "START/STOP" for clarity
+- Two independent timeout systems:
+  - **Limit Switch Timeout**: Configurable 1-30 seconds (default: 5s)
+  - **Movement Timeout**: Configurable 10-600 seconds (default: 90s)
+- Separate enable/disable toggles for each timeout
+- Centered timing settings toggles for improved UI consistency
+- Real-time header status updates on all pages
+
+**UI Improvements**:
+- Dark theme with consistent color palette
+- Responsive layout improvements
+- Centered timing controls
+- Added Home button to navigation
+- Fixed park sensor radio button alignment
+- Real-time status polling (2-second intervals)
 
 ### v2.1.0 (Previous)
 - Initial public release
@@ -471,4 +520,18 @@ For questions, issues, or suggestions, please open an issue on GitHub.
 
 ---
 
-**Note**: This is specialized hardware for controlling observatory equipment. Always test thoroughly in a safe environment before deploying to a production observatory. Ensure proper safety interlocks and redundancy for critical systems.
+## ⚠️ Safety and Liability
+
+**IMPORTANT SAFETY NOTICES**:
+
+1. **Power Limitations**: This controller board uses low-power relays suitable for control signals only. DO NOT connect high-current loads (motors, inverters, heaters) directly to the relay outputs. Use appropriately rated external contactors or power relays.
+
+2. **Electrical Safety**: Installation of high-voltage/high-current equipment should be performed by a qualified electrician. Improper wiring can result in equipment damage, fire hazard, or personal injury.
+
+3. **Testing**: Always test thoroughly in a safe environment before deploying to a production observatory. Verify all safety interlocks, limit switches, and emergency stop functions.
+
+4. **Redundancy**: Implement proper safety interlocks and redundancy for critical systems. Do not rely solely on software for safety-critical functions.
+
+5. **Liability**: This project is provided "as-is" without warranty of any kind. Users assume all responsibility and liability for proper installation, operation, and safety of their systems.
+
+**Note**: This is specialized hardware for controlling observatory equipment. Ensure compliance with local electrical codes and regulations.
