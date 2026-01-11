@@ -168,12 +168,14 @@ inline String getControlJS() {
     "    const mqttEnabled = document.getElementById('mqttEnabled').checked ? 'true' : 'false';\n"
     "    const inverterRelay = document.getElementById('inverterRelayToggle').checked ? 'true' : 'false';\n"
     "    const inverterSoftPwr = document.getElementById('inverterSoftPwrToggle').checked ? 'true' : 'false';\n"
+    "    const delay1 = document.getElementById('delay1Input').value;\n"
+    "    const delay2 = document.getElementById('delay2Input').value;\n"
     "    const timeout = document.getElementById('timeoutInput').value;\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&timeout=' + timeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&delay1=' + delay1 + '&delay2=' + delay2 + '&timeout=' + timeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -841,6 +843,25 @@ inline String getSwitchConfigCard() {
   html += "</div>";
 
   html += "</div>"; // End toggle-row
+
+  // Inverter delay settings
+  html += "<div class='toggle-row' style='margin-top: 15px;'>";
+
+  html += "<div style='margin-right: 20px;'>";
+  html += "<label for='delay1Input' style='display: block; margin-bottom: 5px;'><strong>Inverter Delay 1 (ms):</strong></label>";
+  html += "<input type='number' id='delay1Input' min='0' max='10000' value='" + String(inverterDelay1) + "' ";
+  html += "style='width: 120px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time between K1 power relay and K3 soft-power button (0-10000ms, default: 750)</p>";
+  html += "</div>";
+
+  html += "<div>";
+  html += "<label for='delay2Input' style='display: block; margin-bottom: 5px;'><strong>Inverter Delay 2 (ms):</strong></label>";
+  html += "<input type='number' id='delay2Input' min='0' max='10000' value='" + String(inverterDelay2) + "' ";
+  html += "style='width: 120px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time between inverter power-on and K2 roof button (0-10000ms, default: 1500)</p>";
+  html += "</div>";
+
+  html += "</div>"; // End toggle-row
   html += "</div>"; // End toggle-group
 
   // Timing Settings
@@ -861,6 +882,8 @@ inline String getSwitchConfigCard() {
   html += "Park sensor bypass: " + String(bypassParkSensor ? "Enabled" : "Disabled") + "<br>";
   html += "Inverter relay (K1): " + String(inverterRelayEnabled ? "Enabled" : "Disabled") + "<br>";
   html += "Soft-power button (K3): " + String(inverterSoftPwrEnabled ? "Enabled" : "Disabled") + "<br>";
+  html += "Inverter Delay 1: " + String(inverterDelay1) + "ms<br>";
+  html += "Inverter Delay 2: " + String(inverterDelay2) + "ms<br>";
   html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
   html += "</div>";
 

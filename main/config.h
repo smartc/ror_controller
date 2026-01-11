@@ -54,6 +54,12 @@ const unsigned long SWITCH_STABLE_TIME = 500; // Time in ms a switch must be sta
 extern unsigned long movementTimeout;        // Roof movement timeout in ms (configurable)
 const unsigned long DEFAULT_MOVEMENT_TIMEOUT = 90000; // Default: 90 seconds
 
+// Inverter Timing Settings (NEW in v3)
+extern unsigned long inverterDelay1;         // Delay between K1 relay and K3 soft-power button (ms)
+extern unsigned long inverterDelay2;         // Delay between inverter power-on and K2 roof button (ms)
+const unsigned long DEFAULT_INVERTER_DELAY1 = 750;   // Default: 750ms
+const unsigned long DEFAULT_INVERTER_DELAY2 = 1500;  // Default: 1500ms
+
 // Safety Settings
 extern bool bypassParkSensor;           // Software bypass state for telescope park sensors
 
@@ -112,6 +118,8 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_MQTT_TOPIC_PREFIX "mqttTopicPrefix"
 #define PREF_INVERTER_RELAY_ENABLED "inverterRelayEn"
 #define PREF_INVERTER_SOFTPWR_ENABLED "inverterSoftEn"
+#define PREF_INVERTER_DELAY1 "inverterDelay1"
+#define PREF_INVERTER_DELAY2 "inverterDelay2"
 
 // Enum for roof status - matches ASCOM ShutterStatus values
 enum RoofStatus {

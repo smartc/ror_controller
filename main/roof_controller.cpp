@@ -15,6 +15,8 @@ int LIMIT_SWITCH_CLOSED_PIN = DEFAULT_CLOSED_SWITCH_PIN; // Default to pin 36
 int TRIGGERED = DEFAULT_TRIGGER_STATE;                  // Default to LOW trigger state
 int TELESCOPE_PARKED = DEFAULT_PARK_STATE;              // Park sensor is HIGH until triggered
 unsigned long movementTimeout = DEFAULT_MOVEMENT_TIMEOUT; // Movement timeout in ms
+unsigned long inverterDelay1 = DEFAULT_INVERTER_DELAY1; // Delay between K1 and K3 (default: 750ms)
+unsigned long inverterDelay2 = DEFAULT_INVERTER_DELAY2; // Delay between inverter power-on and K2 (default: 1500ms)
 
 // Limit switch states
 bool lastOpenSwitchState = false;
@@ -313,9 +315,17 @@ bool startOpeningRoof() {
     inverterRelayState = true;
     Debug.println("K1 relay turned ON");
 
-    // Wait 750ms for inverter to initialize
-    delay(750);
-    Debug.println("750ms delay complete");
+    // If soft-power is also enabled, wait Delay 1 before proceeding to soft-power button
+    // Otherwise, wait Delay 2 before proceeding to roof button
+    if (inverterSoftPwrEnabled) {
+      Debug.printf("Waiting %lums (Delay 1: K1 to K3)\n", inverterDelay1);
+      delay(inverterDelay1);
+      Debug.println("Delay 1 complete");
+    } else {
+      Debug.printf("Waiting %lums (Delay 2: inverter to roof button)\n", inverterDelay2);
+      delay(inverterDelay2);
+      Debug.println("Delay 2 complete");
+    }
   } else {
     Debug.println("Inverter relay disabled - skipping K1 relay control");
   }
@@ -333,9 +343,10 @@ bool startOpeningRoof() {
       Debug.println("No AC power detected - sending soft-power button press (K3)");
       sendInverterButtonPress();
 
-      // Wait 1.5 seconds after soft-power button before roof control
-      delay(1500);
-      Debug.println("1500ms delay after soft-power button complete");
+      // Wait Delay 2 after soft-power button before roof control
+      Debug.printf("Waiting %lums (Delay 2: inverter to roof button)\n", inverterDelay2);
+      delay(inverterDelay2);
+      Debug.println("Delay 2 complete");
     } else {
       Debug.println("AC power already detected - skipping soft-power button press");
     }
@@ -392,9 +403,17 @@ bool startClosingRoof() {
     inverterRelayState = true;
     Debug.println("K1 relay turned ON");
 
-    // Wait 750ms for inverter to initialize
-    delay(750);
-    Debug.println("750ms delay complete");
+    // If soft-power is also enabled, wait Delay 1 before proceeding to soft-power button
+    // Otherwise, wait Delay 2 before proceeding to roof button
+    if (inverterSoftPwrEnabled) {
+      Debug.printf("Waiting %lums (Delay 1: K1 to K3)\n", inverterDelay1);
+      delay(inverterDelay1);
+      Debug.println("Delay 1 complete");
+    } else {
+      Debug.printf("Waiting %lums (Delay 2: inverter to roof button)\n", inverterDelay2);
+      delay(inverterDelay2);
+      Debug.println("Delay 2 complete");
+    }
   } else {
     Debug.println("Inverter relay disabled - skipping K1 relay control");
   }
@@ -412,9 +431,10 @@ bool startClosingRoof() {
       Debug.println("No AC power detected - sending soft-power button press (K3)");
       sendInverterButtonPress();
 
-      // Wait 1.5 seconds after soft-power button before roof control
-      delay(1500);
-      Debug.println("1500ms delay after soft-power button complete");
+      // Wait Delay 2 after soft-power button before roof control
+      Debug.printf("Waiting %lums (Delay 2: inverter to roof button)\n", inverterDelay2);
+      delay(inverterDelay2);
+      Debug.println("Delay 2 complete");
     } else {
       Debug.println("AC power already detected - skipping soft-power button press");
     }

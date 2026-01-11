@@ -124,10 +124,19 @@ void loadConfiguration() {
     inverterSoftPwrEnabled = preferences.getBool(PREF_INVERTER_SOFTPWR_ENABLED, true);  // Default to true
   }
 
+  // Load inverter delay settings
+  if (preferences.isKey(PREF_INVERTER_DELAY1)) {
+    inverterDelay1 = preferences.getULong(PREF_INVERTER_DELAY1, DEFAULT_INVERTER_DELAY1);
+  }
+  if (preferences.isKey(PREF_INVERTER_DELAY2)) {
+    inverterDelay2 = preferences.getULong(PREF_INVERTER_DELAY2, DEFAULT_INVERTER_DELAY2);
+  }
+
   preferences.end();
 
   Debug.println("Configuration loaded from preferences");
   Debug.printf("Movement timeout: %lu ms (%lu seconds)\n", movementTimeout, movementTimeout / 1000);
+  Debug.printf("Inverter Delay 1: %lu ms, Delay 2: %lu ms\n", inverterDelay1, inverterDelay2);
 }
 
 // Save configuration to preferences
@@ -154,6 +163,10 @@ void saveConfiguration() {
 
   // Save inverter soft-power enabled setting
   preferences.putBool(PREF_INVERTER_SOFTPWR_ENABLED, inverterSoftPwrEnabled);
+
+  // Save inverter delay settings
+  preferences.putULong(PREF_INVERTER_DELAY1, inverterDelay1);
+  preferences.putULong(PREF_INVERTER_DELAY2, inverterDelay2);
 
   preferences.end();
 
@@ -291,6 +304,50 @@ void handleSetPins() {
       settingsChanged = true;
       message += "Inverter soft-power button " + String(inverterSoftPwrEnabled ? "enabled" : "disabled") + ". ";
       Debug.printf("Inverter soft-power button %s\n", inverterSoftPwrEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  // Check for inverter delay 1 parameter
+  if (webUiServer.hasArg("delay1")) {
+    unsigned long newDelay1 = webUiServer.arg("delay1").toInt(); // In milliseconds
+    if (newDelay1 >= 0 && newDelay1 <= 10000) { // 0 to 10 seconds
+      if (newDelay1 != inverterDelay1) {
+        inverterDelay1 = newDelay1;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_INVERTER_DELAY1, inverterDelay1);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Inverter Delay 1 set to " + String(inverterDelay1) + "ms. ";
+        Debug.printf("Inverter Delay 1 set to %lums\n", inverterDelay1);
+      }
+    } else {
+      message += "Invalid Delay 1 value (must be 0-10000 ms). ";
+      Debug.println("Invalid Delay 1 value received");
+    }
+  }
+
+  // Check for inverter delay 2 parameter
+  if (webUiServer.hasArg("delay2")) {
+    unsigned long newDelay2 = webUiServer.arg("delay2").toInt(); // In milliseconds
+    if (newDelay2 >= 0 && newDelay2 <= 10000) { // 0 to 10 seconds
+      if (newDelay2 != inverterDelay2) {
+        inverterDelay2 = newDelay2;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_INVERTER_DELAY2, inverterDelay2);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Inverter Delay 2 set to " + String(inverterDelay2) + "ms. ";
+        Debug.printf("Inverter Delay 2 set to %lums\n", inverterDelay2);
+      }
+    } else {
+      message += "Invalid Delay 2 value (must be 0-10000 ms). ";
+      Debug.println("Invalid Delay 2 value received");
     }
   }
 
