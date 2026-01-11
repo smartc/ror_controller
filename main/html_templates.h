@@ -990,6 +990,36 @@ inline String getSystemManagementCard() {
 inline String getSetupPage() {
   String html = getPageHeader("ESP32 Roll-Off Roof Controller Setup");
 
+  // Add custom styles matching home page
+  html += "<style>\n"
+          "body { text-align: center; }\n"
+          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
+          ".page-header { margin: 20px 0; }\n"
+          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
+          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
+          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
+          ".error { background-color: #3a1e1e; color: #e57373; }\n"
+          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
+          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
+          ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
+          ".status-indicator.green { background-color: #81c784; }\n"
+          ".status-indicator.red { background-color: #e57373; }\n"
+          ".status-indicator.blue { background-color: #64b5f6; }\n"
+          ".status-indicator.orange { background-color: #ffb74d; }\n"
+          ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
+          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
+          ".status-table { width: 100%; margin-bottom: 15px; }\n"
+          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
+          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
+          "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
+          "</style>\n";
+
+  // Page header with title
+  html += "<div class='page-header'>\n";
+  html += "<h1>Device Setup</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += "</div>\n";
+
   // Get current status for header
   String statusString = getRoofStatusString();
   String statusClass = "";
@@ -1071,6 +1101,36 @@ inline String getSetupPage() {
 // Roof Control page (v3)
 inline String getRoofControlPage() {
   String html = getPageHeader("Roof Control");
+
+  // Add custom styles matching home page
+  html += "<style>\n"
+          "body { text-align: center; }\n"
+          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
+          ".page-header { margin: 20px 0; }\n"
+          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
+          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
+          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
+          ".error { background-color: #3a1e1e; color: #e57373; }\n"
+          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
+          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
+          ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
+          ".status-indicator.green { background-color: #81c784; }\n"
+          ".status-indicator.red { background-color: #e57373; }\n"
+          ".status-indicator.blue { background-color: #64b5f6; }\n"
+          ".status-indicator.orange { background-color: #ffb74d; }\n"
+          ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
+          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
+          ".status-table { width: 100%; margin-bottom: 15px; }\n"
+          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
+          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
+          "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
+          "</style>\n";
+
+  // Page header with title
+  html += "<div class='page-header'>\n";
+  html += "<h1>Roof Control</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
+  html += "</div>\n";
 
   // Get current status for header
   String statusString = getRoofStatusString();
