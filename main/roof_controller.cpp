@@ -175,8 +175,7 @@ void updateRoofStatus() {
   unsigned long currentTime = millis();
 
   // Check whether we have just started moving the roof.  If so, give it time before we revise the roof state.
-  // Skip this check if timeout monitoring is disabled
-  if (movementTimeoutEnabled && (currentTime - movementStartTime < limitSwitchTimeout)) {
+  if (currentTime - movementStartTime < limitSwitchTimeout) {
     return;     // Movement started recently.  Let's wait for limit switch state to change!
   }
 
@@ -218,8 +217,11 @@ void updateRoofStatus() {
     // If the open switch is triggered, the roof is open regardless of previous state
     if (roofStatus != ROOF_OPEN) {
       statusMessage = "Roof fully open";
-      digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
-      inverterRelayState = false;
+      // Only turn off inverter if monitoring is enabled OR if this is a genuine state change
+      if (movementTimeoutEnabled || (roofStatus == ROOF_OPENING)) {
+        digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
+        inverterRelayState = false;
+      }
     }
     roofStatus = ROOF_OPEN;
   }
@@ -227,8 +229,11 @@ void updateRoofStatus() {
     // If the closed switch is triggered, the roof is closed regardless of previous state
     if (roofStatus != ROOF_CLOSED) {
       statusMessage = "Roof fully closed";
-      digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
-      inverterRelayState = false;
+      // Only turn off inverter if monitoring is enabled OR if this is a genuine state change
+      if (movementTimeoutEnabled || (roofStatus == ROOF_CLOSING)) {
+        digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
+        inverterRelayState = false;
+      }
     }
     roofStatus = ROOF_CLOSED;
   } 
