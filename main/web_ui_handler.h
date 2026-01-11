@@ -1,5 +1,5 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * Web UI Handler
  */
 
@@ -34,6 +34,7 @@ void saveConfiguration();
 void initWebUI();
 void handleWebUI();
 void handleRoot();
+void handleControl();  // Roof control page
 void handleSetup();
 void handleSetupPost();
 void handleForceDiscovery();
@@ -48,5 +49,18 @@ void handleParkSensorBypass();
 void handleParkSensorRemove();
 void handleParkSensorRemoveAll();
 void handleParkSensorType();
+
+// Inverter control handlers (NEW in v3)
+void handleInverterToggle();         // Toggle K1 inverter power relay
+void handleInverterButton();         // Send K3 soft-power button press
+void handleInverterStatus();         // Get inverter power states (JSON)
+
+// Roof control handlers
+void handleRoofControl();            // Handle roof open/close/stop commands
+void handleRoofButton();             // Handle single roof button press (mimics physical button)
+void handleRoofOpenClose();          // Handle intelligent open/close (replicates ASCOM/MQTT logic)
+
+// API endpoint for real-time status updates
+void handleApiStatus();              // Return JSON status for AJAX polling
 
 #endif // WEB_UI_HANDLER_H

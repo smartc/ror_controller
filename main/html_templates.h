@@ -22,6 +22,7 @@ String getStatusDisplay(RoofStatus status);
 String getControlJS();
 String getHomePage(RoofStatus status, bool isApMode);
 String getSetupPage();
+String getRoofControlPage();
 String getWifiConfigPage();
 String getWifiSettingsCard();
 String getMqttSettingsCard();
@@ -30,41 +31,43 @@ String getSystemManagementCard();
 String getStatusCard();
 String getParkSensorConfigCard();  // New function for park sensor configuration
 
-// Common CSS styles used across pages
+// Common CSS styles used across pages - Dark Theme
 inline String getCommonStyles() {
-  String styles = 
-    "body { font-family: Arial, sans-serif; margin: 20px; }\n"
-    "h1, h2 { color: #2c3e50; }\n"
-    "a { color: #3498db; text-decoration: none; }\n"
-    "a:hover { text-decoration: underline; }\n"
-    ".card { background: #f8f9fa; border-radius: 4px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n"
-    "label { display: block; margin-bottom: 5px; font-weight: bold; }\n"
-    "input[type=text], input[type=password], input[type=number] { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; }\n"
-    "input[type=submit] { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }\n"
-    "input[type=submit]:hover { background: #2980b9; }\n"
-    "button { background-color: #3498db; color: white; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; }\n"
-    "button:hover { background-color: #2980b9; }\n"
+  String styles =
+    "body { font-family: Arial, sans-serif; margin: 20px; background-color: #1a1a1a; color: #e0e0e0; }\n"
+    "h1, h2 { color: #4fc3f7; margin-top: 0; }\n"
+    "h3 { color: #81c784; }\n"
+    "a { color: #4fc3f7; text-decoration: none; }\n"
+    "a:hover { text-decoration: underline; color: #81d4fa; }\n"
+    ".card { background: #2d2d2d; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #404040; }\n"
+    "label { display: block; margin-bottom: 5px; font-weight: bold; color: #b0b0b0; }\n"
+    "input[type=text], input[type=password], input[type=number] { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #555; border-radius: 4px; background-color: #333; color: #e0e0e0; }\n"
+    "input[type=submit] { background: #4fc3f7; color: #000; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
+    "input[type=submit]:hover { background: #81d4fa; }\n"
+    "button { background-color: #4fc3f7; color: #000; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
+    "button:hover { background-color: #81d4fa; }\n"
+    "button:disabled { background-color: #555; color: #888; cursor: not-allowed; opacity: 0.5; }\n"
     "table { border-collapse: collapse; width: 100%; }\n"
-    "table, th, td { border: 1px solid #ddd; }\n"
+    "table, th, td { border: 1px solid #555; }\n"
     "th, td { padding: 8px; text-align: left; }\n"
-    "th { background-color: #f2f2f2; }\n"
-    ".status-open { color: blue; font-weight: bold; }\n"
-    ".status-closed { color: green; font-weight: bold; }\n"
-    ".status-moving { color: orange; font-weight: bold; }\n"
-    ".status-error { color: darkred; font-weight: bold; }\n"
+    "th { background-color: #333; color: #4fc3f7; font-weight: bold; }\n"
+    "td { background-color: #2d2d2d; }\n"
+    ".status-open { color: #64b5f6; font-weight: bold; }\n"
+    ".status-closed { color: #81c784; font-weight: bold; }\n"
+    ".status-moving { color: #ffb74d; font-weight: bold; }\n"
+    ".status-error { color: #e57373; font-weight: bold; }\n"
     ".button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }\n"
-    ".button-primary { background-color: #3498db; }\n"
-    ".button-warning { background-color: #f39c12; }\n"
-    ".button-danger { background-color: #e74c3c; }\n"
-    // Add new styles for telescope status indicator
+    ".button-primary { background-color: #4fc3f7; color: #000; }\n"
+    ".button-warning { background-color: #ffb74d; color: #000; }\n"
+    ".button-danger { background-color: #e57373; color: #000; }\n"
     ".telescope-status { display: inline-block; margin: 20px auto; text-align: center; }\n"
     ".status-indicator { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }\n"
     ".status-text { display: inline-block; font-weight: bold; vertical-align: middle; }\n"
-    ".indicator-red { background-color: #e74c3c; }\n" // Unparked
-    ".indicator-green { background-color: #2ecc71; }\n" // Parked
-    ".indicator-yellow { background-color: #f1c40f; animation: blink 1s infinite alternate; }\n" // Bypassed
+    ".indicator-red { background-color: #e57373; }\n"
+    ".indicator-green { background-color: #81c784; }\n"
+    ".indicator-yellow { background-color: #ffd54f; animation: blink 1s infinite alternate; }\n"
     "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n";
-  
+
   return styles;
 }
 
@@ -92,23 +95,23 @@ inline String getTelescopeStatusIndicator() {
   return html;
 }
 
-// Toggle switch CSS styles
+// Toggle switch CSS styles - Dark Theme
 inline String getToggleSwitchStyles() {
-  String styles = 
+  String styles =
     ".switch {position: relative; display: inline-block; width: 60px; height: 34px;}\n"
     ".switch input {opacity: 0; width: 0; height: 0;}\n"
-    ".slider {position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px;}\n"
-    ".slider:before {position: absolute; content: \"\"; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%;}\n"
-    "input:checked + .slider {background-color: #2196F3;}\n"
-    "input:focus + .slider {box-shadow: 0 0 1px #2196F3;}\n"
+    ".slider {position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .4s; border-radius: 34px;}\n"
+    ".slider:before {position: absolute; content: \"\"; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: #e0e0e0; transition: .4s; border-radius: 50%;}\n"
+    "input:checked + .slider {background-color: #4fc3f7;}\n"
+    "input:focus + .slider {box-shadow: 0 0 1px #4fc3f7;}\n"
     "input:checked + .slider:before {transform: translateX(26px);}\n"
-    "input.danger:checked + .slider {background-color: #f44336;}\n"
-    ".switch-label {display: inline-block; vertical-align: middle; margin-left: 10px; font-weight: bold;}\n"
+    "input.danger:checked + .slider {background-color: #e57373;}\n"
+    ".switch-label {display: inline-block; vertical-align: middle; margin-left: 10px; font-weight: bold; color: #e0e0e0;}\n"
     ".switch-container {margin-bottom: 20px; display: flex; align-items: center;}\n"
-    ".toggle-group { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 8px; }\n"
-    ".toggle-group h3 { margin-top: 0; color: #2c3e50; }\n"
+    ".toggle-group { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; padding: 15px; background-color: #333; border-radius: 8px; border: 1px solid #555; }\n"
+    ".toggle-group h3 { margin-top: 0; color: #81c784; }\n"
     ".toggle-row { display: flex; flex-wrap: wrap; gap: 20px; }\n";
-  
+
   return styles;
 }
 
@@ -127,17 +130,17 @@ inline String getPageHeader(String pageTitle) {
   return header;
 }
 
-// Navigation links 
+// Navigation links
 inline String getNavBar() {
-  String navbar = 
-    "<div style='margin-bottom: 20px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>\n"
+  String navbar =
+    "<div style='margin-bottom: 20px; padding: 10px; background-color: #2d2d2d; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'>\n"
     "<a href='/' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Home</a>\n"
+    "<a href='/control' style='margin-right: 10px; padding: 8px 12px; background-color: #2ecc71; color: white; border-radius: 4px; text-decoration: none;'>Roof Control</a>\n"
     "<a href='/setup' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Setup</a>\n"
     "<a href='/wificonfig' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>WiFi Config</a>\n"
-    "<a href='http://" + WiFi.localIP().toString() + ":" + String(ALPACA_PORT) + "/setup/v1/dome/0/setup' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>ASCOM Controls</a>\n"
-    "<a href='/update' style='padding: 8px 12px; background-color: #f39c12; color: white; border-radius: 4px; text-decoration: none;'>Update</a>\n" 
+    "<a href='/update' style='padding: 8px 12px; background-color: #f39c12; color: white; border-radius: 4px; text-decoration: none;'>Update</a>\n"
     "</div>\n";
-  
+
   return navbar;
 }
 
@@ -163,11 +166,19 @@ inline String getControlJS() {
     "    const triggerState = document.getElementById('triggerState').checked ? 'high' : 'low';\n"
     "    const swapSwitches = document.getElementById('swapSwitches').checked ? 'true' : 'false';\n"
     "    const mqttEnabled = document.getElementById('mqttEnabled').checked ? 'true' : 'false';\n"
+    "    const inverterRelay = document.getElementById('inverterRelayToggle').checked ? 'true' : 'false';\n"
+    "    const inverterSoftPwr = document.getElementById('inverterSoftPwrToggle').checked ? 'true' : 'false';\n"
+    "    const limitSwitchTimeoutEnabled = document.getElementById('limitSwitchTimeoutEnabledToggle').checked ? 'true' : 'false';\n"
+    "    const timeoutEnabled = document.getElementById('timeoutEnabledToggle').checked ? 'true' : 'false';\n"
+    "    const delay1 = document.getElementById('delay1Input').value;\n"
+    "    const delay2 = document.getElementById('delay2Input').value;\n"
+    "    const limitSwitchTimeout = document.getElementById('limitSwitchTimeoutInput').value;\n"
+    "    const timeout = document.getElementById('timeoutInput').value;\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&limitSwitchTimeoutEnabled=' + limitSwitchTimeoutEnabled + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&limitSwitchTimeout=' + limitSwitchTimeout + '&timeout=' + timeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -207,7 +218,7 @@ inline String getControlJS() {
     "  .then(data => {\n"
     "    console.log(data);\n"
     "    document.getElementById('bypassText').innerHTML = checked ? '(ENABLED)' : '(DISABLED)';\n"
-    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#f44336' : '#333';\n"
+    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#e57373' : '#e0e0e0';\n"
     "  });\n"
     "}\n"
     
@@ -343,35 +354,36 @@ inline String getStatusDisplay(RoofStatus status) {
 inline String getHomePage(RoofStatus status, bool isApMode = false) {
   String html = getPageHeader("ESP32 Roll-Off Roof Status");
   
-  // Add custom styles for home page
+  // Add custom styles for home page - Dark Theme
   html += "<style>\n"
           "body { text-align: center; }\n"
-          ".status-card { background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: left; }\n"
-          ".open { background-color: #e6f2ff; color: #0047ab; }\n"
-          ".closed { background-color: #e6ffe6; color: green; }\n"
-          ".moving { background-color: #fff6e6; color: orange; }\n"
-          ".error { background-color: #ffcccc; color: darkred; }\n"
-          ".ap-mode-banner { background-color: #ffe66d; color: #5c4d00; padding: 10px; border-radius: 5px; margin: 10px 0; font-weight: bold; }\n"
-          ".nav-button { display: inline-block; margin: 5px; padding: 8px 15px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none; }\n"
-          ".nav-button:hover { background-color: #2980b9; text-decoration: none; color: white; }\n"
+          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
+          ".page-header { margin: 20px 0; }\n"
+          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
+          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
+          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
+          ".error { background-color: #3a1e1e; color: #e57373; }\n"
+          ".ap-mode-banner { background-color: #3a3a1e; color: #ffd54f; padding: 10px; border-radius: 5px; margin: 10px 0; font-weight: bold; border: 1px solid #555; }\n"
+          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
+          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
           ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
-          ".status-indicator.green { background-color: #2ecc71; }\n"
-          ".status-indicator.red { background-color: #e74c3c; }\n"
-          ".status-indicator.blue { background-color: #3498db; }\n"
-          ".status-indicator.orange { background-color: #f39c12; }\n"
+          ".status-indicator.green { background-color: #81c784; }\n"
+          ".status-indicator.red { background-color: #e57373; }\n"
+          ".status-indicator.blue { background-color: #64b5f6; }\n"
+          ".status-indicator.orange { background-color: #ffb74d; }\n"
           ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
-          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; }\n"
+          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
           ".status-table { width: 100%; margin-bottom: 15px; }\n"
-          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #f2f2f2; }\n"
-          ".status-table td { padding: 8px; }\n"
-          ".mqtt-json { background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; max-height: 150px; overflow-y: auto; }\n"
+          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
+          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
+          ".mqtt-json { background-color: #333; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; max-height: 150px; overflow-y: auto; color: #81c784; border: 1px solid #555; }\n"
           "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
           "</style>\n";
-          
-  html += "<meta http-equiv='refresh' content='10'>\n"; // Auto-refresh every 10 seconds
-  
-  html += "<h1>ESP32 Roll-Off Roof Controller</h1>\n"
-          "<p>Version: " + String(DEVICE_VERSION) + "</p>\n";
+
+  html += "<div class='page-header'>\n";
+  html += "<h1>ESP32 Roll-Off Roof Controller</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
+  html += "</div>\n";
   
   // AP Mode Banner
   if (isApMode) {
@@ -404,16 +416,16 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   }
   
   // Status header
-  html += "<div class='status-header " + statusClass + "'>\n";
-  html += "<span class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: " + statusString;
+  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
+  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
+  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
   html += "</div>\n";
-  
+
   // Navigation buttons
   html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
   html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
   html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
-  html += "<a href='http://" + WiFi.localIP().toString() + ":" + String(ALPACA_PORT) + "/setup/v1/dome/0/setup' class='nav-button' style='background-color: #3498db;'>ASCOM Controls</a>\n";
   html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
   html += "</div>\n";
   
@@ -455,7 +467,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<tr><th>Park Sensor Bypass</th><td>";
   html += "<span class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
   html += bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled";
-  html += " <small style='margin-left: 10px; color: #666;'><a href='/setup'>Configure bypass in setup</a></small>";
+  html += " <small style='margin-left: 10px; color: #b0b0b0;'><a href='/setup'>Configure bypass in setup</a></small>";
   html += "</td></tr>\n";
   
   // Show telescope parked status based on park sensor type
@@ -529,7 +541,32 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   html += "</table>\n";
   html += "</div>\n";
-  
+
+  // Inverter Status Card (v3) - Display only, no controls
+  html += "<div class='status-card'>\n";
+  html += "<h2>Inverter Status</h2>\n";
+  html += "<table class='status-table'>\n";
+
+  // Get inverter states
+  bool inverterRelay = getInverterRelayState();
+  bool inverterACPower = getInverterACPowerState();
+
+  // Inverter relay state (K1)
+  html += "<tr><th>Power Relay (K1)</th><td>";
+  html += "<span class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
+  html += inverterRelay ? "ON" : "OFF";
+  html += "</td></tr>\n";
+
+  // Inverter AC power state (via optocoupler)
+  html += "<tr><th>AC Power Detected</th><td>";
+  html += "<span class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
+  html += inverterACPower ? "ON" : "OFF";
+  html += "</td></tr>\n";
+
+  html += "</table>\n";
+  html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Use <a href='/control'>Roof Control</a> page to control inverter</p>\n";
+  html += "</div>\n";
+
   // MQTT Information Card
   html += "<div class='status-card'>\n";
   html += "<h2>MQTT Information</h2>\n";
@@ -570,13 +607,68 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "</table>\n";
   html += "</div>\n";
   
-  // Simple JavaScript to handle page refresh
+  // Simple JavaScript for real-time status updates
   html += "<script>\n";
   html += "document.addEventListener('DOMContentLoaded', function() {\n";
   html += "  console.log('Page loaded, auto-refresh enabled');\n";
+  html += "});\n\n";
+
+  html += "function roofControl(action) {\n";
+  html += "  fetch('/roof_control', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: {'Content-Type': 'application/x-www-form-urlencoded'},\n";
+  html += "    body: 'action=' + action\n";
+  html += "  })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => {\n";
+  html += "      setTimeout(() => location.reload(), 500);\n";
+  html += "    })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  // Add real-time status update function for home page
+  html += "function updateHomeStatus() {\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      // Update main status header\n";
+  html += "      const statusHeader = document.getElementById('mainStatusHeader');\n";
+  html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
+  html += "      const statusText = document.getElementById('mainStatusText');\n";
+  html += "      if (statusHeader && statusIndicator && statusText) {\n";
+  html += "        statusText.textContent = data.status;\n";
+  html += "        statusHeader.className = 'status-header ';\n";
+  html += "        statusIndicator.className = 'status-indicator ';\n";
+  html += "        if (data.status === 'Open') {\n";
+  html += "          statusHeader.className += 'open';\n";
+  html += "          statusIndicator.className += 'blue';\n";
+  html += "        } else if (data.status === 'Closed') {\n";
+  html += "          statusHeader.className += 'closed';\n";
+  html += "          statusIndicator.className += 'green';\n";
+  html += "        } else if (data.status === 'Opening') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'blue blink';\n";
+  html += "        } else if (data.status === 'Closing') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'green blink';\n";
+  html += "        } else {\n";
+  html += "          statusHeader.className += 'error';\n";
+  html += "          statusIndicator.className += 'red blink';\n";
+  html += "        }\n";
+  html += "      }\n";
+  html += "    })\n";
+  html += "    .catch(error => console.error('Error updating status:', error));\n";
+  html += "}\n\n";
+
+  // Start polling on page load
+  html += "// Start auto-updating when page loads\n";
+  html += "document.addEventListener('DOMContentLoaded', function() {\n";
+  html += "  updateHomeStatus(); // Initial update\n";
+  html += "  setInterval(updateHomeStatus, 2000); // Update every 2 seconds\n";
   html += "});\n";
+
   html += "</script>\n";
-  
+
   html += "</body></html>";
   
   return html;
@@ -657,9 +749,12 @@ inline String getMqttSettingsCard() {
   html += "<input type='text' id='mqttUser' name='mqttUser' value='" + String(mqttUser) + "'>";
   html += "<label for='mqttPassword'>MQTT Password:</label>";
   html += "<input type='password' id='mqttPassword' name='mqttPassword' value='" + String(mqttPassword) + "'>";
+  html += "<label for='mqttClientId'>MQTT Client ID:</label>";
+  html += "<input type='text' id='mqttClientId' name='mqttClientId' value='" + String(mqttClientId) + "'>";
+  html += "<p style='font-size: 0.8em; color: #b0b0b0;'>Unique identifier for this controller. Change this to prevent conflicts when testing multiple controllers.</p>";
   html += "<label for='mqttTopicPrefix'>MQTT Topic Prefix:</label>";
   html += "<input type='text' id='mqttTopicPrefix' name='mqttTopicPrefix' value='" + String(mqttTopicPrefix) + "'>";
-  html += "<p style='font-size: 0.8em; color: #666;'>Status and command topics will be created as [prefix]/status and [prefix]/command</p>";
+  html += "<p style='font-size: 0.8em; color: #b0b0b0;'>Status and command topics will be created as [prefix]/status and [prefix]/command</p>";
   html += "<input type='submit' value='Save MQTT Settings'>";
   html += "</form>";
   html += "</div>";
@@ -709,29 +804,135 @@ inline String getSwitchConfigCard() {
   html += "<input type='checkbox' id='bypassToggle' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange=\"toggleBypass(this.checked)\">";
   html += "<span class='slider'></span>";
   html += "</label>";
-  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#f44336" : "#333") + ";'>";
+  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>";
   html += "Bypass Telescope Park Sensor <strong id='bypassText'>(" + String(bypassParkSensor ? "ENABLED" : "DISABLED") + ")</strong><br>";
   html += "<small>Warning: When enabled, allows roof to move regardless of telescope position</small><br>";
-  html += "<small style='color: #e67e22;'><strong>Note:</strong> This setting is not retained between restarts. Use a physical jumper on the PARK terminals if no sensor is installed.</small>";
+  html += "<small style='color: #ffb74d;'><strong>Note:</strong> This setting is not retained between restarts. Use a physical jumper on the PARK terminals if no sensor is installed.</small>";
   html += "</span>";
   html += "</div>";
   
   html += "</div>"; // End toggle-row
+
+  // Add a new section for inverter settings
+  html += "<h3>Inverter Settings</h3>";
+  html += "<div class='toggle-row'>";
+
+  // Inverter relay (K1) toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='inverterRelayToggle'" + String(inverterRelayEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Enable Power Relay (K1) <strong id='inverterRelayText'>(" + String(inverterRelayEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Auto-control K1 relay to power inverter when opening/closing roof</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>"; // End toggle-row
+
+  html += "<div class='toggle-row'>";
+
+  // Inverter soft-power button (K3) toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='inverterSoftPwrToggle'" + String(inverterSoftPwrEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Enable Soft-Power Button (K3) <strong id='inverterSoftPwrText'>(" + String(inverterSoftPwrEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Auto-press K3 soft-power button if no AC power detected when opening/closing roof</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>"; // End toggle-row
+
+  // Inverter delay settings
+  html += "<div class='toggle-row' style='margin-top: 15px;'>";
+
+  html += "<div style='margin-right: 20px;'>";
+  html += "<label for='delay1Input' style='display: block; margin-bottom: 5px;'><strong>Inverter Delay 1 (ms):</strong></label>";
+  html += "<input type='number' id='delay1Input' min='0' max='10000' value='" + String(inverterDelay1) + "' ";
+  html += "style='width: 120px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time between K1 power relay and K3 soft-power button (0-10000ms, default: 750)</p>";
+  html += "</div>";
+
+  html += "<div>";
+  html += "<label for='delay2Input' style='display: block; margin-bottom: 5px;'><strong>Inverter Delay 2 (ms):</strong></label>";
+  html += "<input type='number' id='delay2Input' min='0' max='10000' value='" + String(inverterDelay2) + "' ";
+  html += "style='width: 120px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time between inverter power-on and K2 roof button (0-10000ms, default: 1500)</p>";
+  html += "</div>";
+
+  html += "</div>"; // End toggle-row
   html += "</div>"; // End toggle-group
-  
+
+  // Timing Settings
+  html += "<h3>Timing Settings</h3>";
+
+  // Limit switch timeout monitoring toggle
+  html += "<div style='display: flex; justify-content: center; margin-bottom: 10px;'>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='limitSwitchTimeoutEnabledToggle'" + String(limitSwitchTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Monitor Limit Switch Changes <strong id='limitSwitchTimeoutEnabledText'>(" + String(limitSwitchTimeoutEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Turn off inverter if limit switch doesn't change state within timeout after movement starts</small>";
+  html += "</span>";
+  html += "</div>";
+  html += "</div>";
+
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
+  html += "<label for='limitSwitchTimeoutInput' style='display: block; margin-bottom: 5px;'><strong>Limit Switch Timeout (seconds):</strong></label>";
+  html += "<input type='number' id='limitSwitchTimeoutInput' min='1' max='30' value='" + String(limitSwitchTimeout / 1000) + "' ";
+  html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Time to wait for limit switch state to change after movement starts (1-30 seconds, default: 5)</p>";
+  html += "</div>";
+
+  // Movement timeout monitoring toggle
+  html += "<div style='display: flex; justify-content: center; margin-bottom: 10px;'>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='timeoutEnabledToggle'" + String(movementTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Monitor Total Movement Time <strong id='timeoutEnabledText'>(" + String(movementTimeoutEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Automatically stop and turn off inverter if roof doesn't fully open/close within total timeout period</small>";
+  html += "</span>";
+  html += "</div>";
+  html += "</div>";
+
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
+  html += "<label for='timeoutInput' style='display: block; margin-bottom: 5px;'><strong>Movement Timeout (seconds):</strong></label>";
+  html += "<input type='number' id='timeoutInput' min='10' max='600' value='" + String(movementTimeout / 1000) + "' ";
+  html += "style='width: 100px; padding: 5px; font-size: 16px;' />";
+  html += "<p style='margin-top: 5px; font-size: 12px; color: #b0b0b0;'>Total time allowed for roof to fully open or close (10-600 seconds, default: 90)</p>";
+  html += "</div>";
+
   // Current configuration
-  html += "<div style='margin-top: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 4px;'>";
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
   html += "<p><strong>Current Configuration:</strong><br>";
   html += "Trigger state: " + String(TRIGGERED == HIGH ? "HIGH" : "LOW") + "<br>";
   html += "Open switch pin: " + String(LIMIT_SWITCH_OPEN_PIN) + "<br>";
   html += "Closed switch pin: " + String(LIMIT_SWITCH_CLOSED_PIN) + "<br>";
-  html += "Park sensor bypass: " + String(bypassParkSensor ? "Enabled" : "Disabled") + "</p>";
+  html += "Park sensor bypass: " + String(bypassParkSensor ? "Enabled" : "Disabled") + "<br>";
+  html += "Inverter relay (K1): " + String(inverterRelayEnabled ? "Enabled" : "Disabled") + "<br>";
+  html += "Soft-power button (K3): " + String(inverterSoftPwrEnabled ? "Enabled" : "Disabled") + "<br>";
+  html += "Inverter Delay 1: " + String(inverterDelay1) + "ms<br>";
+  html += "Inverter Delay 2: " + String(inverterDelay2) + "ms<br>";
+  html += "Limit switch timeout monitoring: " + String(limitSwitchTimeoutEnabled ? "Enabled" : "Disabled") + "<br>";
+  html += "Limit switch timeout: " + String(limitSwitchTimeout / 1000) + " seconds<br>";
+  html += "Movement timeout monitoring: " + String(movementTimeoutEnabled ? "Enabled" : "Disabled") + "<br>";
+  html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
   html += "</div>";
-  
+
   // Apply button
   html += "<button onclick='applyPinSettings()' class='button-danger' style='margin-top: 15px;'>Apply Settings</button>";
   html += "</div>";
-  
+
   return html;
 }
 
@@ -744,21 +945,31 @@ inline String getParkSensorConfigCard() {
   html += "<div class='toggle-group'>";
   html += "<h3>Park Sensor Type</h3>";
   html += "<p>Choose which park sensor system to use:</p>";
-  
-  html += "<div style='margin-bottom: 20px;'>";
-  html += "<input type='radio' id='parkTypePhysical' name='parkType' value='0'" + 
+
+  html += "<div style='display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;'>";
+  html += "<div style='display: inline-block; text-align: left;'>";
+
+  html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
+  html += "<input type='radio' id='parkTypePhysical' name='parkType' value='0'" +
           String(parkSensorType == PARK_SENSOR_PHYSICAL ? " checked" : "") + ">";
-  html += "<label for='parkTypePhysical' style='margin-left: 5px; margin-right: 20px;'>Physical Sensor Only</label>";
-  
-  html += "<input type='radio' id='parkTypeUDP' name='parkType' value='1'" + 
+  html += "<label for='parkTypePhysical' style='margin-left: 8px; cursor: pointer;'>Physical Sensor Only</label>";
+  html += "</div>";
+
+  html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
+  html += "<input type='radio' id='parkTypeUDP' name='parkType' value='1'" +
           String(parkSensorType == PARK_SENSOR_UDP ? " checked" : "") + ">";
-  html += "<label for='parkTypeUDP' style='margin-left: 5px; margin-right: 20px;'>UDP Sensors Only</label>";
-  
-  html += "<input type='radio' id='parkTypeBoth' name='parkType' value='2'" + 
+  html += "<label for='parkTypeUDP' style='margin-left: 8px; cursor: pointer;'>UDP Sensors Only</label>";
+  html += "</div>";
+
+  html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
+  html += "<input type='radio' id='parkTypeBoth' name='parkType' value='2'" +
           String(parkSensorType == PARK_SENSOR_BOTH ? " checked" : "") + ">";
-  html += "<label for='parkTypeBoth' style='margin-left: 5px;'>Both (AND Logic)</label>";
+  html += "<label for='parkTypeBoth' style='margin-left: 8px; cursor: pointer;'>Both (AND Logic)</label>";
   html += "</div>";
-  html += "</div>";
+
+  html += "</div>"; // End inline-block container
+  html += "</div>"; // End flex container
+  html += "</div>"; // End toggle-group
   
   // UDP Park Sensor Status
   html += "<div class='toggle-group'>";
@@ -870,12 +1081,73 @@ inline String getSystemManagementCard() {
 // Complete setup page
 inline String getSetupPage() {
   String html = getPageHeader("ESP32 Roll-Off Roof Controller Setup");
-  
-  html += "<h1>ESP32 Roll-Off Roof Controller</h1>";
-  html += "<p>Version: " + String(DEVICE_VERSION) + "</p>";
-  
-  // Add navigation
-  html += getNavBar();
+
+  // Add custom styles matching home page
+  html += "<style>\n"
+          "body { text-align: center; }\n"
+          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
+          ".page-header { margin: 20px 0; }\n"
+          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
+          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
+          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
+          ".error { background-color: #3a1e1e; color: #e57373; }\n"
+          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
+          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
+          ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
+          ".status-indicator.green { background-color: #81c784; }\n"
+          ".status-indicator.red { background-color: #e57373; }\n"
+          ".status-indicator.blue { background-color: #64b5f6; }\n"
+          ".status-indicator.orange { background-color: #ffb74d; }\n"
+          ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
+          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
+          ".status-table { width: 100%; margin-bottom: 15px; }\n"
+          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
+          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
+          "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
+          "</style>\n";
+
+  // Page header with title
+  html += "<div class='page-header'>\n";
+  html += "<h1>Device Setup</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += "</div>\n";
+
+  // Get current status for header
+  String statusString = getRoofStatusString();
+  String statusClass = "";
+  String indicatorClass = "";
+
+  if (statusString == "Open") {
+    statusClass = "open";
+    indicatorClass = "blue";
+  } else if (statusString == "Closed") {
+    statusClass = "closed";
+    indicatorClass = "green";
+  } else if (statusString == "Opening") {
+    statusClass = "moving";
+    indicatorClass = "blue blink";
+  } else if (statusString == "Closing") {
+    statusClass = "moving";
+    indicatorClass = "green blink";
+  } else {
+    statusClass = "error";
+    indicatorClass = "red blink";
+  }
+
+  // Status header (matching home page)
+  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
+  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
+  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "</div>\n";
+
+  // Navigation buttons
+  html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
+  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
+  html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
+  html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
+  html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
+  html += "</div>\n";
   
   // Status Card
   html += getStatusCard();
@@ -897,43 +1169,471 @@ inline String getSetupPage() {
   
   // Add JavaScript for interactivity
   html += getControlJS();
-  
+
   // Initialize all toggle labels on page load
   html += "<script>";
+
+  // Add status update function for header
+  html += "function updateStatus() {\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      // Update main status header\n";
+  html += "      const statusHeader = document.getElementById('mainStatusHeader');\n";
+  html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
+  html += "      const statusText = document.getElementById('mainStatusText');\n";
+  html += "      if (statusHeader && statusIndicator && statusText) {\n";
+  html += "        statusText.textContent = data.status;\n";
+  html += "        statusHeader.className = 'status-header ';\n";
+  html += "        statusIndicator.className = 'status-indicator ';\n";
+  html += "        if (data.status === 'Open') {\n";
+  html += "          statusHeader.className += 'open';\n";
+  html += "          statusIndicator.className += 'blue';\n";
+  html += "        } else if (data.status === 'Closed') {\n";
+  html += "          statusHeader.className += 'closed';\n";
+  html += "          statusIndicator.className += 'green';\n";
+  html += "        } else if (data.status === 'Opening') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'blue blink';\n";
+  html += "        } else if (data.status === 'Closing') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'green blink';\n";
+  html += "        } else {\n";
+  html += "          statusHeader.className += 'error';\n";
+  html += "          statusIndicator.className += 'red blink';\n";
+  html += "        }\n";
+  html += "      }\n";
+  html += "    })\n";
+  html += "    .catch(error => console.error('Error updating status:', error));\n";
+  html += "}\n\n";
+
   html += "document.addEventListener('DOMContentLoaded', function() {";
   html += "  // Initialize all toggle labels";
   html += "  updateToggleLabel('triggerState', 'triggerStateText', 'HIGH', 'LOW');";
   html += "  updateToggleLabel('swapSwitches', 'swapSwitchesText', 'Swapped', 'Default');";
   html += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
+  html += "  updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED');";
+  html += "  updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED');";
+  html += "  updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED');";
+  html += "  updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED');";
   html += "  const bypassToggle = document.getElementById('bypassToggle');";
   html += "  const bypassText = document.getElementById('bypassText');";
   html += "  if (bypassToggle && bypassText) {";
   html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#333';";
   html += "  }";
+  html += "  // Start status update polling\n";
+  html += "  updateStatus();\n";
+  html += "  setInterval(updateStatus, 2000);\n";
   html += "});";
   html += "</script>";
   
   html += "</body></html>";
-  
+
+  return html;
+}
+
+// Roof Control page (v3)
+inline String getRoofControlPage() {
+  String html = getPageHeader("Roof Control");
+
+  // Add custom styles matching home page
+  html += "<style>\n"
+          "body { text-align: center; }\n"
+          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
+          ".page-header { margin: 20px 0; }\n"
+          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
+          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
+          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
+          ".error { background-color: #3a1e1e; color: #e57373; }\n"
+          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
+          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
+          ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
+          ".status-indicator.green { background-color: #81c784; }\n"
+          ".status-indicator.red { background-color: #e57373; }\n"
+          ".status-indicator.blue { background-color: #64b5f6; }\n"
+          ".status-indicator.orange { background-color: #ffb74d; }\n"
+          ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
+          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
+          ".status-table { width: 100%; margin-bottom: 15px; }\n"
+          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
+          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
+          "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
+          "</style>\n";
+
+  // Page header with title
+  html += "<div class='page-header'>\n";
+  html += "<h1>Roof Control</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
+  html += "</div>\n";
+
+  // Get current status for header
+  String statusString = getRoofStatusString();
+  String statusClass = "";
+  String indicatorClass = "";
+
+  if (statusString == "Open") {
+    statusClass = "open";
+    indicatorClass = "blue";
+  } else if (statusString == "Closed") {
+    statusClass = "closed";
+    indicatorClass = "green";
+  } else if (statusString == "Opening") {
+    statusClass = "moving";
+    indicatorClass = "blue blink";
+  } else if (statusString == "Closing") {
+    statusClass = "moving";
+    indicatorClass = "green blink";
+  } else {
+    statusClass = "error";
+    indicatorClass = "red blink";
+  }
+
+  // Status header (matching home page)
+  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
+  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
+  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "</div>\n";
+
+  // Navigation buttons
+  html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
+  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
+  html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
+  html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
+  html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
+  html += "</div>\n";
+
+  // Current Status Card
+  html += "<div class='status-card'>\n";
+  html += "<h2>Current Status</h2>\n";
+  html += "<table class='status-table'>\n";
+
+  // Roof status - with IDs for dynamic updates (reuse statusClass from above)
+  String tableStatusClass = "";
+  if (statusString == "Open") {
+    tableStatusClass = "status-open";
+  } else if (statusString == "Closed") {
+    tableStatusClass = "status-closed";
+  } else if (statusString == "Opening" || statusString == "Closing") {
+    tableStatusClass = "status-moving";
+  } else {
+    tableStatusClass = "status-error";
+  }
+
+  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + tableStatusClass + "'>" + statusString + "</td></tr>\n";
+
+  // Park sensor status
+  html += "<tr><th>Telescope Parked</th><td id='telescopeParked'>";
+  html += "<span id='telescopeParkedIndicator' class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
+  html += "<span id='telescopeParkedText'>" + String(telescopeParked ? "Yes" : "No") + "</span>";
+  html += "</td></tr>\n";
+
+  // Bypass state
+  html += "<tr><th>Park Sensor Bypass</th><td id='bypassEnabled'>";
+  html += "<span id='bypassIndicator' class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
+  html += "<span id='bypassText'>" + String(bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled") + "</span>";
+  html += "</td></tr>\n";
+
+  // Limit switch states
+  bool openSwitchTriggered = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+  bool closedSwitchTriggered = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+
+  html += "<tr><th>Open Limit Switch</th><td id='openLimit'>";
+  html += "<span id='openLimitIndicator' class='status-indicator " + String(openSwitchTriggered ? "green" : "red") + "'></span> ";
+  html += "<span id='openLimitText'>" + String(openSwitchTriggered ? "Triggered" : "Not Triggered") + "</span>";
+  html += "</td></tr>\n";
+
+  html += "<tr><th>Closed Limit Switch</th><td id='closedLimit'>";
+  html += "<span id='closedLimitIndicator' class='status-indicator " + String(closedSwitchTriggered ? "green" : "red") + "'></span> ";
+  html += "<span id='closedLimitText'>" + String(closedSwitchTriggered ? "Triggered" : "Not Triggered") + "</span>";
+  html += "</td></tr>\n";
+
+  // Inverter states
+  bool inverterRelay = getInverterRelayState();
+  bool inverterACPower = getInverterACPowerState();
+
+  html += "<tr><th>Inverter Relay (K1)</th><td id='inverterRelay'>";
+  html += "<span id='inverterRelayIndicator' class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
+  html += "<span id='inverterRelayText'>" + String(inverterRelay ? "ON" : "OFF") + "</span>";
+  html += "</td></tr>\n";
+
+  html += "<tr><th>Inverter AC Power</th><td id='inverterACPower'>";
+  html += "<span id='inverterACPowerIndicator' class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
+  html += "<span id='inverterACPowerText'>" + String(inverterACPower ? "ON" : "OFF") + "</span>";
+  html += "</td></tr>\n";
+
+  html += "</table>\n";
+  html += "</div>\n";
+
+  // Roof Control Card
+  html += "<div class='status-card'>\n";
+  html += "<h2>Roof Movement</h2>\n";
+
+  // Add bypass toggle
+  html += "<div style='margin: 15px 0; padding: 15px; background-color: #2d2d2d; border-radius: 4px;'>\n";
+  html += "<div class='switch-container' style='display: flex; align-items: center; justify-content: center;'>\n";
+  html += "<label class='switch'>\n";
+  html += "<input type='checkbox' id='bypassToggleControl' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange='toggleBypassControl(this.checked)'>\n";
+  html += "<span class='slider'></span>\n";
+  html += "</label>\n";
+  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>\n";
+  html += "Bypass Park Sensor <strong>" + String(bypassParkSensor ? "(ENABLED)" : "(DISABLED)") + "</strong><br>\n";
+  html += "<small style='color: #e0e0e0;'>Enable to control roof regardless of telescope position</small>\n";
+  html += "</span>\n";
+  html += "</div>\n";
+  html += "</div>\n";
+
+  html += "<div style='text-align: center; margin: 20px 0;'>\n";
+
+  // Determine if buttons should be disabled
+  bool buttonDisabled = !bypassParkSensor && !telescopeParked;
+
+  // Intelligent button - uses ASCOM/MQTT logic
+  html += "<button id='roofOpenCloseButton' class='btn' onclick='roofOpenClose()' style='background-color: #2ecc71; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">OPEN / CLOSE</button>\n";
+
+  // Manual button - mimics physical button press
+  html += "<button id='roofControlButton' class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">START / STOP</button>\n";
+
+  if (buttonDisabled) {
+    html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>⚠ Telescope not parked - Enable bypass to control roof</p>\n";
+  } else {
+    html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'><strong>START/STOP:</strong> Mimics physical button | <strong>OPEN/CLOSE:</strong> Intelligent control</p>\n";
+  }
+
+  html += "</div>\n";
+  html += "</div>\n";
+
+  // Inverter Control Card
+  html += "<div class='status-card'>\n";
+  html += "<h2>Inverter Control</h2>\n";
+  html += "<div style='text-align: center; margin: 20px 0;'>\n";
+  html += "<button class='btn' onclick='toggleInverterPower()' style='margin: 5px;'>Toggle Power Relay (K1)</button>\n";
+  html += "<button class='btn' onclick='sendInverterButton()' style='margin: 5px;'>Press Soft-Power Button (K3)</button>\n";
+  html += "</div>\n";
+  html += "</div>\n";
+
+  // Add JavaScript for control functions
+  html += "<script>\n";
+  html += "function toggleInverterPower() {\n";
+  html += "  fetch('/inverter_toggle', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { console.log('Inverter toggle:', data); updateStatus(); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function sendInverterButton() {\n";
+  html += "  fetch('/inverter_button', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { console.log('Inverter button:', data); updateStatus(); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function roofControl(action) {\n";
+  html += "  fetch('/roof_control', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: {'Content-Type': 'application/x-www-form-urlencoded'},\n";
+  html += "    body: 'action=' + action\n";
+  html += "  })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { setTimeout(() => location.reload(), 500); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function roofButtonPress() {\n";
+  html += "  fetch('/roof_button', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { console.log('Roof button pressed:', data); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function roofOpenClose() {\n";
+  html += "  fetch('/roof_openclose', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { console.log('Intelligent roof control:', data); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function toggleBypassControl(checked) {\n";
+  html += "  fetch('/toggle_bypass', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+  html += "    body: 'bypass=' + checked\n";
+  html += "  })\n";
+  html += "  .then(response => response.text())\n";
+  html += "  .then(data => {\n";
+  html += "    console.log(data);\n";
+  html += "    const label = document.getElementById('bypassLabelControl');\n";
+  html += "    if (label) {\n";
+  html += "      label.style.color = checked ? '#e57373' : '#e0e0e0';\n";
+  html += "      label.innerHTML = 'Bypass Park Sensor <strong>' + (checked ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
+  html += "    }\n";
+  html += "    updateStatus(); // Refresh status\n";
+  html += "  })\n";
+  html += "  .catch(error => {\n";
+  html += "    console.error('Error:', error);\n";
+  html += "    alert('Error toggling bypass: ' + error);\n";
+  html += "  });\n";
+  html += "}\n\n";
+
+  // Add real-time status update function
+  html += "function updateStatus() {\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      // Update roof status\n";
+  html += "      const statusEl = document.getElementById('roofStatus');\n";
+  html += "      if (statusEl) {\n";
+  html += "        statusEl.textContent = data.status;\n";
+  html += "        statusEl.className = '';\n";
+  html += "        if (data.status === 'Open') statusEl.className = 'status-open';\n";
+  html += "        else if (data.status === 'Closed') statusEl.className = 'status-closed';\n";
+  html += "        else if (data.status === 'Opening' || data.status === 'Closing') statusEl.className = 'status-moving';\n";
+  html += "        else statusEl.className = 'status-error';\n";
+  html += "      }\n\n";
+
+  html += "      // Update telescope parked\n";
+  html += "      const tpInd = document.getElementById('telescopeParkedIndicator');\n";
+  html += "      const tpText = document.getElementById('telescopeParkedText');\n";
+  html += "      if (tpInd && tpText) {\n";
+  html += "        tpInd.className = 'status-indicator ' + (data.telescope_parked ? 'green' : 'red');\n";
+  html += "        tpText.textContent = data.telescope_parked ? 'Yes' : 'No';\n";
+  html += "      }\n\n";
+
+  html += "      // Update bypass status\n";
+  html += "      const bypassInd = document.getElementById('bypassIndicator');\n";
+  html += "      const bypassText = document.getElementById('bypassText');\n";
+  html += "      if (bypassInd && bypassText) {\n";
+  html += "        bypassInd.className = 'status-indicator ' + (data.bypass_enabled ? 'red blink' : 'green');\n";
+  html += "        bypassText.innerHTML = data.bypass_enabled ? \"<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>\" : 'Disabled';\n";
+  html += "      }\n";
+  html += "      // Update bypass toggle checkbox\n";
+  html += "      const bypassToggle = document.getElementById('bypassToggleControl');\n";
+  html += "      const bypassLabel = document.getElementById('bypassLabelControl');\n";
+  html += "      if (bypassToggle) bypassToggle.checked = data.bypass_enabled;\n";
+  html += "      if (bypassLabel) {\n";
+  html += "        bypassLabel.style.color = data.bypass_enabled ? '#f44336' : '#333';\n";
+  html += "        bypassLabel.innerHTML = 'Bypass Park Sensor <strong>' + (data.bypass_enabled ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
+  html += "      }\n\n";
+
+  html += "      // Update roof control buttons disabled state\n";
+  html += "      const shouldDisable = !data.bypass_enabled && !data.telescope_parked;\n";
+  html += "      const roofButton = document.getElementById('roofControlButton');\n";
+  html += "      if (roofButton) {\n";
+  html += "        roofButton.disabled = shouldDisable;\n";
+  html += "        if (shouldDisable) {\n";
+  html += "          roofButton.style.opacity = '0.5';\n";
+  html += "          roofButton.style.cursor = 'not-allowed';\n";
+  html += "        } else {\n";
+  html += "          roofButton.style.opacity = '1';\n";
+  html += "          roofButton.style.cursor = 'pointer';\n";
+  html += "        }\n";
+  html += "      }\n";
+  html += "      const openCloseButton = document.getElementById('roofOpenCloseButton');\n";
+  html += "      if (openCloseButton) {\n";
+  html += "        openCloseButton.disabled = shouldDisable;\n";
+  html += "        if (shouldDisable) {\n";
+  html += "          openCloseButton.style.opacity = '0.5';\n";
+  html += "          openCloseButton.style.cursor = 'not-allowed';\n";
+  html += "        } else {\n";
+  html += "          openCloseButton.style.opacity = '1';\n";
+  html += "          openCloseButton.style.cursor = 'pointer';\n";
+  html += "        }\n";
+  html += "      }\n\n";
+
+  html += "      // Update open limit switch\n";
+  html += "      const openInd = document.getElementById('openLimitIndicator');\n";
+  html += "      const openText = document.getElementById('openLimitText');\n";
+  html += "      if (openInd && openText) {\n";
+  html += "        openInd.className = 'status-indicator ' + (data.limit_open ? 'green' : 'red');\n";
+  html += "        openText.textContent = data.limit_open ? 'Triggered' : 'Not Triggered';\n";
+  html += "      }\n\n";
+
+  html += "      // Update closed limit switch\n";
+  html += "      const closedInd = document.getElementById('closedLimitIndicator');\n";
+  html += "      const closedText = document.getElementById('closedLimitText');\n";
+  html += "      if (closedInd && closedText) {\n";
+  html += "        closedInd.className = 'status-indicator ' + (data.limit_closed ? 'green' : 'red');\n";
+  html += "        closedText.textContent = data.limit_closed ? 'Triggered' : 'Not Triggered';\n";
+  html += "      }\n\n";
+
+  html += "      // Update inverter relay\n";
+  html += "      const invRelayInd = document.getElementById('inverterRelayIndicator');\n";
+  html += "      const invRelayText = document.getElementById('inverterRelayText');\n";
+  html += "      if (invRelayInd && invRelayText) {\n";
+  html += "        invRelayInd.className = 'status-indicator ' + (data.inverter_relay ? 'green' : 'red');\n";
+  html += "        invRelayText.textContent = data.inverter_relay ? 'ON' : 'OFF';\n";
+  html += "      }\n\n";
+
+  html += "      // Update inverter AC power\n";
+  html += "      const invACInd = document.getElementById('inverterACPowerIndicator');\n";
+  html += "      const invACText = document.getElementById('inverterACPowerText');\n";
+  html += "      if (invACInd && invACText) {\n";
+  html += "        invACInd.className = 'status-indicator ' + (data.inverter_ac_power ? 'green' : 'red');\n";
+  html += "        invACText.textContent = data.inverter_ac_power ? 'ON' : 'OFF';\n";
+  html += "      }\n\n";
+
+  html += "      // Update main status header\n";
+  html += "      const statusHeader = document.getElementById('mainStatusHeader');\n";
+  html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
+  html += "      const statusText = document.getElementById('mainStatusText');\n";
+  html += "      if (statusHeader && statusIndicator && statusText) {\n";
+  html += "        statusText.textContent = data.status;\n";
+  html += "        statusHeader.className = 'status-header ';\n";
+  html += "        statusIndicator.className = 'status-indicator ';\n";
+  html += "        if (data.status === 'Open') {\n";
+  html += "          statusHeader.className += 'open';\n";
+  html += "          statusIndicator.className += 'blue';\n";
+  html += "        } else if (data.status === 'Closed') {\n";
+  html += "          statusHeader.className += 'closed';\n";
+  html += "          statusIndicator.className += 'green';\n";
+  html += "        } else if (data.status === 'Opening') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'blue blink';\n";
+  html += "        } else if (data.status === 'Closing') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'green blink';\n";
+  html += "        } else {\n";
+  html += "          statusHeader.className += 'error';\n";
+  html += "          statusIndicator.className += 'red blink';\n";
+  html += "        }\n";
+  html += "      }\n";
+  html += "    })\n";
+  html += "    .catch(error => console.error('Error updating status:', error));\n";
+  html += "}\n\n";
+
+  // Start polling on page load
+  html += "// Start auto-updating when page loads\n";
+  html += "document.addEventListener('DOMContentLoaded', function() {\n";
+  html += "  updateStatus(); // Initial update\n";
+  html += "  setInterval(updateStatus, 2000); // Update every 2 seconds\n";
+  html += "});\n";
+
+  html += "</script>\n";
+
+  html += "</body></html>";
+
   return html;
 }
 
 // WiFi configuration page
 inline String getWifiConfigPage() {
   String html = getPageHeader("WiFi Configuration");
-  
-  // Add custom styles for the WiFi config page
+
+  // Add custom styles for the WiFi config page - Dark Theme
   html += "<style>\n"
-          "body { text-align: center; background-color: #f0f8ff; }\n"
-          ".container { max-width: 500px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }\n"
+          "body { text-align: center; }\n"
+          ".container { max-width: 600px; margin: 0 auto; background-color: #2d2d2d; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #404040; }\n"
           ".network-list { margin-bottom: 20px; text-align: left; }\n"
-          ".network { padding: 10px; margin-bottom: 5px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }\n"
-          ".network:hover { background-color: #f5f5f5; }\n"
+          ".network { padding: 10px; margin-bottom: 5px; border: 1px solid #555; border-radius: 4px; cursor: pointer; background-color: #333; color: #e0e0e0; }\n"
+          ".network:hover { background-color: #404040; }\n"
           ".back-link { margin-top: 20px; display: inline-block; }\n"
           "</style>\n";
-  
+
   html += "<div class='container'>";
-  html += "<h1>WiFi Configuration</h1>";
+  html += "<div class='page-header'>\n";
+  html += "<h1>WiFi Configuration</h1>\n";
+  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += "</div>\n";
   
   // Add network scanning functionality
   html += "<div class='network-list'>";

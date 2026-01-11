@@ -1,5 +1,5 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * Web UI Handler Implementation
  */
 
@@ -43,25 +43,31 @@ void loadConfiguration() {
     int savedMqttPort = preferences.getInt(PREF_MQTT_PORT, DEFAULT_MQTT_PORT);
     String savedMqttUser = preferences.getString(PREF_MQTT_USER, "");
     String savedMqttPassword = preferences.getString(PREF_MQTT_PASSWORD, "");
+    String savedMqttClientId = preferences.getString(PREF_MQTT_CLIENT_ID, "");
     String savedMqttTopicPrefix = preferences.getString(PREF_MQTT_TOPIC_PREFIX, "");
-    
+
     if (savedMqttServer.length() > 0) {
       strncpy(mqttServer, savedMqttServer.c_str(), sizeof(mqttServer) - 1);
       mqttServer[sizeof(mqttServer) - 1] = '\0';
     }
-    
+
     mqttPort = savedMqttPort;
-    
+
     if (savedMqttUser.length() > 0) {
       strncpy(mqttUser, savedMqttUser.c_str(), sizeof(mqttUser) - 1);
       mqttUser[sizeof(mqttUser) - 1] = '\0';
     }
-    
+
     if (savedMqttPassword.length() > 0) {
       strncpy(mqttPassword, savedMqttPassword.c_str(), sizeof(mqttPassword) - 1);
       mqttPassword[sizeof(mqttPassword) - 1] = '\0';
     }
-    
+
+    if (savedMqttClientId.length() > 0) {
+      strncpy(mqttClientId, savedMqttClientId.c_str(), sizeof(mqttClientId) - 1);
+      mqttClientId[sizeof(mqttClientId) - 1] = '\0';
+    }
+
     if (savedMqttTopicPrefix.length() > 0) {
       strncpy(mqttTopicPrefix, savedMqttTopicPrefix.c_str(), sizeof(mqttTopicPrefix) - 1);
       mqttTopicPrefix[sizeof(mqttTopicPrefix) - 1] = '\0';
@@ -102,10 +108,50 @@ void loadConfiguration() {
   if (preferences.isKey(PREF_BYPASS_SENSOR)) {
     bypassParkSensor = preferences.getBool(PREF_BYPASS_SENSOR, false);
   }
-  
+
+  // Load movement timeout setting
+  if (preferences.isKey(PREF_MOVEMENT_TIMEOUT)) {
+    movementTimeout = preferences.getULong(PREF_MOVEMENT_TIMEOUT, DEFAULT_MOVEMENT_TIMEOUT);
+  }
+
+  // Load movement timeout enabled setting
+  if (preferences.isKey(PREF_TIMEOUT_ENABLED)) {
+    movementTimeoutEnabled = preferences.getBool(PREF_TIMEOUT_ENABLED, DEFAULT_TIMEOUT_ENABLED);
+  }
+
+  // Load limit switch timeout setting
+  if (preferences.isKey(PREF_LIMIT_SWITCH_TIMEOUT)) {
+    limitSwitchTimeout = preferences.getULong(PREF_LIMIT_SWITCH_TIMEOUT, DEFAULT_LIMIT_SWITCH_TIMEOUT);
+  }
+
+  // Load limit switch timeout enabled setting
+  if (preferences.isKey(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED)) {
+    limitSwitchTimeoutEnabled = preferences.getBool(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED, DEFAULT_LIMIT_SWITCH_TIMEOUT_ENABLED);
+  }
+
+  // Load inverter relay enabled setting
+  if (preferences.isKey(PREF_INVERTER_RELAY_ENABLED)) {
+    inverterRelayEnabled = preferences.getBool(PREF_INVERTER_RELAY_ENABLED, true);  // Default to true
+  }
+
+  // Load inverter soft-power enabled setting
+  if (preferences.isKey(PREF_INVERTER_SOFTPWR_ENABLED)) {
+    inverterSoftPwrEnabled = preferences.getBool(PREF_INVERTER_SOFTPWR_ENABLED, true);  // Default to true
+  }
+
+  // Load inverter delay settings
+  if (preferences.isKey(PREF_INVERTER_DELAY1)) {
+    inverterDelay1 = preferences.getULong(PREF_INVERTER_DELAY1, DEFAULT_INVERTER_DELAY1);
+  }
+  if (preferences.isKey(PREF_INVERTER_DELAY2)) {
+    inverterDelay2 = preferences.getULong(PREF_INVERTER_DELAY2, DEFAULT_INVERTER_DELAY2);
+  }
+
   preferences.end();
-  
+
   Debug.println("Configuration loaded from preferences");
+  Debug.printf("Movement timeout: %lu ms (%lu seconds)\n", movementTimeout, movementTimeout / 1000);
+  Debug.printf("Inverter Delay 1: %lu ms, Delay 2: %lu ms\n", inverterDelay1, inverterDelay2);
 }
 
 // Save configuration to preferences
@@ -121,10 +167,33 @@ void saveConfiguration() {
   preferences.putInt(PREF_MQTT_PORT, mqttPort);
   preferences.putString(PREF_MQTT_USER, mqttUser);
   preferences.putString(PREF_MQTT_PASSWORD, mqttPassword);
+  preferences.putString(PREF_MQTT_CLIENT_ID, mqttClientId);
   preferences.putString(PREF_MQTT_TOPIC_PREFIX, mqttTopicPrefix);
-  
+
+  // Save movement timeout
+  preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
+
+  // Save movement timeout enabled setting
+  preferences.putBool(PREF_TIMEOUT_ENABLED, movementTimeoutEnabled);
+
+  // Save limit switch timeout
+  preferences.putULong(PREF_LIMIT_SWITCH_TIMEOUT, limitSwitchTimeout);
+
+  // Save limit switch timeout enabled setting
+  preferences.putBool(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED, limitSwitchTimeoutEnabled);
+
+  // Save inverter relay enabled setting
+  preferences.putBool(PREF_INVERTER_RELAY_ENABLED, inverterRelayEnabled);
+
+  // Save inverter soft-power enabled setting
+  preferences.putBool(PREF_INVERTER_SOFTPWR_ENABLED, inverterSoftPwrEnabled);
+
+  // Save inverter delay settings
+  preferences.putULong(PREF_INVERTER_DELAY1, inverterDelay1);
+  preferences.putULong(PREF_INVERTER_DELAY2, inverterDelay2);
+
   preferences.end();
-  
+
   Debug.println("Configuration saved to preferences");
 }
 
@@ -206,6 +275,162 @@ void handleSetPins() {
     }
   }
 
+  // Check for timeout parameter
+  if (webUiServer.hasArg("timeout")) {
+    unsigned long newTimeout = webUiServer.arg("timeout").toInt() * 1000; // Convert seconds to ms
+    if (newTimeout >= 10000 && newTimeout <= 600000) { // 10 seconds to 10 minutes
+      if (newTimeout != movementTimeout) {
+        movementTimeout = newTimeout;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Movement timeout set to " + String(movementTimeout / 1000) + " seconds. ";
+        Debug.printf("Movement timeout set to %lu seconds\n", movementTimeout / 1000);
+      }
+    } else {
+      message += "Invalid timeout value (must be 10-600 seconds). ";
+      Debug.println("Invalid timeout value received");
+    }
+  }
+
+  // Check for timeout enabled parameter
+  if (webUiServer.hasArg("timeoutEnabled")) {
+    bool newTimeoutEnabled = webUiServer.arg("timeoutEnabled").equals("true");
+    if (newTimeoutEnabled != movementTimeoutEnabled) {
+      movementTimeoutEnabled = newTimeoutEnabled;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_TIMEOUT_ENABLED, movementTimeoutEnabled);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Movement timeout monitoring " + String(movementTimeoutEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Movement timeout monitoring %s\n", movementTimeoutEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  // Check for limit switch timeout parameter
+  if (webUiServer.hasArg("limitSwitchTimeout")) {
+    unsigned long newLimitSwitchTimeout = webUiServer.arg("limitSwitchTimeout").toInt() * 1000; // Convert seconds to ms
+    if (newLimitSwitchTimeout >= 1000 && newLimitSwitchTimeout <= 30000) { // 1 to 30 seconds
+      if (newLimitSwitchTimeout != limitSwitchTimeout) {
+        limitSwitchTimeout = newLimitSwitchTimeout;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_LIMIT_SWITCH_TIMEOUT, limitSwitchTimeout);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Limit switch timeout set to " + String(limitSwitchTimeout / 1000) + " seconds. ";
+        Debug.printf("Limit switch timeout set to %lu seconds\n", limitSwitchTimeout / 1000);
+      }
+    } else {
+      message += "Invalid limit switch timeout value (must be 1-30 seconds). ";
+      Debug.println("Invalid limit switch timeout value received");
+    }
+  }
+
+  // Check for limit switch timeout enabled parameter
+  if (webUiServer.hasArg("limitSwitchTimeoutEnabled")) {
+    bool newLimitSwitchTimeoutEnabled = webUiServer.arg("limitSwitchTimeoutEnabled").equals("true");
+    if (newLimitSwitchTimeoutEnabled != limitSwitchTimeoutEnabled) {
+      limitSwitchTimeoutEnabled = newLimitSwitchTimeoutEnabled;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_LIMIT_SWITCH_TIMEOUT_ENABLED, limitSwitchTimeoutEnabled);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Limit switch timeout monitoring " + String(limitSwitchTimeoutEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Limit switch timeout monitoring %s\n", limitSwitchTimeoutEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  // Check for inverter relay enabled parameter
+  if (webUiServer.hasArg("inverterRelay")) {
+    bool newInverterRelayEnabled = webUiServer.arg("inverterRelay").equals("true");
+    if (newInverterRelayEnabled != inverterRelayEnabled) {
+      inverterRelayEnabled = newInverterRelayEnabled;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_INVERTER_RELAY_ENABLED, inverterRelayEnabled);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Inverter relay control " + String(inverterRelayEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Inverter relay control %s\n", inverterRelayEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  // Check for inverter soft-power enabled parameter
+  if (webUiServer.hasArg("inverterSoftPwr")) {
+    bool newInverterSoftPwrEnabled = webUiServer.arg("inverterSoftPwr").equals("true");
+    if (newInverterSoftPwrEnabled != inverterSoftPwrEnabled) {
+      inverterSoftPwrEnabled = newInverterSoftPwrEnabled;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_INVERTER_SOFTPWR_ENABLED, inverterSoftPwrEnabled);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Inverter soft-power button " + String(inverterSoftPwrEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Inverter soft-power button %s\n", inverterSoftPwrEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  // Check for inverter delay 1 parameter
+  if (webUiServer.hasArg("delay1")) {
+    unsigned long newDelay1 = webUiServer.arg("delay1").toInt(); // In milliseconds
+    if (newDelay1 >= 0 && newDelay1 <= 10000) { // 0 to 10 seconds
+      if (newDelay1 != inverterDelay1) {
+        inverterDelay1 = newDelay1;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_INVERTER_DELAY1, inverterDelay1);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Inverter Delay 1 set to " + String(inverterDelay1) + "ms. ";
+        Debug.printf("Inverter Delay 1 set to %lums\n", inverterDelay1);
+      }
+    } else {
+      message += "Invalid Delay 1 value (must be 0-10000 ms). ";
+      Debug.println("Invalid Delay 1 value received");
+    }
+  }
+
+  // Check for inverter delay 2 parameter
+  if (webUiServer.hasArg("delay2")) {
+    unsigned long newDelay2 = webUiServer.arg("delay2").toInt(); // In milliseconds
+    if (newDelay2 >= 0 && newDelay2 <= 10000) { // 0 to 10 seconds
+      if (newDelay2 != inverterDelay2) {
+        inverterDelay2 = newDelay2;
+
+        // Save the setting
+        preferences.begin(PREFERENCES_NAMESPACE, false);
+        preferences.putULong(PREF_INVERTER_DELAY2, inverterDelay2);
+        preferences.end();
+
+        settingsChanged = true;
+        message += "Inverter Delay 2 set to " + String(inverterDelay2) + "ms. ";
+        Debug.printf("Inverter Delay 2 set to %lums\n", inverterDelay2);
+      }
+    } else {
+      message += "Invalid Delay 2 value (must be 0-10000 ms). ";
+      Debug.println("Invalid Delay 2 value received");
+    }
+  }
+
   if (settingsChanged) {
     // Apply new pin settings
     applyPinSettings();
@@ -227,7 +452,10 @@ void initWebUI() {
   // Handle setup page
   webUiServer.on("/setup", HTTP_GET, handleSetup);
   webUiServer.on("/setup", HTTP_POST, handleSetupPost);
-  
+
+  // Handle roof control page
+  webUiServer.on("/control", HTTP_GET, handleControl);
+
   // Force discovery handler
   webUiServer.on("/force_discovery", HTTP_GET, handleForceDiscovery);
   
@@ -251,7 +479,20 @@ void initWebUI() {
   webUiServer.on("/park_sensor_remove", HTTP_POST, handleParkSensorRemove);
   webUiServer.on("/park_sensor_remove_all", HTTP_POST, handleParkSensorRemoveAll);
   webUiServer.on("/park_sensor_type", HTTP_POST, handleParkSensorType);
-  
+
+  // Inverter control endpoints (NEW in v3)
+  webUiServer.on("/inverter_toggle", HTTP_POST, handleInverterToggle);
+  webUiServer.on("/inverter_button", HTTP_POST, handleInverterButton);
+  webUiServer.on("/inverter_status", HTTP_GET, handleInverterStatus);
+
+  // Roof control endpoint
+  webUiServer.on("/roof_control", HTTP_POST, handleRoofControl);
+  webUiServer.on("/roof_button", HTTP_POST, handleRoofButton);
+  webUiServer.on("/roof_openclose", HTTP_POST, handleRoofOpenClose);
+
+  // API endpoint for real-time status
+  webUiServer.on("/api/status", HTTP_GET, handleApiStatus);
+
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
   webUiServer.on("/wificonfig", HTTP_POST, handleWifiConfigPost);
@@ -305,14 +546,15 @@ void handleSetupPost() {
   }
   
   // Process MQTT settings
-  if (webUiServer.hasArg("mqttServer") && webUiServer.hasArg("mqttPort") && 
+  if (webUiServer.hasArg("mqttServer") && webUiServer.hasArg("mqttPort") &&
       webUiServer.hasArg("mqttUser") && webUiServer.hasArg("mqttPassword") &&
-      webUiServer.hasArg("mqttTopicPrefix")) {
-    
+      webUiServer.hasArg("mqttClientId") && webUiServer.hasArg("mqttTopicPrefix")) {
+
     String newMqttServer = webUiServer.arg("mqttServer");
     int newMqttPort = webUiServer.arg("mqttPort").toInt();
     String newMqttUser = webUiServer.arg("mqttUser");
     String newMqttPassword = webUiServer.arg("mqttPassword");
+    String newMqttClientId = webUiServer.arg("mqttClientId");
     String newMqttTopicPrefix = webUiServer.arg("mqttTopicPrefix");
     
     if (newMqttServer.length() > 0 && strcmp(newMqttServer.c_str(), mqttServer) != 0) {
@@ -341,7 +583,14 @@ void handleSetupPost() {
       settingsChanged = true;
       Debug.println("MQTT password changed");
     }
-    
+
+    if (newMqttClientId.length() > 0 && strcmp(newMqttClientId.c_str(), mqttClientId) != 0) {
+      strncpy(mqttClientId, newMqttClientId.c_str(), sizeof(mqttClientId) - 1);
+      mqttClientId[sizeof(mqttClientId) - 1] = '\0';
+      settingsChanged = true;
+      Debug.println("MQTT client ID changed");
+    }
+
     if (newMqttTopicPrefix.length() > 0 && strcmp(newMqttTopicPrefix.c_str(), mqttTopicPrefix) != 0) {
       strncpy(mqttTopicPrefix, newMqttTopicPrefix.c_str(), sizeof(mqttTopicPrefix) - 1);
       mqttTopicPrefix[sizeof(mqttTopicPrefix) - 1] = '\0';
@@ -565,4 +814,166 @@ void handleParkSensorType() {
     webUiServer.send(400, "text/plain", "Missing type parameter");
     Debug.println("Park sensor type error: Missing parameter");
   }
+}
+
+// ========== NEW INVERTER CONTROL HANDLERS (v3 Hardware) ==========
+
+// Handler for toggling K1 inverter power relay
+void handleInverterToggle() {
+  toggleInverterPower();
+
+  bool state = getInverterRelayState();
+  String stateStr = state ? "ON" : "OFF";
+
+  Debug.printf("Inverter power relay toggled via web interface to: %s\n", stateStr.c_str());
+  webUiServer.send(200, "text/plain", "Inverter power relay: " + stateStr);
+}
+
+// Handler for sending K3 soft-power button press
+void handleInverterButton() {
+  sendInverterButtonPress();
+
+  Debug.println("Inverter button press sent via web interface");
+  webUiServer.send(200, "text/plain", "Inverter button pressed");
+}
+
+// Handler for getting inverter power states
+void handleInverterStatus() {
+  bool relayState = getInverterRelayState();
+  bool acPowerState = getInverterACPowerState();
+
+  // Create JSON response
+  String json = "{";
+  json += "\"relay_state\":" + String(relayState ? "true" : "false") + ",";
+  json += "\"ac_power_state\":" + String(acPowerState ? "true" : "false");
+  json += "}";
+
+  webUiServer.send(200, "application/json", json);
+}
+
+// Handler for roof control page
+void handleControl() {
+  String html = getRoofControlPage();
+  webUiServer.send(200, "text/html", html);
+}
+
+// Handler for roof control commands
+void handleRoofControl() {
+  if (webUiServer.hasArg("action")) {
+    String action = webUiServer.arg("action");
+
+    if (action == "open") {
+      bool success = startOpeningRoof();
+      if (success) {
+        Debug.println("Roof opening command sent via web interface");
+        webUiServer.send(200, "text/plain", "Roof opening");
+      } else {
+        Debug.println("Roof opening command failed - check safety interlocks");
+        webUiServer.send(400, "text/plain", "Cannot open roof - check telescope park status");
+      }
+    } else if (action == "close") {
+      bool success = startClosingRoof();
+      if (success) {
+        Debug.println("Roof closing command sent via web interface");
+        webUiServer.send(200, "text/plain", "Roof closing");
+      } else {
+        Debug.println("Roof closing command failed - check safety interlocks");
+        webUiServer.send(400, "text/plain", "Cannot close roof - check telescope park status");
+      }
+    } else if (action == "stop") {
+      stopRoofMovement();
+      Debug.println("Roof stop command sent via web interface");
+      webUiServer.send(200, "text/plain", "Roof stopped");
+    } else {
+      webUiServer.send(400, "text/plain", "Invalid action");
+      Debug.println("Roof control error: Invalid action");
+    }
+  } else {
+    webUiServer.send(400, "text/plain", "Missing action parameter");
+    Debug.println("Roof control error: Missing parameter");
+  }
+}
+
+// Handle single roof button press (mimics physical button)
+void handleRoofButton() {
+  Debug.println("Roof button pressed via web interface");
+
+  // Check telescope safety interlock - only if bypass is not enabled
+  if (!bypassParkSensor && !telescopeParked) {
+    Debug.println("Cannot control roof: Telescope not parked and bypass not enabled");
+    webUiServer.send(400, "text/plain", "Cannot control roof - telescope not parked. Enable bypass to override.");
+    return;
+  }
+
+  // Just send a button press - exactly like the physical button
+  // The roof controller hardware will handle the logic
+  sendButtonPress();
+
+  Debug.println("Roof button press sent");
+  webUiServer.send(200, "text/plain", "Button press sent");
+}
+
+// Handle intelligent open/close command (replicates ASCOM/MQTT logic)
+void handleRoofOpenClose() {
+  Debug.println("Intelligent roof control via web interface");
+
+  // Check telescope safety interlock - only if bypass is not enabled
+  if (!bypassParkSensor && !telescopeParked) {
+    Debug.println("Cannot control roof: Telescope not parked and bypass not enabled");
+    webUiServer.send(400, "text/plain", "Cannot control roof - telescope not parked. Enable bypass to override.");
+    return;
+  }
+
+  // Determine action based on current roof state
+  bool success = false;
+  String action = "";
+
+  if (roofStatus == ROOF_CLOSED || roofStatus == ROOF_CLOSING) {
+    // Roof is closed or closing, so open it
+    action = "Opening";
+    success = startOpeningRoof();
+  } else if (roofStatus == ROOF_OPEN || roofStatus == ROOF_OPENING) {
+    // Roof is open or opening, so close it
+    action = "Closing";
+    success = startClosingRoof();
+  } else {
+    // Unknown state - return error
+    Debug.println("Cannot determine roof action - unknown state");
+    webUiServer.send(400, "text/plain", "Cannot control roof - unknown state");
+    return;
+  }
+
+  if (success) {
+    Debug.printf("Intelligent roof control: %s roof\n", action.c_str());
+    webUiServer.send(200, "text/plain", action + " roof");
+  } else {
+    Debug.printf("Intelligent roof control failed: Cannot %s roof\n", action.c_str());
+    webUiServer.send(400, "text/plain", "Cannot " + action + " roof - check safety interlocks");
+  }
+}
+
+// API endpoint for real-time status updates (returns JSON)
+void handleApiStatus() {
+  DynamicJsonDocument doc(512);
+
+  // Roof status
+  doc["status"] = getRoofStatusString();
+  doc["telescope_parked"] = telescopeParked;
+  doc["bypass_enabled"] = bypassParkSensor;
+
+  // Limit switch states
+  doc["limit_open"] = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+  doc["limit_closed"] = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+
+  // Inverter states
+  doc["inverter_relay"] = getInverterRelayState();
+  doc["inverter_ac_power"] = getInverterACPowerState();
+
+  // Park sensor type
+  doc["park_sensor_type"] = static_cast<int>(parkSensorType);
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+
+  webUiServer.send(200, "application/json", jsonResponse);
 }

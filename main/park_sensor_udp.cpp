@@ -168,7 +168,7 @@ bool isTelescopeParkedUDP() {
       
       // If sensor is offline or unknown, consider it as not parked for safety
       if (sensor.status == SENSOR_OFFLINE || sensor.status == SENSOR_UNKNOWN) {
-        Debug.printf("Sensor %s is offline/unknown - considering as NOT PARKED\n", sensor.name.c_str());
+        Debug.printf(3, "Sensor %s is offline/unknown - considering as NOT PARKED\n", sensor.name.c_str());
         allParked = false;
         break;
       }

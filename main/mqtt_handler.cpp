@@ -1,5 +1,5 @@
 /*
- * ESP32 ASCOM Alpaca Roll-Off Roof Controller
+ * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
  * MQTT Handler Implementation - Fixed Discovery Functions
  */
 
@@ -35,24 +35,51 @@ void setupMQTT() {
     return;
   }
 
-  // Create a unique client ID by appending the ESP32's chip ID
-  uint64_t chipId = ESP.getEfuseMac(); // Gets the chip ID, which is essentially its serial number
-  String chipIdStr = String((uint32_t)(chipId >> 32), HEX) + String((uint32_t)chipId, HEX);
-  
-  // Make sure we don't exceed the buffer size
-  String uniqueClientId = String(mqttClientId) + "_" + chipIdStr;
-  if (uniqueClientId.length() >= MQTT_CLIENTID_SIZE) {
-    // If too long, truncate the original ID to make room for the MAC
-    int maxOriginalLength = MQTT_CLIENTID_SIZE - chipIdStr.length() - 2; // -2 for "_" and null terminator
-    String truncatedId = String(mqttClientId).substring(0, maxOriginalLength);
-    uniqueClientId = truncatedId + "_" + chipIdStr;
+  // If mqttClientId is still the default, append chip ID to make it unique
+  // This prevents conflicts when multiple controllers are on the same network
+  if (String(mqttClientId) == String(DEFAULT_MQTT_CLIENT_ID) ||
+      String(mqttClientId).indexOf("_") == -1) {  // No underscore means no chip ID appended yet
+
+    uint64_t chipId = ESP.getEfuseMac();
+    String chipIdStr = String((uint32_t)(chipId >> 32), HEX) + String((uint32_t)chipId, HEX);
+
+    String uniqueClientId = String(mqttClientId) + "_" + chipIdStr;
+    if (uniqueClientId.length() >= MQTT_CLIENTID_SIZE) {
+      int maxOriginalLength = MQTT_CLIENTID_SIZE - chipIdStr.length() - 2;
+      String truncatedId = String(mqttClientId).substring(0, maxOriginalLength);
+      uniqueClientId = truncatedId + "_" + chipIdStr;
+    }
+
+    uniqueClientId.toCharArray(mqttClientId, MQTT_CLIENTID_SIZE);
+
+    Serial.println("Generated unique MQTT client ID");
   }
-  
-  // Copy the unique ID to the mqttClientId buffer
-  uniqueClientId.toCharArray(mqttClientId, MQTT_CLIENTID_SIZE);
-  
-  Serial.print("Using unique MQTT client ID: ");
+
+  Serial.print("Using MQTT client ID: ");
   Serial.println(mqttClientId);
+
+  // If mqttTopicPrefix is still the default, append chip ID to make it unique
+  // This prevents conflicts when multiple controllers are on the same network
+  if (String(mqttTopicPrefix) == String(DEFAULT_MQTT_TOPIC_PREFIX) ||
+      String(mqttTopicPrefix).indexOf("_") == -1) {  // No underscore means no chip ID appended yet
+
+    uint64_t chipId = ESP.getEfuseMac();
+    String chipIdStr = String((uint32_t)(chipId >> 32), HEX) + String((uint32_t)chipId, HEX);
+
+    String uniqueTopicPrefix = String(mqttTopicPrefix) + "_" + chipIdStr;
+    if (uniqueTopicPrefix.length() >= MQTT_TOPIC_SIZE) {
+      int maxOriginalLength = MQTT_TOPIC_SIZE - chipIdStr.length() - 2;
+      String truncatedPrefix = String(mqttTopicPrefix).substring(0, maxOriginalLength);
+      uniqueTopicPrefix = truncatedPrefix + "_" + chipIdStr;
+    }
+
+    uniqueTopicPrefix.toCharArray(mqttTopicPrefix, MQTT_TOPIC_SIZE);
+
+    Serial.println("Generated unique MQTT topic prefix");
+  }
+
+  Serial.print("Using MQTT topic prefix: ");
+  Serial.println(mqttTopicPrefix);
 
   // Increase MQTT buffer size to handle larger discovery messages
   mqttClient.setBufferSize(2048);  // Increase to 2KB for safety
@@ -175,7 +202,11 @@ void publishStatusToMQTT() {
   doc["trigger_state"] = (TRIGGERED == HIGH ? "HIGH" : "LOW");
   doc["open_switch_pin"] = LIMIT_SWITCH_OPEN_PIN;
   doc["closed_switch_pin"] = LIMIT_SWITCH_CLOSED_PIN;
-  
+
+  // Add inverter power state information (NEW in v3)
+  doc["inverter_relay_state"] = getInverterRelayState();
+  doc["inverter_ac_power_state"] = getInverterACPowerState();
+
   // Add park sensor information
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
   doc["park_sensor_type_name"] = (parkSensorType == PARK_SENSOR_PHYSICAL ? "Physical" : 
