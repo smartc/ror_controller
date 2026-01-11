@@ -53,6 +53,8 @@ const uint32_t DEBOUNCE_DELAY = 100;        // Debounce delay in ms
 const unsigned long SWITCH_STABLE_TIME = 500; // Time in ms a switch must be stable
 extern unsigned long movementTimeout;        // Roof movement timeout in ms (configurable)
 const unsigned long DEFAULT_MOVEMENT_TIMEOUT = 90000; // Default: 90 seconds
+extern bool movementTimeoutEnabled;          // Enable/disable movement timeout monitoring (configurable)
+const bool DEFAULT_TIMEOUT_ENABLED = true;   // Default: enabled
 
 // Inverter Timing Settings (NEW in v3)
 extern unsigned long inverterDelay1;         // Delay between K1 relay and K3 soft-power button (ms)
@@ -108,6 +110,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_SWAP_SWITCHES "swapSwitches"
 #define PREF_BYPASS_SENSOR "bypassParkSensor"
 #define PREF_MOVEMENT_TIMEOUT "moveTimeout"
+#define PREF_TIMEOUT_ENABLED "timeoutEnabled"
 #define PREF_WIFI_SSID "ssid"
 #define PREF_WIFI_PASSWORD "wifiPassword"
 #define PREF_MQTT_SERVER "mqttServer"

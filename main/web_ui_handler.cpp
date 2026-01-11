@@ -114,6 +114,11 @@ void loadConfiguration() {
     movementTimeout = preferences.getULong(PREF_MOVEMENT_TIMEOUT, DEFAULT_MOVEMENT_TIMEOUT);
   }
 
+  // Load movement timeout enabled setting
+  if (preferences.isKey(PREF_TIMEOUT_ENABLED)) {
+    movementTimeoutEnabled = preferences.getBool(PREF_TIMEOUT_ENABLED, DEFAULT_TIMEOUT_ENABLED);
+  }
+
   // Load inverter relay enabled setting
   if (preferences.isKey(PREF_INVERTER_RELAY_ENABLED)) {
     inverterRelayEnabled = preferences.getBool(PREF_INVERTER_RELAY_ENABLED, true);  // Default to true
@@ -157,6 +162,9 @@ void saveConfiguration() {
 
   // Save movement timeout
   preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
+
+  // Save movement timeout enabled setting
+  preferences.putBool(PREF_TIMEOUT_ENABLED, movementTimeoutEnabled);
 
   // Save inverter relay enabled setting
   preferences.putBool(PREF_INVERTER_RELAY_ENABLED, inverterRelayEnabled);
@@ -270,6 +278,23 @@ void handleSetPins() {
     } else {
       message += "Invalid timeout value (must be 10-600 seconds). ";
       Debug.println("Invalid timeout value received");
+    }
+  }
+
+  // Check for timeout enabled parameter
+  if (webUiServer.hasArg("timeoutEnabled")) {
+    bool newTimeoutEnabled = webUiServer.arg("timeoutEnabled").equals("true");
+    if (newTimeoutEnabled != movementTimeoutEnabled) {
+      movementTimeoutEnabled = newTimeoutEnabled;
+
+      // Save the setting
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_TIMEOUT_ENABLED, movementTimeoutEnabled);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Movement timeout monitoring " + String(movementTimeoutEnabled ? "enabled" : "disabled") + ". ";
+      Debug.printf("Movement timeout monitoring %s\n", movementTimeoutEnabled ? "enabled" : "disabled");
     }
   }
 

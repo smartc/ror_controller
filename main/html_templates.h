@@ -168,6 +168,7 @@ inline String getControlJS() {
     "    const mqttEnabled = document.getElementById('mqttEnabled').checked ? 'true' : 'false';\n"
     "    const inverterRelay = document.getElementById('inverterRelayToggle').checked ? 'true' : 'false';\n"
     "    const inverterSoftPwr = document.getElementById('inverterSoftPwrToggle').checked ? 'true' : 'false';\n"
+    "    const timeoutEnabled = document.getElementById('timeoutEnabledToggle').checked ? 'true' : 'false';\n"
     "    const delay1 = document.getElementById('delay1Input').value;\n"
     "    const delay2 = document.getElementById('delay2Input').value;\n"
     "    const timeout = document.getElementById('timeoutInput').value;\n"
@@ -175,7 +176,7 @@ inline String getControlJS() {
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&delay1=' + delay1 + '&delay2=' + delay2 + '&timeout=' + timeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&timeout=' + timeout\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -866,6 +867,19 @@ inline String getSwitchConfigCard() {
 
   // Timing Settings
   html += "<h3>Timing Settings</h3>";
+
+  // Movement timeout monitoring toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='timeoutEnabledToggle'" + String(movementTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Monitor Roof Movement <strong id='timeoutEnabledText'>(" + String(movementTimeoutEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Automatically stop and turn off inverter if no roof movement detected within timeout period</small>";
+  html += "</span>";
+  html += "</div>";
+
   html += "<div style='margin-top: 10px; padding: 10px; background-color: #2d2d2d; border-radius: 4px;'>";
   html += "<label for='timeoutInput' style='display: block; margin-bottom: 5px;'><strong>Movement Timeout (seconds):</strong></label>";
   html += "<input type='number' id='timeoutInput' min='10' max='600' value='" + String(movementTimeout / 1000) + "' ";
@@ -884,6 +898,7 @@ inline String getSwitchConfigCard() {
   html += "Soft-power button (K3): " + String(inverterSoftPwrEnabled ? "Enabled" : "Disabled") + "<br>";
   html += "Inverter Delay 1: " + String(inverterDelay1) + "ms<br>";
   html += "Inverter Delay 2: " + String(inverterDelay2) + "ms<br>";
+  html += "Movement timeout monitoring: " + String(movementTimeoutEnabled ? "Enabled" : "Disabled") + "<br>";
   html += "Movement timeout: " + String(movementTimeout / 1000) + " seconds</p>";
   html += "</div>";
 
@@ -1172,6 +1187,7 @@ inline String getSetupPage() {
   html += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
   html += "  updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED');";
   html += "  updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED');";
+  html += "  updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED');";
   html += "  const bypassToggle = document.getElementById('bypassToggle');";
   html += "  const bypassText = document.getElementById('bypassText');";
   html += "  if (bypassToggle && bypassText) {";

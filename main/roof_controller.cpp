@@ -15,6 +15,7 @@ int LIMIT_SWITCH_CLOSED_PIN = DEFAULT_CLOSED_SWITCH_PIN; // Default to pin 36
 int TRIGGERED = DEFAULT_TRIGGER_STATE;                  // Default to LOW trigger state
 int TELESCOPE_PARKED = DEFAULT_PARK_STATE;              // Park sensor is HIGH until triggered
 unsigned long movementTimeout = DEFAULT_MOVEMENT_TIMEOUT; // Movement timeout in ms
+bool movementTimeoutEnabled = DEFAULT_TIMEOUT_ENABLED;  // Timeout monitoring enabled (default: true)
 unsigned long inverterDelay1 = DEFAULT_INVERTER_DELAY1; // Delay between K1 and K3 (default: 750ms)
 unsigned long inverterDelay2 = DEFAULT_INVERTER_DELAY2; // Delay between inverter power-on and K2 (default: 1500ms)
 
@@ -266,15 +267,20 @@ void updateRoofStatus() {
 
 // Check for movement timeout
 void checkMovementTimeout() {
+  // Skip timeout check if monitoring is disabled
+  if (!movementTimeoutEnabled) {
+    return;
+  }
+
   // Check for timeout during roof movement
   if ((roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) &&
       (millis() - movementStartTime > movementTimeout)) {
-    
+
     // Stop the roof due to timeout
     Debug.println("Roof movement timed out!");
     stopRoofMovement();
     roofStatus = ROOF_ERROR;
-    
+
     // Publish status change due to timeout
     publishStatusToMQTT();
     lastPublishedStatus = roofStatus;
