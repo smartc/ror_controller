@@ -1344,8 +1344,8 @@ inline String getRoofControlPage() {
   // Determine if buttons should be disabled
   bool buttonDisabled = !bypassParkSensor && !telescopeParked;
 
-  // Intelligent button - uses ASCOM/MQTT logic (always enabled, has built-in safety checks)
-  html += "<button id='roofOpenCloseButton' class='btn' onclick='roofOpenClose()' style='background-color: #2ecc71; font-size: 20px; padding: 15px 30px; margin: 5px;'>OPEN / CLOSE</button>\n";
+  // Intelligent button - uses ASCOM/MQTT logic
+  html += "<button id='roofOpenCloseButton' class='btn' onclick='roofOpenClose()' style='background-color: #2ecc71; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">OPEN / CLOSE</button>\n";
 
   // Manual button - mimics physical button press
   html += "<button id='roofControlButton' class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">START / STOP</button>\n";
@@ -1471,10 +1471,10 @@ inline String getRoofControlPage() {
   html += "        bypassLabel.innerHTML = 'Bypass Park Sensor <strong>' + (data.bypass_enabled ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "      }\n\n";
 
-  html += "      // Update roof control button disabled state\n";
+  html += "      // Update roof control buttons disabled state\n";
+  html += "      const shouldDisable = !data.bypass_enabled && !data.telescope_parked;\n";
   html += "      const roofButton = document.getElementById('roofControlButton');\n";
   html += "      if (roofButton) {\n";
-  html += "        const shouldDisable = !data.bypass_enabled && !data.telescope_parked;\n";
   html += "        roofButton.disabled = shouldDisable;\n";
   html += "        if (shouldDisable) {\n";
   html += "          roofButton.style.opacity = '0.5';\n";
@@ -1482,6 +1482,17 @@ inline String getRoofControlPage() {
   html += "        } else {\n";
   html += "          roofButton.style.opacity = '1';\n";
   html += "          roofButton.style.cursor = 'pointer';\n";
+  html += "        }\n";
+  html += "      }\n";
+  html += "      const openCloseButton = document.getElementById('roofOpenCloseButton');\n";
+  html += "      if (openCloseButton) {\n";
+  html += "        openCloseButton.disabled = shouldDisable;\n";
+  html += "        if (shouldDisable) {\n";
+  html += "          openCloseButton.style.opacity = '0.5';\n";
+  html += "          openCloseButton.style.cursor = 'not-allowed';\n";
+  html += "        } else {\n";
+  html += "          openCloseButton.style.opacity = '1';\n";
+  html += "          openCloseButton.style.cursor = 'pointer';\n";
   html += "        }\n";
   html += "      }\n\n";
 
