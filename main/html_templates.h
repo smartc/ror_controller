@@ -417,7 +417,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
   html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
   html += "</div>\n";
-  
+
   // Navigation buttons
   html += "<div style='margin: 20px 0;'>\n";
   html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
@@ -1090,6 +1090,7 @@ inline String getSetupPage() {
 
   // Navigation buttons
   html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
   html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
   html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
   html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
@@ -1203,6 +1204,7 @@ inline String getRoofControlPage() {
 
   // Navigation buttons
   html += "<div style='margin: 20px 0;'>\n";
+  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
   html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
   html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
   html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
