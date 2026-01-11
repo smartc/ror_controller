@@ -216,9 +216,9 @@ void updateRoofStatus() {
   }
   else if (isOpenLimitTriggered) {
     // If the open switch is triggered, the roof is open regardless of previous state
-    // BUT if limit switch timeout monitoring is disabled and we're currently opening, stay in OPENING state
-    // This allows the movement timeout to trigger even if the roof hasn't moved yet
-    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_OPENING) {
+    // BUT if limit switch timeout monitoring is disabled and we're currently CLOSING (trying to close from open),
+    // stay in CLOSING state to allow the movement timeout to trigger
+    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_CLOSING) {
       if (roofStatus != ROOF_OPEN) {
         statusMessage = "Roof fully open";
         // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
@@ -232,9 +232,9 @@ void updateRoofStatus() {
   }
   else if (isClosedLimitTriggered) {
     // If the closed switch is triggered, the roof is closed regardless of previous state
-    // BUT if limit switch timeout monitoring is disabled and we're currently closing, stay in CLOSING state
-    // This allows the movement timeout to trigger even if the roof hasn't moved yet
-    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_CLOSING) {
+    // BUT if limit switch timeout monitoring is disabled and we're currently OPENING (trying to open from closed),
+    // stay in OPENING state to allow the movement timeout to trigger
+    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_OPENING) {
       if (roofStatus != ROOF_CLOSED) {
         statusMessage = "Roof fully closed";
         // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
