@@ -1127,9 +1127,44 @@ inline String getSetupPage() {
   
   // Add JavaScript for interactivity
   html += getControlJS();
-  
+
   // Initialize all toggle labels on page load
   html += "<script>";
+
+  // Add status update function for header
+  html += "function updateStatus() {\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      // Update main status header\n";
+  html += "      const statusHeader = document.getElementById('mainStatusHeader');\n";
+  html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
+  html += "      const statusText = document.getElementById('mainStatusText');\n";
+  html += "      if (statusHeader && statusIndicator && statusText) {\n";
+  html += "        statusText.textContent = data.status;\n";
+  html += "        statusHeader.className = 'status-header ';\n";
+  html += "        statusIndicator.className = 'status-indicator ';\n";
+  html += "        if (data.status === 'Open') {\n";
+  html += "          statusHeader.className += 'open';\n";
+  html += "          statusIndicator.className += 'blue';\n";
+  html += "        } else if (data.status === 'Closed') {\n";
+  html += "          statusHeader.className += 'closed';\n";
+  html += "          statusIndicator.className += 'green';\n";
+  html += "        } else if (data.status === 'Opening') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'blue blink';\n";
+  html += "        } else if (data.status === 'Closing') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'green blink';\n";
+  html += "        } else {\n";
+  html += "          statusHeader.className += 'error';\n";
+  html += "          statusIndicator.className += 'red blink';\n";
+  html += "        }\n";
+  html += "      }\n";
+  html += "    })\n";
+  html += "    .catch(error => console.error('Error updating status:', error));\n";
+  html += "}\n\n";
+
   html += "document.addEventListener('DOMContentLoaded', function() {";
   html += "  // Initialize all toggle labels";
   html += "  updateToggleLabel('triggerState', 'triggerStateText', 'HIGH', 'LOW');";
@@ -1142,6 +1177,9 @@ inline String getSetupPage() {
   html += "  if (bypassToggle && bypassText) {";
   html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#333';";
   html += "  }";
+  html += "  // Start status update polling\n";
+  html += "  updateStatus();\n";
+  html += "  setInterval(updateStatus, 2000);\n";
   html += "});";
   html += "</script>";
   
@@ -1477,6 +1515,32 @@ inline String getRoofControlPage() {
   html += "      if (invACInd && invACText) {\n";
   html += "        invACInd.className = 'status-indicator ' + (data.inverter_ac_power ? 'green' : 'red');\n";
   html += "        invACText.textContent = data.inverter_ac_power ? 'ON' : 'OFF';\n";
+  html += "      }\n\n";
+
+  html += "      // Update main status header\n";
+  html += "      const statusHeader = document.getElementById('mainStatusHeader');\n";
+  html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
+  html += "      const statusText = document.getElementById('mainStatusText');\n";
+  html += "      if (statusHeader && statusIndicator && statusText) {\n";
+  html += "        statusText.textContent = data.status;\n";
+  html += "        statusHeader.className = 'status-header ';\n";
+  html += "        statusIndicator.className = 'status-indicator ';\n";
+  html += "        if (data.status === 'Open') {\n";
+  html += "          statusHeader.className += 'open';\n";
+  html += "          statusIndicator.className += 'blue';\n";
+  html += "        } else if (data.status === 'Closed') {\n";
+  html += "          statusHeader.className += 'closed';\n";
+  html += "          statusIndicator.className += 'green';\n";
+  html += "        } else if (data.status === 'Opening') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'blue blink';\n";
+  html += "        } else if (data.status === 'Closing') {\n";
+  html += "          statusHeader.className += 'moving';\n";
+  html += "          statusIndicator.className += 'green blink';\n";
+  html += "        } else {\n";
+  html += "          statusHeader.className += 'error';\n";
+  html += "          statusIndicator.className += 'red blink';\n";
+  html += "        }\n";
   html += "      }\n";
   html += "    })\n";
   html += "    .catch(error => console.error('Error updating status:', error));\n";
