@@ -903,21 +903,31 @@ inline String getParkSensorConfigCard() {
   html += "<div class='toggle-group'>";
   html += "<h3>Park Sensor Type</h3>";
   html += "<p>Choose which park sensor system to use:</p>";
-  
-  html += "<div style='margin-bottom: 20px;'>";
-  html += "<input type='radio' id='parkTypePhysical' name='parkType' value='0'" + 
+
+  html += "<div style='display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;'>";
+  html += "<div style='display: inline-block; text-align: left;'>";
+
+  html += "<div style='margin-bottom: 10px;'>";
+  html += "<input type='radio' id='parkTypePhysical' name='parkType' value='0'" +
           String(parkSensorType == PARK_SENSOR_PHYSICAL ? " checked" : "") + ">";
-  html += "<label for='parkTypePhysical' style='margin-left: 5px; margin-right: 20px;'>Physical Sensor Only</label>";
-  
-  html += "<input type='radio' id='parkTypeUDP' name='parkType' value='1'" + 
+  html += "<label for='parkTypePhysical' style='margin-left: 8px;'>Physical Sensor Only</label>";
+  html += "</div>";
+
+  html += "<div style='margin-bottom: 10px;'>";
+  html += "<input type='radio' id='parkTypeUDP' name='parkType' value='1'" +
           String(parkSensorType == PARK_SENSOR_UDP ? " checked" : "") + ">";
-  html += "<label for='parkTypeUDP' style='margin-left: 5px; margin-right: 20px;'>UDP Sensors Only</label>";
-  
-  html += "<input type='radio' id='parkTypeBoth' name='parkType' value='2'" + 
+  html += "<label for='parkTypeUDP' style='margin-left: 8px;'>UDP Sensors Only</label>";
+  html += "</div>";
+
+  html += "<div style='margin-bottom: 10px;'>";
+  html += "<input type='radio' id='parkTypeBoth' name='parkType' value='2'" +
           String(parkSensorType == PARK_SENSOR_BOTH ? " checked" : "") + ">";
-  html += "<label for='parkTypeBoth' style='margin-left: 5px;'>Both (AND Logic)</label>";
+  html += "<label for='parkTypeBoth' style='margin-left: 8px;'>Both (AND Logic)</label>";
   html += "</div>";
-  html += "</div>";
+
+  html += "</div>"; // End inline-block container
+  html += "</div>"; // End flex container
+  html += "</div>"; // End toggle-group
   
   // UDP Park Sensor Status
   html += "<div class='toggle-group'>";
