@@ -907,22 +907,22 @@ inline String getParkSensorConfigCard() {
   html += "<div style='display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;'>";
   html += "<div style='display: inline-block; text-align: left;'>";
 
-  html += "<div style='margin-bottom: 10px;'>";
+  html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
   html += "<input type='radio' id='parkTypePhysical' name='parkType' value='0'" +
           String(parkSensorType == PARK_SENSOR_PHYSICAL ? " checked" : "") + ">";
-  html += "<label for='parkTypePhysical' style='margin-left: 8px;'>Physical Sensor Only</label>";
+  html += "<label for='parkTypePhysical' style='margin-left: 8px; cursor: pointer;'>Physical Sensor Only</label>";
   html += "</div>";
 
-  html += "<div style='margin-bottom: 10px;'>";
+  html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
   html += "<input type='radio' id='parkTypeUDP' name='parkType' value='1'" +
           String(parkSensorType == PARK_SENSOR_UDP ? " checked" : "") + ">";
-  html += "<label for='parkTypeUDP' style='margin-left: 8px;'>UDP Sensors Only</label>";
+  html += "<label for='parkTypeUDP' style='margin-left: 8px; cursor: pointer;'>UDP Sensors Only</label>";
   html += "</div>";
 
-  html += "<div style='margin-bottom: 10px;'>";
+  html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
   html += "<input type='radio' id='parkTypeBoth' name='parkType' value='2'" +
           String(parkSensorType == PARK_SENSOR_BOTH ? " checked" : "") + ">";
-  html += "<label for='parkTypeBoth' style='margin-left: 8px;'>Both (AND Logic)</label>";
+  html += "<label for='parkTypeBoth' style='margin-left: 8px; cursor: pointer;'>Both (AND Logic)</label>";
   html += "</div>";
 
   html += "</div>"; // End inline-block container
