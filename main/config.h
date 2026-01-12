@@ -74,8 +74,8 @@ extern bool bypassParkSensor;           // Software bypass state for telescope p
 #define PREF_UDP_PARK_ENABLED "udpParkEnabled"
 
 // Default WiFi credentials (will be overridden by stored settings if available)
-#define DEFAULT_WIFI_SSID "IsolationWard"
-#define DEFAULT_WIFI_PASSWORD "hunterelephant"
+#define DEFAULT_WIFI_SSID "YOUR_SSID"
+#define DEFAULT_WIFI_PASSWORD "SU93R53CR3tP@55w0Rd"
 
 // AP Mode SSID and password
 #define AP_SSID "RoofController"
@@ -86,8 +86,8 @@ extern bool bypassParkSensor;           // Software bypass state for telescope p
 #define PREF_MQTT_ENABLED "mqttEnabled"
 #define DEFAULT_MQTT_SERVER "192.168.2.235"
 #define DEFAULT_MQTT_PORT 1883
-#define DEFAULT_MQTT_USER "corey"
-#define DEFAULT_MQTT_PASSWORD "MQTT2020"
+#define DEFAULT_MQTT_USER "mqtt_username"
+#define DEFAULT_MQTT_PASSWORD "MQTT_P@55w0rd"
 #define DEFAULT_MQTT_CLIENT_ID "RollOffRoof"
 #define DEFAULT_MQTT_TOPIC_PREFIX "observatory/roof"
 #define MQTT_PUBLISH_INTERVAL 30000     // 30 seconds
