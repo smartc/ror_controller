@@ -13,7 +13,7 @@
 #define DEBUG_LEVEL 1  // 0=Off, 1=Basic, 2=Verbose
 
 // Version Information
-#define DEVICE_VERSION "3.0.0"  // v3 hardware with ESP32-S3
+#define DEVICE_VERSION "3.0.1"  // v3 hardware with ESP32-S3
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
