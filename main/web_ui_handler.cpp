@@ -489,6 +489,22 @@ void initWebUI() {
     ESP.restart();
   });
 
+  // Factory reset handler - clears all saved preferences
+  webUiServer.on("/factory_reset", HTTP_POST, []() {
+    webUiServer.send(200, "text/plain", "Factory reset in progress... Device will restart with default settings.");
+    Debug.println("Factory reset requested via web interface");
+    delay(500);
+
+    // Clear all preferences
+    preferences.begin(PREFERENCES_NAMESPACE, false);
+    preferences.clear();
+    preferences.end();
+
+    Debug.println("All preferences cleared, restarting device...");
+    delay(500);
+    ESP.restart();
+  });
+
   // Toggle park sensor bypass
   webUiServer.on("/toggle_bypass", HTTP_POST, handleBypassToggle);
   

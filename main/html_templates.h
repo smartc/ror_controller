@@ -207,7 +207,24 @@ inline String getControlJS() {
     "    });\n"
     "  }\n"
     "}\n"
-    
+
+    // Factory reset function
+    "function factoryReset() {\n"
+    "  if (confirm('WARNING: This will erase ALL saved settings including WiFi credentials, MQTT settings, and device configuration.\\n\\nThe device will restart and enter AP mode with default settings.\\n\\nAre you sure you want to continue?')) {\n"
+    "    if (confirm('This action cannot be undone. Click OK to confirm factory reset.')) {\n"
+    "      fetch('/factory_reset', {\n"
+    "        method: 'POST'\n"
+    "      })\n"
+    "      .then(response => {\n"
+    "        alert('Factory reset in progress. Device will restart with default settings and enter AP mode.');\n"
+    "      })\n"
+    "      .catch(err => {\n"
+    "        console.error('Error:', err);\n"
+    "      });\n"
+    "    }\n"
+    "  }\n"
+    "}\n"
+
     // Toggle bypass park sensor
     "function toggleBypass(checked) {\n"
     "  fetch('/toggle_bypass', {\n"
@@ -1084,14 +1101,19 @@ inline String getParkSensorConfigCard() {
 inline String getSystemManagementCard() {
   String html = "<div class='card'>";
   html += "<h2>System Management</h2>";
-  
+
   html += "<div class='button-row'>";
   html += "<button onclick='restartDevice()' class='button-danger'>Restart Device</button>";
   html += "<a href='/force_discovery' style='text-decoration: none;'><button class='button-primary'>Force Discovery</button></a>";
   html += "</div>";
-  
+
+  html += "<div class='button-row' style='margin-top: 15px;'>";
+  html += "<button onclick='factoryReset()' class='button-danger' style='background-color: #8b0000;'>Factory Reset</button>";
   html += "</div>";
-  
+  html += "<p style='font-size: 0.8em; color: #e57373; margin-top: 5px;'>Factory Reset erases all saved settings and restarts in AP mode.</p>";
+
+  html += "</div>";
+
   return html;
 }
 
