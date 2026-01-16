@@ -644,8 +644,8 @@ bool getInverterRelayState() {
 // Get state of AC power (via optocoupler on GPIO7)
 bool getInverterACPowerState() {
   // Read the AC power detection pin
-  // When AC power is present, the optocoupler sends HIGH signal
-  return digitalRead(INVERTER_AC_POWER_PIN) == HIGH;
+  // When AC power is present, the optocoupler pulls the pin LOW
+  return digitalRead(INVERTER_AC_POWER_PIN) == LOW;
 }
 
 // Update and monitor inverter AC power state (call in main loop)

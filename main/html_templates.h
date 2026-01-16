@@ -174,11 +174,12 @@ inline String getControlJS() {
     "    const delay2 = document.getElementById('delay2Input').value;\n"
     "    const limitSwitchTimeout = document.getElementById('limitSwitchTimeoutInput').value;\n"
     "    const timeout = document.getElementById('timeoutInput').value;\n"
+    "    const parkSwitchType = document.getElementById('parkSwitchType').checked ? 'high' : 'low';\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&limitSwitchTimeoutEnabled=' + limitSwitchTimeoutEnabled + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&limitSwitchTimeout=' + limitSwitchTimeout + '&timeout=' + timeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&limitSwitchTimeoutEnabled=' + limitSwitchTimeoutEnabled + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&limitSwitchTimeout=' + limitSwitchTimeout + '&timeout=' + timeout + '&parkSwitchType=' + parkSwitchType\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -811,6 +812,22 @@ inline String getSwitchConfigCard() {
   html += "</span>";
   html += "</div>";
   
+  html += "</div>"; // End toggle-row
+
+  // Park switch type toggle (normally open vs normally closed)
+  html += "<div class='toggle-row'>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='parkSwitchType'" + String(TELESCOPE_PARKED == HIGH ? " checked" : "") + " onchange=\"updateToggleLabel('parkSwitchType', 'parkSwitchTypeText', 'Normally Closed', 'Normally Open')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Park Switch Type: <strong id='parkSwitchTypeText'>" + String(TELESCOPE_PARKED == HIGH ? "Normally Closed" : "Normally Open") + "</strong><br>";
+  html += "<small>Normally Open (recommended): Pin is pulled LOW when scope is parked</small><br>";
+  html += "<small>Normally Closed: Pin is pulled HIGH when scope is parked</small><br>";
+  html += "<small style='color: #ffb74d;'><strong>Note:</strong> A normally open switch is safer - a broken wire will indicate an unsafe (unparked) state.</small>";
+  html += "</span>";
+  html += "</div>";
   html += "</div>"; // End toggle-row
 
   // Add a new section for inverter settings

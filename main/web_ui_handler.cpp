@@ -244,7 +244,26 @@ void handleSetPins() {
       Debug.printf("Switch pins %s\n", swapLimitSwitches ? "swapped" : "restored to defaults");
     }
   }
-  
+
+  // Check for park switch type parameter (normally open vs normally closed)
+  if (webUiServer.hasArg("parkSwitchType")) {
+    int newParkState = webUiServer.arg("parkSwitchType").equals("high") ? HIGH : LOW;
+    if (newParkState != TELESCOPE_PARKED) {
+      TELESCOPE_PARKED = newParkState;
+
+      // Open preferences for writing
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putInt(PREF_PARK_STATE, TELESCOPE_PARKED);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Park switch type changed to " + String(TELESCOPE_PARKED == HIGH ? "Normally Closed" : "Normally Open") + ". ";
+      Debug.printf("Park switch type changed to %s (pin %s when parked)\n",
+                   TELESCOPE_PARKED == HIGH ? "Normally Closed" : "Normally Open",
+                   TELESCOPE_PARKED == HIGH ? "HIGH" : "LOW");
+    }
+  }
+
   // Check for MQTT enabled parameter
   if (webUiServer.hasArg("mqttEnabled")) {
     bool newMqttEnabled = webUiServer.arg("mqttEnabled").equals("true");
