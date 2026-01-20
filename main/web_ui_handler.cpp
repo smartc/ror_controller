@@ -244,7 +244,26 @@ void handleSetPins() {
       Debug.printf("Switch pins %s\n", swapLimitSwitches ? "swapped" : "restored to defaults");
     }
   }
-  
+
+  // Check for park switch type parameter (normally open vs normally closed)
+  if (webUiServer.hasArg("parkSwitchType")) {
+    int newParkState = webUiServer.arg("parkSwitchType").equals("high") ? HIGH : LOW;
+    if (newParkState != TELESCOPE_PARKED) {
+      TELESCOPE_PARKED = newParkState;
+
+      // Open preferences for writing
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putInt(PREF_PARK_STATE, TELESCOPE_PARKED);
+      preferences.end();
+
+      settingsChanged = true;
+      message += "Park switch type changed to " + String(TELESCOPE_PARKED == HIGH ? "Normally Closed" : "Normally Open") + ". ";
+      Debug.printf("Park switch type changed to %s (pin %s when parked)\n",
+                   TELESCOPE_PARKED == HIGH ? "Normally Closed" : "Normally Open",
+                   TELESCOPE_PARKED == HIGH ? "HIGH" : "LOW");
+    }
+  }
+
   // Check for MQTT enabled parameter
   if (webUiServer.hasArg("mqttEnabled")) {
     bool newMqttEnabled = webUiServer.arg("mqttEnabled").equals("true");
@@ -467,6 +486,22 @@ void initWebUI() {
     webUiServer.send(200, "text/plain", "Restarting device...");
     Debug.println("Device restart requested via web interface");
     delay(1000);
+    ESP.restart();
+  });
+
+  // Factory reset handler - clears all saved preferences
+  webUiServer.on("/factory_reset", HTTP_POST, []() {
+    webUiServer.send(200, "text/plain", "Factory reset in progress... Device will restart with default settings.");
+    Debug.println("Factory reset requested via web interface");
+    delay(500);
+
+    // Clear all preferences
+    preferences.begin(PREFERENCES_NAMESPACE, false);
+    preferences.clear();
+    preferences.end();
+
+    Debug.println("All preferences cleared, restarting device...");
+    delay(500);
     ESP.restart();
   });
 

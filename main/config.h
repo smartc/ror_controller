@@ -46,7 +46,7 @@ const int DEFAULT_CLOSED_SWITCH_PIN = 36;
 extern int TRIGGERED;                   // Define whether pin is HIGH or LOW when limit switch is triggered
 extern int TELESCOPE_PARKED;            // Define whether pin is HIGH or LOW when telescope is parked
 const int DEFAULT_TRIGGER_STATE = LOW;  // Default trigger state
-const int DEFAULT_PARK_STATE = HIGH;    // Default park sensor state
+const int DEFAULT_PARK_STATE = LOW;     // Default park sensor state (LOW = normally open switch, pulled low when parked)
 
 // Timing Settings
 const uint32_t DEBOUNCE_DELAY = 100;        // Debounce delay in ms

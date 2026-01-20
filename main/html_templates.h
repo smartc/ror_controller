@@ -174,11 +174,12 @@ inline String getControlJS() {
     "    const delay2 = document.getElementById('delay2Input').value;\n"
     "    const limitSwitchTimeout = document.getElementById('limitSwitchTimeoutInput').value;\n"
     "    const timeout = document.getElementById('timeoutInput').value;\n"
+    "    const parkSwitchType = document.getElementById('parkSwitchType').checked ? 'high' : 'low';\n"
     "    \n"
     "    fetch('/set_pins', {\n"
     "      method: 'POST',\n"
     "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&limitSwitchTimeoutEnabled=' + limitSwitchTimeoutEnabled + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&limitSwitchTimeout=' + limitSwitchTimeout + '&timeout=' + timeout\n"
+    "      body: 'triggerState=' + triggerState + '&swapSwitches=' + swapSwitches + '&mqttEnabled=' + mqttEnabled + '&inverterRelay=' + inverterRelay + '&inverterSoftPwr=' + inverterSoftPwr + '&limitSwitchTimeoutEnabled=' + limitSwitchTimeoutEnabled + '&timeoutEnabled=' + timeoutEnabled + '&delay1=' + delay1 + '&delay2=' + delay2 + '&limitSwitchTimeout=' + limitSwitchTimeout + '&timeout=' + timeout + '&parkSwitchType=' + parkSwitchType\n"
     "    })\n"
     "    .then(response => response.text())\n"
     "    .then(data => {\n"
@@ -206,7 +207,24 @@ inline String getControlJS() {
     "    });\n"
     "  }\n"
     "}\n"
-    
+
+    // Factory reset function
+    "function factoryReset() {\n"
+    "  if (confirm('WARNING: This will erase ALL saved settings including WiFi credentials, MQTT settings, and device configuration.\\n\\nThe device will restart and enter AP mode with default settings.\\n\\nAre you sure you want to continue?')) {\n"
+    "    if (confirm('This action cannot be undone. Click OK to confirm factory reset.')) {\n"
+    "      fetch('/factory_reset', {\n"
+    "        method: 'POST'\n"
+    "      })\n"
+    "      .then(response => {\n"
+    "        alert('Factory reset in progress. Device will restart with default settings and enter AP mode.');\n"
+    "      })\n"
+    "      .catch(err => {\n"
+    "        console.error('Error:', err);\n"
+    "      });\n"
+    "    }\n"
+    "  }\n"
+    "}\n"
+
     // Toggle bypass park sensor
     "function toggleBypass(checked) {\n"
     "  fetch('/toggle_bypass', {\n"
@@ -813,6 +831,22 @@ inline String getSwitchConfigCard() {
   
   html += "</div>"; // End toggle-row
 
+  // Park switch type toggle (normally open vs normally closed)
+  html += "<div class='toggle-row'>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='parkSwitchType'" + String(TELESCOPE_PARKED == HIGH ? " checked" : "") + " onchange=\"updateToggleLabel('parkSwitchType', 'parkSwitchTypeText', 'Normally Closed', 'Normally Open')\">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Park Switch Type: <strong id='parkSwitchTypeText'>" + String(TELESCOPE_PARKED == HIGH ? "Normally Closed" : "Normally Open") + "</strong><br>";
+  html += "<small>Normally Open (recommended): Pin is pulled LOW when scope is parked</small><br>";
+  html += "<small>Normally Closed: Pin is pulled HIGH when scope is parked</small><br>";
+  html += "<small style='color: #ffb74d;'><strong>Note:</strong> A normally open switch is safer - a broken wire will indicate an unsafe (unparked) state.</small>";
+  html += "</span>";
+  html += "</div>";
+  html += "</div>"; // End toggle-row
+
   // Add a new section for inverter settings
   html += "<h3>Inverter Settings</h3>";
   html += "<div class='toggle-row'>";
@@ -1067,14 +1101,19 @@ inline String getParkSensorConfigCard() {
 inline String getSystemManagementCard() {
   String html = "<div class='card'>";
   html += "<h2>System Management</h2>";
-  
+
   html += "<div class='button-row'>";
   html += "<button onclick='restartDevice()' class='button-danger'>Restart Device</button>";
   html += "<a href='/force_discovery' style='text-decoration: none;'><button class='button-primary'>Force Discovery</button></a>";
   html += "</div>";
-  
+
+  html += "<div class='button-row' style='margin-top: 15px;'>";
+  html += "<button onclick='factoryReset()' class='button-danger' style='background-color: #8b0000;'>Factory Reset</button>";
   html += "</div>";
-  
+  html += "<p style='font-size: 0.8em; color: #e57373; margin-top: 5px;'>Factory Reset erases all saved settings and restarts in AP mode.</p>";
+
+  html += "</div>";
+
   return html;
 }
 

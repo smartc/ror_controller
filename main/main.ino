@@ -157,15 +157,22 @@ void loop() {
 // Initialize WiFi connection
 void initWiFi() {
   Debug.println("Initializing WiFi...");
-  
-  // Set WiFi mode
-  WiFi.mode(WIFI_STA);
-  
-  // Try to connect to saved network
-  if (strlen(ssid) > 0) {
+
+  // Clean up any existing WiFi state
+  WiFi.disconnect(true);  // Disconnect and clear stored credentials
+  WiFi.softAPdisconnect(true);  // Stop any running AP
+  delay(100);  // Allow cleanup to complete
+
+  // Check if we have credentials to connect with
+  if (strlen(ssid) > 0 && strcmp(ssid, "YOUR_SSID") != 0) {
     Debug.printf("Connecting to WiFi network: %s\n", ssid);
+
+    // Set WiFi mode to station
+    WiFi.mode(WIFI_STA);
+    delay(100);
+
     WiFi.begin(ssid, password);
-    
+
     // Wait up to 30 seconds for connection
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 60) {
@@ -174,26 +181,34 @@ void initWiFi() {
       attempts++;
     }
     Debug.println("");
-    
+
     if (WiFi.status() == WL_CONNECTED) {
       Debug.println("WiFi connected successfully!");
       Debug.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
       Debug.printf("Signal strength: %d dBm\n", WiFi.RSSI());
       apMode = false;
     } else {
-      Debug.println("Failed to connect to WiFi, starting AP mode");
+      Debug.printf("Failed to connect to WiFi (status: %d), starting AP mode\n", WiFi.status());
       startAPMode();
     }
   } else {
-    Debug.println("No WiFi credentials saved, starting AP mode");
+    Debug.println("No valid WiFi credentials configured, starting AP mode");
     startAPMode();
   }
 }
 
 // Start Access Point mode for configuration
 void startAPMode() {
+  Debug.println("Starting AP mode...");
+
+  // Clean up WiFi state before starting AP
+  WiFi.disconnect(true);
+  delay(100);
+
+  // Set WiFi mode to AP
   WiFi.mode(WIFI_AP);
-  
+  delay(100);
+
   if (WiFi.softAP(AP_SSID, AP_PASSWORD)) {
     Debug.printf("AP mode started - SSID: %s, Password: %s\n", AP_SSID, AP_PASSWORD);
     Debug.printf("AP IP address: %s\n", WiFi.softAPIP().toString().c_str());
@@ -201,6 +216,16 @@ void startAPMode() {
     apStartTime = millis();
   } else {
     Debug.println("Failed to start AP mode!");
+    // Try one more time after a longer delay
+    delay(1000);
+    if (WiFi.softAP(AP_SSID, AP_PASSWORD)) {
+      Debug.println("AP mode started on retry");
+      Debug.printf("AP IP address: %s\n", WiFi.softAPIP().toString().c_str());
+      apMode = true;
+      apStartTime = millis();
+    } else {
+      Debug.println("AP mode failed to start after retry!");
+    }
   }
 }
 
@@ -210,26 +235,30 @@ void handleWiFi() {
     // Check if we should exit AP mode after timeout
     if (millis() - apStartTime > AP_TIMEOUT) {
       Debug.println("AP mode timeout, attempting to reconnect to WiFi");
+      // Stop AP before trying to reconnect
+      WiFi.softAPdisconnect(true);
+      delay(100);
       initWiFi();
     }
   } else {
     // Check if WiFi connection is lost
     if (WiFi.status() != WL_CONNECTED) {
-      Debug.println("WiFi connection lost, attempting to reconnect...");
+      Debug.printf("WiFi connection lost (status: %d), attempting to reconnect...\n", WiFi.status());
       WiFi.reconnect();
-      
+
       // If reconnection fails after 30 seconds, start AP mode
       unsigned long reconnectStart = millis();
       while (WiFi.status() != WL_CONNECTED && millis() - reconnectStart < 30000) {
         delay(500);
         Debug.print(".");
       }
-      
+
       if (WiFi.status() != WL_CONNECTED) {
-        Debug.println("\nFailed to reconnect, starting AP mode");
+        Debug.printf("\nFailed to reconnect (status: %d), starting AP mode\n", WiFi.status());
         startAPMode();
       } else {
         Debug.println("\nWiFi reconnected successfully!");
+        Debug.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
       }
     }
   }
