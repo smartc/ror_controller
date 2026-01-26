@@ -44,6 +44,8 @@ extern bool gpsEnabled;
 extern bool gpsNtpEnabled;
 extern bool rtcPresent;
 extern bool timeSynced;
+extern int16_t timezoneOffset;            // Timezone offset in minutes from UTC
+extern bool dstEnabled;                   // Daylight Saving Time enabled
 extern GPSStatus gpsStatus;
 extern TimeSource currentTimeSource;
 
@@ -73,12 +75,22 @@ bool hasGPSFix();                         // Check if GPS has valid fix
 bool isTimeSynced();                      // Check if time is synced (GPS or RTC)
 TimeSource getTimeSource();               // Get current time source
 GPSStatus getGPSStatus();                 // Get current GPS status
-String getTimeString();                   // Get formatted time string (from best source)
-String getDateString();                   // Get formatted date string (from best source)
+String getTimeString();                   // Get formatted UTC time string (from best source)
+String getDateString();                   // Get formatted UTC date string (from best source)
+String getLocalTimeString();              // Get formatted local time string (with TZ + DST)
+String getLocalDateString();              // Get formatted local date string (with TZ + DST)
 String getGPSTimeString();                // Get formatted GPS time string
 String getGPSDateString();                // Get formatted GPS date string
 uint32_t getCurrentUnixTime();            // Get Unix timestamp from best available source
+uint32_t getLocalUnixTime();              // Get local Unix timestamp (with TZ + DST offset)
 uint32_t getGPSUnixTime();                // Get Unix timestamp from GPS only
+
+// Timezone functions
+void setTimezoneOffset(int16_t offset);   // Set timezone offset in minutes
+void setDSTEnabled(bool enabled);         // Enable/disable DST
+int16_t getTimezoneOffset();              // Get current timezone offset
+bool isDSTEnabled();                      // Check if DST is enabled
+int16_t getTotalOffset();                 // Get total offset (TZ + DST) in minutes
 
 // NTP response helpers
 void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remotePort);

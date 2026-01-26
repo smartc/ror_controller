@@ -173,11 +173,16 @@ void loop() {
                  ESP.getFreeHeap());
     // Time source status
     TimeSource ts = getTimeSource();
-    Debug.printf(2, "Time: %s %s (Source: %s, RTC: %s)\n",
+    Debug.printf(2, "Time: %s %s UTC (Source: %s, RTC: %s)\n",
                  getDateString().c_str(),
                  getTimeString().c_str(),
                  ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None"),
                  isRTCPresent() ? "Present" : "Not found");
+    Debug.printf(2, "Local: %s %s (TZ: %+d min, DST: %s)\n",
+                 getLocalDateString().c_str(),
+                 getLocalTimeString().c_str(),
+                 timezoneOffset,
+                 dstEnabled ? "On" : "Off");
     if (gpsEnabled) {
       GPSStatus gpsStatusData = getGPSStatus();
       Debug.printf(2, "GPS: Fix=%s, Sats=%d, Lat=%.6f, Lon=%.6f\n",

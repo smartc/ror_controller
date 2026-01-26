@@ -384,6 +384,44 @@ inline String getControlJS() {
     "    alert('Error toggling NTP server: ' + err);\n"
     "  });\n"
     "}\n"
+
+    // Timezone functions
+    "function setTimezone() {\n"
+    "  const offset = document.getElementById('timezoneOffset').value;\n"
+    "  fetch('/timezone_offset', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'offset=' + offset\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    alert(data);\n"
+    "    location.reload();\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error setting timezone: ' + err);\n"
+    "  });\n"
+    "}\n"
+
+    "function toggleDST(enabled) {\n"
+    "  fetch('/dst_enabled', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'enabled=' + enabled\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    document.getElementById('dstEnabledText').innerHTML = enabled ? '(ON)' : '(OFF)';\n"
+    "    location.reload();\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error toggling DST: ' + err);\n"
+    "  });\n"
+    "}\n"
     "</script>\n";
   
   return js;
@@ -684,9 +722,18 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += timeSourceStr;
     html += "</td></tr>\n";
 
-    // Current time
-    html += "<tr><th>Current Time (UTC)</th><td>" + getTimeString() + "</td></tr>\n";
-    html += "<tr><th>Current Date</th><td>" + getDateString() + "</td></tr>\n";
+    // Current UTC time (with ID for real-time update)
+    html += "<tr><th>UTC Time</th><td><span id='utcTimeDisplay'>" + getTimeString() + "</span></td></tr>\n";
+    html += "<tr><th>UTC Date</th><td><span id='utcDateDisplay'>" + getDateString() + "</span></td></tr>\n";
+
+    // Local time display
+    int16_t totalOffset = timezoneOffset + (dstEnabled ? 60 : 0);
+    int16_t offsetHours = totalOffset / 60;
+    int16_t offsetMins = abs(totalOffset % 60);
+    char offsetStr[16];
+    snprintf(offsetStr, sizeof(offsetStr), "UTC%+d:%02d", offsetHours, offsetMins);
+    html += "<tr><th>Local Time (" + String(offsetStr) + ")</th><td><span id='localTimeDisplay'>" + getLocalTimeString() + "</span></td></tr>\n";
+    html += "<tr><th>Local Date</th><td><span id='localDateDisplay'>" + getLocalDateString() + "</span></td></tr>\n";
 
     // RTC status
     html += "<tr><th>RTC (DS3231)</th><td>";
@@ -780,6 +827,15 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "          statusIndicator.className += 'red blink';\n";
   html += "        }\n";
   html += "      }\n";
+  html += "      // Update time displays in real-time\n";
+  html += "      const utcTime = document.getElementById('utcTimeDisplay');\n";
+  html += "      const utcDate = document.getElementById('utcDateDisplay');\n";
+  html += "      const localTime = document.getElementById('localTimeDisplay');\n";
+  html += "      const localDate = document.getElementById('localDateDisplay');\n";
+  html += "      if (utcTime && data.current_time) utcTime.textContent = data.current_time;\n";
+  html += "      if (utcDate && data.current_date) utcDate.textContent = data.current_date;\n";
+  html += "      if (localTime && data.local_time) localTime.textContent = data.local_time;\n";
+  html += "      if (localDate && data.local_date) localDate.textContent = data.local_date;\n";
   html += "    })\n";
   html += "    .catch(error => console.error('Error updating status:', error));\n";
   html += "}\n\n";
@@ -1320,6 +1376,42 @@ inline String getGPSConfigCard() {
   html += "</div>";
 
   html += "</div>";  // End toggle-row
+
+  // Timezone Settings Section
+  html += "<h3>Timezone Settings</h3>";
+
+  // Timezone offset input
+  html += "<div style='margin-bottom: 15px;'>";
+  html += "<label for='timezoneOffset' style='display: inline-block; width: 200px;'>Timezone Offset (minutes from UTC):</label>";
+  html += "<input type='number' id='timezoneOffset' value='" + String(timezoneOffset) + "' min='-720' max='840' style='width: 100px; margin-right: 10px;'>";
+  html += "<button onclick='setTimezone()' class='button-primary' style='padding: 8px 15px;'>Set</button>";
+  html += "<br><small style='color: #b0b0b0; margin-left: 200px;'>Examples: -300 (EST/UTC-5), -480 (PST/UTC-8), 60 (CET/UTC+1), 330 (IST/UTC+5:30)</small>";
+  html += "</div>";
+
+  // DST toggle
+  html += "<div class='toggle-row'>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='dstEnabledToggle'" + String(dstEnabled ? " checked" : "") + " onchange='toggleDST(this.checked)'>";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Daylight Saving Time <strong id='dstEnabledText'>(" + String(dstEnabled ? "ON" : "OFF") + ")</strong><br>";
+  html += "<small>Adds 1 hour to local time when enabled</small>";
+  html += "</span>";
+  html += "</div>";
+  html += "</div>";  // End toggle-row
+
+  // Current local time display
+  int16_t totalOffset = timezoneOffset + (dstEnabled ? 60 : 0);
+  int16_t offsetHours = totalOffset / 60;
+  int16_t offsetMins = abs(totalOffset % 60);
+  char offsetStr[16];
+  snprintf(offsetStr, sizeof(offsetStr), "UTC%+d:%02d", offsetHours, offsetMins);
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #333; border-radius: 4px;'>";
+  html += "<p style='margin: 5px 0; color: #81c784;'>Current Local Time (" + String(offsetStr) + "): <strong id='localTimeDisplay'>" + getLocalTimeString() + "</strong></p>";
+  html += "</div>";
+
   html += "</div>";  // End settings toggle-group
 
   // Usage information

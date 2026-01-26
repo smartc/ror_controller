@@ -20,6 +20,8 @@ bool gpsEnabled = false;
 bool gpsNtpEnabled = false;
 bool rtcPresent = false;
 bool timeSynced = false;
+int16_t timezoneOffset = 0;     // Timezone offset in minutes from UTC
+bool dstEnabled = false;        // Daylight Saving Time enabled
 TimeSource currentTimeSource = TIME_SOURCE_NONE;
 GPSStatus gpsStatus = {false, false, 0, 0.0, 0.0, 0.0, {0, 0, 0, 0, 0, 0, false}, 0};
 
@@ -521,6 +523,101 @@ uint32_t getGPSUnixTime() {
   uint32_t baseTime = lastGPSUnixTime;
   unsigned long elapsed = (millis() - lastGPSSecondMillis) / 1000;
   return baseTime + elapsed;
+}
+
+// Get total timezone offset including DST (in minutes)
+int16_t getTotalOffset() {
+  return timezoneOffset + (dstEnabled ? 60 : 0);
+}
+
+// Get local Unix timestamp (UTC + timezone + DST offset)
+uint32_t getLocalUnixTime() {
+  uint32_t utcTime = getCurrentUnixTime();
+  if (utcTime == 0) return 0;
+
+  int32_t offsetSeconds = getTotalOffset() * 60;
+  return utcTime + offsetSeconds;
+}
+
+// Get formatted local time string (HH:MM:SS)
+String getLocalTimeString() {
+  uint32_t localUnix = getLocalUnixTime();
+  if (localUnix == 0) {
+    return "No Sync";
+  }
+  uint8_t hour = (localUnix % 86400) / 3600;
+  uint8_t minute = (localUnix % 3600) / 60;
+  uint8_t second = localUnix % 60;
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hour, minute, second);
+  return String(buf);
+}
+
+// Get formatted local date string (YYYY-MM-DD)
+String getLocalDateString() {
+  uint32_t localUnix = getLocalUnixTime();
+  if (localUnix == 0) {
+    return "No Sync";
+  }
+
+  // Convert Unix timestamp to date
+  uint32_t days = localUnix / 86400;
+  uint16_t year = 1970;
+
+  while (true) {
+    uint16_t daysInYear = 365;
+    if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) daysInYear = 366;
+    if (days < daysInYear) break;
+    days -= daysInYear;
+    year++;
+  }
+
+  static const uint8_t daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  bool isLeap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+  uint8_t month = 0;
+
+  while (month < 12) {
+    uint8_t dim = daysInMonth[month];
+    if (month == 1 && isLeap) dim = 29;
+    if (days < dim) break;
+    days -= dim;
+    month++;
+  }
+
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%04d-%02d-%02d", year, month + 1, (uint8_t)(days + 1));
+  return String(buf);
+}
+
+// Timezone setting functions
+void setTimezoneOffset(int16_t offset) {
+  timezoneOffset = offset;
+
+  Preferences prefs;
+  prefs.begin(PREFERENCES_NAMESPACE, false);
+  prefs.putShort(PREF_TIMEZONE_OFFSET, timezoneOffset);
+  prefs.end();
+
+  Debug.printf("Timezone offset set to %d minutes\n", timezoneOffset);
+}
+
+void setDSTEnabled(bool enabled) {
+  dstEnabled = enabled;
+
+  Preferences prefs;
+  prefs.begin(PREFERENCES_NAMESPACE, false);
+  prefs.putBool(PREF_DST_ENABLED, dstEnabled);
+  prefs.end();
+
+  Debug.printf("DST %s\n", dstEnabled ? "enabled" : "disabled");
+}
+
+int16_t getTimezoneOffset() {
+  return timezoneOffset;
+}
+
+bool isDSTEnabled() {
+  return dstEnabled;
 }
 
 // ============== NMEA Parsing Functions ==============

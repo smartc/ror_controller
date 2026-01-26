@@ -83,6 +83,8 @@ extern bool gpsEnabled;                 // Enable/disable GPS module
 extern bool gpsNtpEnabled;              // Enable/disable NTP server functionality
 extern bool rtcPresent;                 // RTC hardware detected
 extern bool timeSynced;                 // Time has been synced (from GPS or RTC)
+extern int16_t timezoneOffset;          // Timezone offset in minutes from UTC
+extern bool dstEnabled;                 // Daylight Saving Time enabled
 
 // UDP Park Sensor Settings
 #define PREF_PARK_SENSOR_TYPE "parkSensorType"
@@ -148,8 +150,13 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 // GPS and RTC Configuration
 #define PREF_GPS_ENABLED "gpsEnabled"
 #define PREF_GPS_NTP_ENABLED "gpsNtpEnabled"
+#define PREF_TIMEZONE_OFFSET "tzOffset"
+#define PREF_DST_ENABLED "dstEnabled"
 const int NTP_PORT = 123;                   // Standard NTP port
+const int16_t DEFAULT_TIMEZONE_OFFSET = 0;  // Default: UTC (0 minutes)
+const bool DEFAULT_DST_ENABLED = false;     // Default: DST disabled
 // NTP server runs independently once time is synced from GPS or RTC
+// TODO: Add PPS (Pulse Per Second) sync support for sub-second GPS accuracy
 
 // Enum for roof status - matches ASCOM ShutterStatus values
 enum RoofStatus {

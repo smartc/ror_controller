@@ -156,12 +156,21 @@ void loadConfiguration() {
     gpsNtpEnabled = preferences.getBool(PREF_GPS_NTP_ENABLED, false);
   }
 
+  // Load timezone settings
+  if (preferences.isKey(PREF_TIMEZONE_OFFSET)) {
+    timezoneOffset = preferences.getShort(PREF_TIMEZONE_OFFSET, DEFAULT_TIMEZONE_OFFSET);
+  }
+  if (preferences.isKey(PREF_DST_ENABLED)) {
+    dstEnabled = preferences.getBool(PREF_DST_ENABLED, DEFAULT_DST_ENABLED);
+  }
+
   preferences.end();
 
   Debug.println("Configuration loaded from preferences");
   Debug.printf("Movement timeout: %lu ms (%lu seconds)\n", movementTimeout, movementTimeout / 1000);
   Debug.printf("Inverter Delay 1: %lu ms, Delay 2: %lu ms\n", inverterDelay1, inverterDelay2);
   Debug.printf("GPS: %s, NTP Server: %s\n", gpsEnabled ? "Enabled" : "Disabled", gpsNtpEnabled ? "Enabled" : "Disabled");
+  Debug.printf("Timezone: %+d minutes, DST: %s\n", timezoneOffset, dstEnabled ? "Enabled" : "Disabled");
 }
 
 // Save configuration to preferences
@@ -543,6 +552,10 @@ void initWebUI() {
   webUiServer.on("/gps_enabled", HTTP_POST, handleGPSEnabled);
   webUiServer.on("/gps_ntp_enabled", HTTP_POST, handleGPSNtpEnabled);
   webUiServer.on("/api/gps_status", HTTP_GET, handleGPSStatus);
+
+  // Timezone control endpoints
+  webUiServer.on("/timezone_offset", HTTP_POST, handleTimezoneOffset);
+  webUiServer.on("/dst_enabled", HTTP_POST, handleDSTEnabled);
 
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
@@ -1045,6 +1058,10 @@ void handleApiStatus() {
   doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
   doc["current_time"] = getTimeString();
   doc["current_date"] = getDateString();
+  doc["local_time"] = getLocalTimeString();
+  doc["local_date"] = getLocalDateString();
+  doc["timezone_offset"] = timezoneOffset;
+  doc["dst_enabled"] = dstEnabled;
 
   // GPS status
   doc["gps_enabled"] = gpsEnabled;
@@ -1101,14 +1118,21 @@ void handleGPSStatus() {
   GPSStatus status = getGPSStatus();
   TimeSource ts = getTimeSource();
 
-  DynamicJsonDocument doc(768);
+  DynamicJsonDocument doc(1024);
 
   // Time status
   doc["time_synced"] = timeSynced;
   doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
   doc["current_time"] = getTimeString();
   doc["current_date"] = getDateString();
+  doc["local_time"] = getLocalTimeString();
+  doc["local_date"] = getLocalDateString();
   doc["unix_time"] = getCurrentUnixTime();
+
+  // Timezone settings
+  doc["timezone_offset"] = timezoneOffset;
+  doc["dst_enabled"] = dstEnabled;
+  doc["total_offset"] = getTotalOffset();
 
   // RTC status
   doc["rtc_present"] = rtcPresent;
@@ -1128,4 +1152,40 @@ void handleGPSStatus() {
   serializeJson(doc, jsonResponse);
 
   webUiServer.send(200, "application/json", jsonResponse);
+}
+
+// Handler for setting timezone offset
+void handleTimezoneOffset() {
+  if (webUiServer.hasArg("offset")) {
+    int16_t offset = webUiServer.arg("offset").toInt();
+
+    // Validate offset (-720 to +840 minutes = UTC-12 to UTC+14)
+    if (offset < -720 || offset > 840) {
+      webUiServer.send(400, "text/plain", "Invalid timezone offset (must be -720 to +840 minutes)");
+      return;
+    }
+
+    setTimezoneOffset(offset);
+
+    Debug.printf("Timezone offset set to %d minutes via web interface\n", offset);
+    webUiServer.send(200, "text/plain", "Timezone offset set to " + String(offset) + " minutes");
+  } else {
+    webUiServer.send(400, "text/plain", "Missing offset parameter");
+    Debug.println("Timezone offset error: Missing parameter");
+  }
+}
+
+// Handler for enabling/disabling DST
+void handleDSTEnabled() {
+  if (webUiServer.hasArg("enabled")) {
+    bool enabled = webUiServer.arg("enabled").equals("true");
+
+    setDSTEnabled(enabled);
+
+    Debug.printf("DST %s via web interface\n", enabled ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "DST " + String(enabled ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing enabled parameter");
+    Debug.println("DST enabled error: Missing parameter");
+  }
 }
