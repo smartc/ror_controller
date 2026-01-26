@@ -780,19 +780,24 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += "</td></tr>\n";
 
     if (gpsEnabled) {
-      // GPS Fix status with accuracy (HDOP)
+      // GPS Fix status with accuracy (HDOP converted to meters)
       html += "<tr><th>GPS Fix</th><td>";
       html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
       html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
       if (gpsStatusData.hasFix && gpsStatusData.hdop > 0) {
-        char hdopStr[16];
-        snprintf(hdopStr, sizeof(hdopStr), " (HDOP: %.1f)", gpsStatusData.hdop);
-        html += hdopStr;
+        char accuracyStr[24];
+        float accuracyMeters = gpsStatusData.hdop * 2.5;  // HDOP * base accuracy (~2.5m for civilian GPS)
+        snprintf(accuracyStr, sizeof(accuracyStr), " (Accuracy: +/- %.1fm)", accuracyMeters);
+        html += accuracyStr;
       }
       html += "</td></tr>\n";
 
-      // Satellites (used / in view)
-      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + " / " + String(gpsStatusData.satellites_in_view) + "</td></tr>\n";
+      // Satellites (used / in view, or just used if in_view not available)
+      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites);
+      if (gpsStatusData.satellites_in_view > 0) {
+        html += " / " + String(gpsStatusData.satellites_in_view);
+      }
+      html += "</td></tr>\n";
 
       // GPS Position (if fix available)
       if (gpsStatusData.hasFix) {
@@ -1353,19 +1358,24 @@ inline String getGPSConfigCard() {
   html += "</td></tr>";
 
   if (gpsEnabled) {
-    // Fix status with accuracy (HDOP)
+    // Fix status with accuracy (HDOP converted to meters)
     html += "<tr><th>GPS Fix</th><td>";
     html += "<span class='status-indicator " + String(status.hasFix ? "green" : "red blink") + "'></span> ";
     html += status.hasFix ? "Valid Fix" : "No Fix";
     if (status.hasFix && status.hdop > 0) {
-      char hdopStr[16];
-      snprintf(hdopStr, sizeof(hdopStr), " (HDOP: %.1f)", status.hdop);
-      html += hdopStr;
+      char accuracyStr[24];
+      float accuracyMeters = status.hdop * 2.5;  // HDOP * base accuracy (~2.5m for civilian GPS)
+      snprintf(accuracyStr, sizeof(accuracyStr), " (Accuracy: +/- %.1fm)", accuracyMeters);
+      html += accuracyStr;
     }
     html += "</td></tr>";
 
-    // Satellites (used / in view)
-    html += "<tr><th>Satellites</th><td>" + String(status.satellites) + " / " + String(status.satellites_in_view) + "</td></tr>";
+    // Satellites (used / in view, or just used if in_view not available)
+    html += "<tr><th>Satellites</th><td>" + String(status.satellites);
+    if (status.satellites_in_view > 0) {
+      html += " / " + String(status.satellites_in_view);
+    }
+    html += "</td></tr>";
 
     // Position (if available)
     if (status.hasFix) {
