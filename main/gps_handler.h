@@ -49,6 +49,11 @@ extern bool dstEnabled;                   // Daylight Saving Time enabled
 extern GPSStatus gpsStatus;
 extern TimeSource currentTimeSource;
 
+// GPS Pin configuration (user-configurable)
+extern int gpsTxPin;                      // GPS TX -> ESP32 RX (receives GPS data)
+extern int gpsRxPin;                      // GPS RX -> ESP32 TX (-1 = disabled)
+extern int gpsPpsPin;                     // GPS PPS pin (-1 = disabled)
+
 // Function prototypes - GPS
 void initGPS();                           // Initialize GPS module
 void handleGPS();                         // Process GPS data in main loop

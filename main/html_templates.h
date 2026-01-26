@@ -422,6 +422,27 @@ inline String getControlJS() {
     "    alert('Error toggling DST: ' + err);\n"
     "  });\n"
     "}\n"
+
+    // GPS pin configuration function
+    "function saveGPSPins() {\n"
+    "  const txPin = document.getElementById('gpsTxPin').value;\n"
+    "  const rxPin = document.getElementById('gpsRxPin').value;\n"
+    "  const ppsPin = document.getElementById('gpsPpsPin').value;\n"
+    "  fetch('/gps_pins', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'tx_pin=' + txPin + '&rx_pin=' + rxPin + '&pps_pin=' + ppsPin\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    alert(data);\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error saving GPS pins: ' + err);\n"
+    "  });\n"
+    "}\n"
     "</script>\n";
   
   return js;
@@ -1357,8 +1378,7 @@ inline String getGPSConfigCard() {
   html += "<span class='slider'></span>";
   html += "</label>";
   html += "<span class='switch-label'>";
-  html += "Enable GPS Module <strong id='gpsEnabledText'>(" + String(gpsEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
-  html += "<small>GPS connected to GPIO" + String(GPS_TX_PIN) + " (RX) and GPIO" + String(GPS_RX_PIN) + " (TX)</small>";
+  html += "Enable GPS Module <strong id='gpsEnabledText'>(" + String(gpsEnabled ? "ENABLED" : "DISABLED") + ")</strong>";
   html += "</span>";
   html += "</div>";
 
@@ -1379,6 +1399,36 @@ inline String getGPSConfigCard() {
   html += "</div>";
 
   html += "</div>";  // End toggle-row
+
+  // GPS Pin Configuration Section
+  html += "<h3>GPS Pin Configuration</h3>";
+  html += "<p style='color: #b0b0b0; margin-bottom: 10px;'><small>Set to -1 to disable a pin. Changes require restart.</small></p>";
+
+  html += "<div style='display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;'>";
+
+  // TX Pin (GPS -> ESP32, required for receiving GPS data)
+  html += "<div>";
+  html += "<label for='gpsTxPin' style='display: block; margin-bottom: 5px;'>GPS TX Pin (data in):</label>";
+  html += "<input type='number' id='gpsTxPin' value='" + String(gpsTxPin) + "' min='0' max='48' style='width: 80px;'>";
+  html += "</div>";
+
+  // RX Pin (ESP32 -> GPS, optional for sending commands)
+  html += "<div>";
+  html += "<label for='gpsRxPin' style='display: block; margin-bottom: 5px;'>GPS RX Pin (cmd out):</label>";
+  html += "<input type='number' id='gpsRxPin' value='" + String(gpsRxPin) + "' min='-1' max='48' style='width: 80px;'>";
+  html += "</div>";
+
+  // PPS Pin (optional, for precise timing)
+  html += "<div>";
+  html += "<label for='gpsPpsPin' style='display: block; margin-bottom: 5px;'>GPS PPS Pin:</label>";
+  html += "<input type='number' id='gpsPpsPin' value='" + String(gpsPpsPin) + "' min='-1' max='48' style='width: 80px;'>";
+  html += "</div>";
+
+  html += "<div style='align-self: flex-end;'>";
+  html += "<button onclick='saveGPSPins()' class='button-primary' style='padding: 8px 15px;'>Save Pins</button>";
+  html += "</div>";
+
+  html += "</div>";
 
   // Timezone Settings Section
   html += "<h3>Timezone Settings</h3>";

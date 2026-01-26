@@ -156,6 +156,17 @@ void loadConfiguration() {
     gpsNtpEnabled = preferences.getBool(PREF_GPS_NTP_ENABLED, false);
   }
 
+  // Load GPS pin settings
+  if (preferences.isKey(PREF_GPS_TX_PIN)) {
+    gpsTxPin = preferences.getInt(PREF_GPS_TX_PIN, DEFAULT_GPS_TX_PIN);
+  }
+  if (preferences.isKey(PREF_GPS_RX_PIN)) {
+    gpsRxPin = preferences.getInt(PREF_GPS_RX_PIN, DEFAULT_GPS_RX_PIN);
+  }
+  if (preferences.isKey(PREF_GPS_PPS_PIN)) {
+    gpsPpsPin = preferences.getInt(PREF_GPS_PPS_PIN, DEFAULT_GPS_PPS_PIN);
+  }
+
   // Load timezone settings
   if (preferences.isKey(PREF_TIMEZONE_OFFSET)) {
     timezoneOffset = preferences.getShort(PREF_TIMEZONE_OFFSET, DEFAULT_TIMEZONE_OFFSET);
@@ -170,6 +181,7 @@ void loadConfiguration() {
   Debug.printf("Movement timeout: %lu ms (%lu seconds)\n", movementTimeout, movementTimeout / 1000);
   Debug.printf("Inverter Delay 1: %lu ms, Delay 2: %lu ms\n", inverterDelay1, inverterDelay2);
   Debug.printf("GPS: %s, NTP Server: %s\n", gpsEnabled ? "Enabled" : "Disabled", gpsNtpEnabled ? "Enabled" : "Disabled");
+  Debug.printf("GPS Pins: TX=%d, RX=%d, PPS=%d\n", gpsTxPin, gpsRxPin, gpsPpsPin);
   Debug.printf("Timezone: %+d minutes, DST: %s\n", timezoneOffset, dstEnabled ? "Enabled" : "Disabled");
 }
 
@@ -551,6 +563,7 @@ void initWebUI() {
   // GPS control endpoints
   webUiServer.on("/gps_enabled", HTTP_POST, handleGPSEnabled);
   webUiServer.on("/gps_ntp_enabled", HTTP_POST, handleGPSNtpEnabled);
+  webUiServer.on("/gps_pins", HTTP_POST, handleGPSPins);
   webUiServer.on("/api/gps_status", HTTP_GET, handleGPSStatus);
 
   // Timezone control endpoints
@@ -1187,5 +1200,49 @@ void handleDSTEnabled() {
   } else {
     webUiServer.send(400, "text/plain", "Missing enabled parameter");
     Debug.println("DST enabled error: Missing parameter");
+  }
+}
+
+// Handler for setting GPS pin configuration
+void handleGPSPins() {
+  bool changed = false;
+
+  if (webUiServer.hasArg("tx_pin")) {
+    int txPin = webUiServer.arg("tx_pin").toInt();
+    if (txPin >= 0 && txPin <= 48) {  // Valid ESP32-S3 GPIO range
+      gpsTxPin = txPin;
+      changed = true;
+    }
+  }
+
+  if (webUiServer.hasArg("rx_pin")) {
+    int rxPin = webUiServer.arg("rx_pin").toInt();
+    if (rxPin >= -1 && rxPin <= 48) {  // -1 = disabled
+      gpsRxPin = rxPin;
+      changed = true;
+    }
+  }
+
+  if (webUiServer.hasArg("pps_pin")) {
+    int ppsPin = webUiServer.arg("pps_pin").toInt();
+    if (ppsPin >= -1 && ppsPin <= 48) {  // -1 = disabled
+      gpsPpsPin = ppsPin;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    // Save to preferences
+    Preferences prefs;
+    prefs.begin(PREFERENCES_NAMESPACE, false);
+    prefs.putInt(PREF_GPS_TX_PIN, gpsTxPin);
+    prefs.putInt(PREF_GPS_RX_PIN, gpsRxPin);
+    prefs.putInt(PREF_GPS_PPS_PIN, gpsPpsPin);
+    prefs.end();
+
+    Debug.printf("GPS pins updated: TX=%d, RX=%d, PPS=%d\n", gpsTxPin, gpsRxPin, gpsPpsPin);
+    webUiServer.send(200, "text/plain", "GPS pins saved. Restart required for changes to take effect.");
+  } else {
+    webUiServer.send(400, "text/plain", "No valid pin parameters provided");
   }
 }

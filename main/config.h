@@ -34,9 +34,15 @@ const int SNOW_SENSOR_RS485_RO = 41;        // RS485 RO (Receiver Output)
 const int SNOW_SENSOR_RS485_RE_DE = 39;     // RS485 RE/DE (Receiver Enable / Driver Enable)
 const int SNOW_SENSOR_RS485_DI = 40;        // RS485 DI (Driver Input)
 
-// GPS Module Pins
-const int GPS_TX_PIN = 14;                  // GPS TX -> ESP32 RX (GPIO14)
-const int GPS_RX_PIN = 13;                  // GPS RX -> ESP32 TX (GPIO13)
+// GPS Module Pins - configurable via WebUI
+extern int gpsTxPin;                        // GPS TX -> ESP32 RX (receives GPS data)
+extern int gpsRxPin;                        // GPS RX -> ESP32 TX (send commands to GPS, -1 to disable)
+extern int gpsPpsPin;                       // GPS PPS pin for precise timing (-1 to disable)
+
+// Default GPS Pin Settings
+const int DEFAULT_GPS_TX_PIN = 14;          // Default: GPIO14
+const int DEFAULT_GPS_RX_PIN = -1;          // Default: disabled (not needed for receive-only)
+const int DEFAULT_GPS_PPS_PIN = -1;         // Default: disabled (not yet wired)
 
 // I2C Pins for RTC (DS3231)
 const int I2C_SDA_PIN = 8;                  // I2C SDA
@@ -150,6 +156,9 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 // GPS and RTC Configuration
 #define PREF_GPS_ENABLED "gpsEnabled"
 #define PREF_GPS_NTP_ENABLED "gpsNtpEnabled"
+#define PREF_GPS_TX_PIN "gpsTxPin"
+#define PREF_GPS_RX_PIN "gpsRxPin"
+#define PREF_GPS_PPS_PIN "gpsPpsPin"
 #define PREF_TIMEZONE_OFFSET "tzOffset"
 #define PREF_DST_ENABLED "dstEnabled"
 const int NTP_PORT = 123;                   // Standard NTP port

@@ -25,6 +25,11 @@ bool dstEnabled = false;        // Daylight Saving Time enabled
 TimeSource currentTimeSource = TIME_SOURCE_NONE;
 GPSStatus gpsStatus = {false, false, 0, 0.0, 0.0, 0.0, {0, 0, 0, 0, 0, 0, false}, 0};
 
+// GPS Pin configuration (user-configurable via WebUI)
+int gpsTxPin = DEFAULT_GPS_TX_PIN;    // GPS TX -> ESP32 RX
+int gpsRxPin = DEFAULT_GPS_RX_PIN;    // GPS RX -> ESP32 TX (-1 = disabled)
+int gpsPpsPin = DEFAULT_GPS_PPS_PIN;  // GPS PPS pin (-1 = disabled)
+
 // RTC time storage (when GPS not available)
 static GPSTime rtcTime = {0, 0, 0, 0, 0, 0, false};
 static unsigned long lastRTCReadMillis = 0;
@@ -202,8 +207,13 @@ void initGPS() {
 
   Debug.println("Initializing GPS module...");
 
-  // Initialize GPS serial port
-  GPSSerial.begin(9600, SERIAL_8N1, GPS_TX_PIN, GPS_RX_PIN);
+  // Initialize GPS serial port with configurable pins
+  // If gpsRxPin is -1, use -1 for TX (receive-only mode)
+  int rxPin = gpsTxPin;   // ESP32 RX <- GPS TX (receives data FROM GPS)
+  int txPin = gpsRxPin;   // ESP32 TX -> GPS RX (sends commands TO GPS, -1 = disabled)
+
+  GPSSerial.begin(9600, SERIAL_8N1, rxPin, txPin);
+  Debug.printf("GPS Serial: RX=%d (from GPS), TX=%d (to GPS)\n", rxPin, txPin);
 
   // Clear any existing data
   while (GPSSerial.available()) {
@@ -216,6 +226,12 @@ void initGPS() {
   gpsStatus.satellites = 0;
   gpsStatus.time.valid = false;
   gpsStatus.lastUpdate = 0;
+
+  // PPS pin setup (for future use)
+  if (gpsPpsPin >= 0) {
+    pinMode(gpsPpsPin, INPUT);
+    Debug.printf("GPS PPS pin configured: GPIO%d\n", gpsPpsPin);
+  }
 
   Debug.println("GPS initialized");
 }

@@ -68,6 +68,7 @@ void handleApiStatus();              // Return JSON status for AJAX polling
 // GPS control handlers
 void handleGPSEnabled();             // Enable/disable GPS module
 void handleGPSNtpEnabled();          // Enable/disable NTP server
+void handleGPSPins();                // Set GPS pin configuration
 void handleGPSStatus();              // Get GPS status (JSON)
 
 // Timezone control handlers
