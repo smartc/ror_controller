@@ -59,6 +59,7 @@ void handleInverterStatus();         // Get inverter power states (JSON)
 void handleRoofControl();            // Handle roof open/close/stop commands
 void handleRoofButton();             // Handle single roof button press (mimics physical button)
 void handleRoofOpenClose();          // Handle intelligent open/close (replicates ASCOM/MQTT logic)
+void handleClearError();             // Clear error state and re-check limit switches
 
 // API endpoint for real-time status updates
 void handleApiStatus();              // Return JSON status for AJAX polling
