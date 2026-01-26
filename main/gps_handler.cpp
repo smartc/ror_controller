@@ -1,11 +1,12 @@
 /*
  * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
- * GPS Handler Implementation - Provides GPS time and NTP server functionality
+ * GPS and RTC Handler - Provides GPS time, RTC backup, and NTP server functionality
  */
 
 #include "gps_handler.h"
 #include "Debug.h"
 #include <WiFiUdp.h>
+#include <Wire.h>
 #include <Preferences.h>
 
 // GPS Serial port (using HardwareSerial 1)
@@ -14,18 +15,29 @@ HardwareSerial GPSSerial(1);
 // NTP UDP server
 WiFiUDP ntpUdp;
 
-// Global GPS variables
+// Global GPS and RTC variables
 bool gpsEnabled = false;
 bool gpsNtpEnabled = false;
+bool rtcPresent = false;
+bool timeSynced = false;
+TimeSource currentTimeSource = TIME_SOURCE_NONE;
 GPSStatus gpsStatus = {false, false, 0, 0.0, 0.0, 0.0, {0, 0, 0, 0, 0, 0, false}, 0};
+
+// RTC time storage (when GPS not available)
+static GPSTime rtcTime = {0, 0, 0, 0, 0, 0, false};
+static unsigned long lastRTCReadMillis = 0;
+static uint32_t lastRTCUnixTime = 0;
 
 // NMEA parsing buffer
 static char nmeaBuffer[128];
 static uint8_t nmeaIndex = 0;
 
-// Last valid time (for interpolation between GPS updates)
+// Last valid GPS time (for interpolation between GPS updates)
 static unsigned long lastGPSSecondMillis = 0;
 static uint32_t lastGPSUnixTime = 0;
+
+// Track if we've synced RTC from GPS
+static bool rtcSyncedFromGPS = false;
 
 // NTP timestamp epoch offset (1900 to 1970 = 70 years)
 #define NTP_TIMESTAMP_DELTA 2208988800UL
@@ -37,6 +49,147 @@ static void parseGPGGA(const char* sentence);
 static double parseLatLon(const char* str, char dir);
 static uint32_t dateTimeToUnix(uint16_t year, uint8_t month, uint8_t day,
                                 uint8_t hour, uint8_t minute, uint8_t second);
+static uint8_t bcdToDec(uint8_t val);
+static uint8_t decToBcd(uint8_t val);
+
+// ============== RTC Functions (DS3231) ==============
+
+// Initialize RTC module
+void initRTC() {
+  Debug.println("Initializing RTC (DS3231)...");
+
+  // Initialize I2C
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+  // Check if DS3231 is present
+  Wire.beginTransmission(DS3231_ADDRESS);
+  uint8_t error = Wire.endTransmission();
+
+  if (error == 0) {
+    rtcPresent = true;
+    Debug.println("DS3231 RTC detected");
+
+    // Try to read time from RTC
+    GPSTime rtcReadTime;
+    if (readRTC(&rtcReadTime) && rtcReadTime.valid) {
+      rtcTime = rtcReadTime;
+      lastRTCUnixTime = dateTimeToUnix(rtcTime.year, rtcTime.month, rtcTime.day,
+                                        rtcTime.hour, rtcTime.minute, rtcTime.second);
+      lastRTCReadMillis = millis();
+      timeSynced = true;
+      currentTimeSource = TIME_SOURCE_RTC;
+      Debug.printf("RTC time: %04d-%02d-%02d %02d:%02d:%02d\n",
+                   rtcTime.year, rtcTime.month, rtcTime.day,
+                   rtcTime.hour, rtcTime.minute, rtcTime.second);
+    } else {
+      Debug.println("RTC time not set or invalid");
+    }
+  } else {
+    rtcPresent = false;
+    Debug.println("DS3231 RTC not detected");
+  }
+}
+
+// Check if RTC is present
+bool isRTCPresent() {
+  return rtcPresent;
+}
+
+// Read time from DS3231 RTC
+bool readRTC(GPSTime* time) {
+  if (!rtcPresent) {
+    return false;
+  }
+
+  Wire.beginTransmission(DS3231_ADDRESS);
+  Wire.write(0x00);  // Start at register 0
+  if (Wire.endTransmission() != 0) {
+    return false;
+  }
+
+  Wire.requestFrom(DS3231_ADDRESS, (uint8_t)7);
+  if (Wire.available() < 7) {
+    return false;
+  }
+
+  time->second = bcdToDec(Wire.read() & 0x7F);
+  time->minute = bcdToDec(Wire.read());
+  time->hour = bcdToDec(Wire.read() & 0x3F);  // 24-hour mode
+  Wire.read();  // Day of week (skip)
+  time->day = bcdToDec(Wire.read());
+  uint8_t monthRaw = Wire.read();
+  time->month = bcdToDec(monthRaw & 0x1F);
+  time->year = 2000 + bcdToDec(Wire.read());
+
+  // Century bit is in month register bit 7
+  if (monthRaw & 0x80) {
+    time->year += 100;
+  }
+
+  // Basic validation
+  if (time->year >= 2020 && time->year <= 2099 &&
+      time->month >= 1 && time->month <= 12 &&
+      time->day >= 1 && time->day <= 31 &&
+      time->hour <= 23 && time->minute <= 59 && time->second <= 59) {
+    time->valid = true;
+    return true;
+  }
+
+  time->valid = false;
+  return false;
+}
+
+// Write time to DS3231 RTC
+bool writeRTC(const GPSTime* time) {
+  if (!rtcPresent || !time->valid) {
+    return false;
+  }
+
+  Wire.beginTransmission(DS3231_ADDRESS);
+  Wire.write(0x00);  // Start at register 0
+  Wire.write(decToBcd(time->second));
+  Wire.write(decToBcd(time->minute));
+  Wire.write(decToBcd(time->hour));  // 24-hour mode
+  Wire.write(1);  // Day of week (not used, set to 1)
+  Wire.write(decToBcd(time->day));
+  Wire.write(decToBcd(time->month));
+  Wire.write(decToBcd(time->year - 2000));
+
+  if (Wire.endTransmission() != 0) {
+    return false;
+  }
+
+  Debug.printf("RTC time set to: %04d-%02d-%02d %02d:%02d:%02d\n",
+               time->year, time->month, time->day,
+               time->hour, time->minute, time->second);
+  return true;
+}
+
+// Sync RTC from GPS when GPS has fix
+void syncRTCFromGPS() {
+  if (!rtcPresent || !gpsStatus.hasFix || !gpsStatus.time.valid) {
+    return;
+  }
+
+  // Only sync once per session (or when GPS time changes significantly)
+  if (!rtcSyncedFromGPS) {
+    if (writeRTC(&gpsStatus.time)) {
+      rtcSyncedFromGPS = true;
+      Debug.println("RTC synced from GPS");
+    }
+  }
+}
+
+// BCD conversion helpers
+static uint8_t bcdToDec(uint8_t val) {
+  return ((val >> 4) * 10) + (val & 0x0F);
+}
+
+static uint8_t decToBcd(uint8_t val) {
+  return ((val / 10) << 4) + (val % 10);
+}
+
+// ============== GPS Functions ==============
 
 // Initialize GPS module
 void initGPS() {
@@ -48,7 +201,6 @@ void initGPS() {
   Debug.println("Initializing GPS module...");
 
   // Initialize GPS serial port
-  // GPS TX -> ESP32 RX (GPIO14), GPS RX -> ESP32 TX (GPIO13)
   GPSSerial.begin(9600, SERIAL_8N1, GPS_TX_PIN, GPS_RX_PIN);
 
   // Clear any existing data
@@ -62,15 +214,6 @@ void initGPS() {
   gpsStatus.satellites = 0;
   gpsStatus.time.valid = false;
   gpsStatus.lastUpdate = 0;
-
-  // Initialize NTP server if enabled
-  if (gpsNtpEnabled) {
-    if (ntpUdp.begin(NTP_PORT)) {
-      Debug.printf("NTP server started on port %d\n", NTP_PORT);
-    } else {
-      Debug.println("Failed to start NTP server");
-    }
-  }
 
   Debug.println("GPS initialized");
 }
@@ -103,11 +246,35 @@ void handleGPS() {
       nmeaBuffer[nmeaIndex++] = c;
     }
   }
+
+  // Update time source and sync RTC if GPS has fix
+  if (gpsStatus.hasFix && gpsStatus.time.valid) {
+    timeSynced = true;
+    currentTimeSource = TIME_SOURCE_GPS;
+    syncRTCFromGPS();
+  }
+}
+
+// ============== NTP Functions ==============
+
+// Initialize NTP server
+void initNTP() {
+  if (!gpsNtpEnabled) {
+    Debug.println("NTP server disabled");
+    return;
+  }
+
+  if (ntpUdp.begin(NTP_PORT)) {
+    Debug.printf("NTP server started on port %d\n", NTP_PORT);
+  } else {
+    Debug.println("Failed to start NTP server");
+  }
 }
 
 // Handle NTP server requests
 void handleNTP() {
-  if (!gpsEnabled || !gpsNtpEnabled) {
+  // NTP requires time to be synced (from GPS or RTC), and NTP to be enabled
+  if (!gpsNtpEnabled || !timeSynced) {
     return;
   }
 
@@ -127,11 +294,11 @@ void handleNTP() {
 
 // Send NTP response
 void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remotePort) {
-  // Get current time
-  uint32_t currentTime = getGPSUnixTime();
+  // Get current time from best available source
+  uint32_t currentTime = getCurrentUnixTime();
 
   if (currentTime == 0) {
-    Debug.println("No GPS time available for NTP response");
+    Debug.println("No time available for NTP response");
     return;
   }
 
@@ -145,7 +312,7 @@ void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remo
   // LI (leap indicator) = 0, VN (version) = 4, Mode = 4 (server)
   response[0] = 0b00100100;  // LI=0, VN=4, Mode=4
 
-  // Stratum = 1 (primary reference - GPS)
+  // Stratum = 1 (primary reference - GPS/RTC)
   response[1] = 1;
 
   // Poll interval = 6 (64 seconds)
@@ -155,56 +322,53 @@ void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remo
   response[3] = 0xEC;  // -20 in signed 8-bit
 
   // Root delay = 0
-  response[4] = 0;
-  response[5] = 0;
-  response[6] = 0;
-  response[7] = 0;
+  response[4] = 0; response[5] = 0; response[6] = 0; response[7] = 0;
 
   // Root dispersion = 0
-  response[8] = 0;
-  response[9] = 0;
-  response[10] = 0;
-  response[11] = 0;
+  response[8] = 0; response[9] = 0; response[10] = 0; response[11] = 0;
 
-  // Reference ID = "GPS " (for stratum 1)
-  response[12] = 'G';
-  response[13] = 'P';
-  response[14] = 'S';
-  response[15] = ' ';
+  // Reference ID based on time source
+  if (currentTimeSource == TIME_SOURCE_GPS) {
+    response[12] = 'G'; response[13] = 'P'; response[14] = 'S'; response[15] = ' ';
+  } else {
+    response[12] = 'L'; response[13] = 'O'; response[14] = 'C'; response[15] = 'L';
+  }
 
-  // Reference timestamp (last GPS update)
-  uint32_t refTime = ntpTime;
-  response[16] = (refTime >> 24) & 0xFF;
-  response[17] = (refTime >> 16) & 0xFF;
-  response[18] = (refTime >> 8) & 0xFF;
-  response[19] = refTime & 0xFF;
-  response[20] = 0; response[21] = 0; response[22] = 0; response[23] = 0;  // Fraction
+  // Reference timestamp
+  response[16] = (ntpTime >> 24) & 0xFF;
+  response[17] = (ntpTime >> 16) & 0xFF;
+  response[18] = (ntpTime >> 8) & 0xFF;
+  response[19] = ntpTime & 0xFF;
+  response[20] = 0; response[21] = 0; response[22] = 0; response[23] = 0;
 
   // Origin timestamp (copy from request - transmit timestamp)
   memcpy(&response[24], &buffer[40], 8);
 
-  // Receive timestamp (current time when request received)
+  // Receive timestamp
   response[32] = (ntpTime >> 24) & 0xFF;
   response[33] = (ntpTime >> 16) & 0xFF;
   response[34] = (ntpTime >> 8) & 0xFF;
   response[35] = ntpTime & 0xFF;
-  response[36] = 0; response[37] = 0; response[38] = 0; response[39] = 0;  // Fraction
+  response[36] = 0; response[37] = 0; response[38] = 0; response[39] = 0;
 
-  // Transmit timestamp (current time)
+  // Transmit timestamp
   response[40] = (ntpTime >> 24) & 0xFF;
   response[41] = (ntpTime >> 16) & 0xFF;
   response[42] = (ntpTime >> 8) & 0xFF;
   response[43] = ntpTime & 0xFF;
-  response[44] = 0; response[45] = 0; response[46] = 0; response[47] = 0;  // Fraction
+  response[44] = 0; response[45] = 0; response[46] = 0; response[47] = 0;
 
   // Send response
   ntpUdp.beginPacket(remoteIP, remotePort);
   ntpUdp.write(response, 48);
   ntpUdp.endPacket();
 
-  Debug.printf(2, "NTP response sent to %s:%d (time: %lu)\n",
-               remoteIP.toString().c_str(), remotePort, ntpTime);
+  Debug.printf(2, "NTP response sent to %s:%d (time: %lu, source: %s)\n",
+               remoteIP.toString().c_str(), remotePort, ntpTime,
+               currentTimeSource == TIME_SOURCE_GPS ? "GPS" : "RTC");
 }
+
+// ============== Control Functions ==============
 
 // Enable/disable GPS
 void setGPSEnabled(bool enabled) {
@@ -214,7 +378,6 @@ void setGPSEnabled(bool enabled) {
 
   gpsEnabled = enabled;
 
-  // Save to preferences
   Preferences prefs;
   prefs.begin(PREFERENCES_NAMESPACE, false);
   prefs.putBool(PREF_GPS_ENABLED, gpsEnabled);
@@ -223,13 +386,17 @@ void setGPSEnabled(bool enabled) {
   if (enabled) {
     initGPS();
   } else {
-    // Disable GPS
     gpsStatus.enabled = false;
     gpsStatus.hasFix = false;
     gpsStatus.time.valid = false;
 
-    // Stop NTP server
-    ntpUdp.stop();
+    // Fall back to RTC if available
+    if (rtcPresent && rtcTime.valid) {
+      currentTimeSource = TIME_SOURCE_RTC;
+    } else if (currentTimeSource == TIME_SOURCE_GPS) {
+      currentTimeSource = TIME_SOURCE_NONE;
+      timeSynced = false;
+    }
 
     Debug.println("GPS disabled");
   }
@@ -243,25 +410,21 @@ void setGPSNtpEnabled(bool enabled) {
 
   gpsNtpEnabled = enabled;
 
-  // Save to preferences
   Preferences prefs;
   prefs.begin(PREFERENCES_NAMESPACE, false);
   prefs.putBool(PREF_GPS_NTP_ENABLED, gpsNtpEnabled);
   prefs.end();
 
-  if (enabled && gpsEnabled) {
-    if (ntpUdp.begin(NTP_PORT)) {
-      Debug.printf("NTP server started on port %d\n", NTP_PORT);
-    } else {
-      Debug.println("Failed to start NTP server");
-    }
-  } else if (!enabled) {
+  if (enabled) {
+    initNTP();
+  } else {
     ntpUdp.stop();
     Debug.println("NTP server stopped");
   }
 }
 
-// Status functions
+// ============== Status Functions ==============
+
 bool isGPSEnabled() {
   return gpsEnabled;
 }
@@ -274,56 +437,98 @@ bool hasGPSFix() {
   return gpsStatus.hasFix;
 }
 
+bool isTimeSynced() {
+  return timeSynced;
+}
+
+TimeSource getTimeSource() {
+  return currentTimeSource;
+}
+
 GPSStatus getGPSStatus() {
   return gpsStatus;
 }
 
-// Get formatted time string (HH:MM:SS)
+// Get formatted time string from best source (HH:MM:SS)
+String getTimeString() {
+  if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
+    return getGPSTimeString();
+  } else if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
+    // Calculate interpolated time from RTC
+    uint32_t currentUnix = getCurrentUnixTime();
+    uint8_t hour = (currentUnix % 86400) / 3600;
+    uint8_t minute = (currentUnix % 3600) / 60;
+    uint8_t second = currentUnix % 60;
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hour, minute, second);
+    return String(buf);
+  }
+  return "No Sync";
+}
+
+// Get formatted date string from best source (YYYY-MM-DD)
+String getDateString() {
+  if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
+    return getGPSDateString();
+  } else if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d",
+             rtcTime.year, rtcTime.month, rtcTime.day);
+    return String(buf);
+  }
+  return "No Sync";
+}
+
+// Get formatted GPS time string (HH:MM:SS)
 String getGPSTimeString() {
   if (!gpsStatus.time.valid) {
     return "No Fix";
   }
-
   char buf[12];
   snprintf(buf, sizeof(buf), "%02d:%02d:%02d",
            gpsStatus.time.hour, gpsStatus.time.minute, gpsStatus.time.second);
   return String(buf);
 }
 
-// Get formatted date string (YYYY-MM-DD)
+// Get formatted GPS date string (YYYY-MM-DD)
 String getGPSDateString() {
   if (!gpsStatus.time.valid) {
     return "No Fix";
   }
-
   char buf[12];
   snprintf(buf, sizeof(buf), "%04d-%02d-%02d",
            gpsStatus.time.year, gpsStatus.time.month, gpsStatus.time.day);
   return String(buf);
 }
 
-// Get Unix timestamp from GPS
+// Get Unix timestamp from best available source
+uint32_t getCurrentUnixTime() {
+  if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
+    return getGPSUnixTime();
+  } else if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
+    // Interpolate from last RTC read
+    unsigned long elapsed = (millis() - lastRTCReadMillis) / 1000;
+    return lastRTCUnixTime + elapsed;
+  }
+  return 0;
+}
+
+// Get Unix timestamp from GPS only
 uint32_t getGPSUnixTime() {
   if (!gpsStatus.time.valid) {
     return 0;
   }
-
-  // Calculate current time with interpolation
   uint32_t baseTime = lastGPSUnixTime;
   unsigned long elapsed = (millis() - lastGPSSecondMillis) / 1000;
-
   return baseTime + elapsed;
 }
 
 // ============== NMEA Parsing Functions ==============
 
 static void parseNMEA(const char* sentence) {
-  // Check for valid NMEA sentence
   if (sentence[0] != '$') {
     return;
   }
-
-  // Check sentence type
   if (strncmp(sentence + 3, "RMC", 3) == 0) {
     parseGPRMC(sentence);
   }
@@ -332,8 +537,6 @@ static void parseNMEA(const char* sentence) {
   }
 }
 
-// Parse GPRMC sentence (Recommended Minimum Navigation Information)
-// $GPRMC,hhmmss.ss,A,llll.ll,a,yyyyy.yy,a,x.x,x.x,ddmmyy,x.x,a*hh
 static void parseGPRMC(const char* sentence) {
   char* p = (char*)sentence;
   int fieldIndex = 0;
@@ -351,31 +554,15 @@ static void parseGPRMC(const char* sentence) {
   while (*p) {
     if (*p == ',' || *p == '*') {
       field[fieldLen] = '\0';
-
       switch (fieldIndex) {
-        case 1:  // Time
-          strncpy(timeStr, field, sizeof(timeStr) - 1);
-          break;
-        case 2:  // Status (A=Active, V=Void)
-          statusChar = field[0];
-          break;
-        case 3:  // Latitude
-          strncpy(latStr, field, sizeof(latStr) - 1);
-          break;
-        case 4:  // Latitude direction
-          latDir = field[0];
-          break;
-        case 5:  // Longitude
-          strncpy(lonStr, field, sizeof(lonStr) - 1);
-          break;
-        case 6:  // Longitude direction
-          lonDir = field[0];
-          break;
-        case 9:  // Date
-          strncpy(dateStr, field, sizeof(dateStr) - 1);
-          break;
+        case 1: strncpy(timeStr, field, sizeof(timeStr) - 1); break;
+        case 2: statusChar = field[0]; break;
+        case 3: strncpy(latStr, field, sizeof(latStr) - 1); break;
+        case 4: latDir = field[0]; break;
+        case 5: strncpy(lonStr, field, sizeof(lonStr) - 1); break;
+        case 6: lonDir = field[0]; break;
+        case 9: strncpy(dateStr, field, sizeof(dateStr) - 1); break;
       }
-
       fieldIndex++;
       fieldLen = 0;
     } else {
@@ -386,26 +573,22 @@ static void parseGPRMC(const char* sentence) {
     p++;
   }
 
-  // Update GPS status
   gpsStatus.hasFix = (statusChar == 'A');
 
   if (gpsStatus.hasFix && strlen(timeStr) >= 6 && strlen(dateStr) >= 6) {
-    // Parse time (hhmmss.ss)
     gpsStatus.time.hour = (timeStr[0] - '0') * 10 + (timeStr[1] - '0');
     gpsStatus.time.minute = (timeStr[2] - '0') * 10 + (timeStr[3] - '0');
     gpsStatus.time.second = (timeStr[4] - '0') * 10 + (timeStr[5] - '0');
 
-    // Parse date (ddmmyy)
     uint8_t day = (dateStr[0] - '0') * 10 + (dateStr[1] - '0');
     uint8_t month = (dateStr[2] - '0') * 10 + (dateStr[3] - '0');
     uint8_t year2 = (dateStr[4] - '0') * 10 + (dateStr[5] - '0');
 
     gpsStatus.time.day = day;
     gpsStatus.time.month = month;
-    gpsStatus.time.year = 2000 + year2;  // Assume 21st century
+    gpsStatus.time.year = 2000 + year2;
     gpsStatus.time.valid = true;
 
-    // Parse position
     if (strlen(latStr) > 0) {
       gpsStatus.latitude = parseLatLon(latStr, latDir);
     }
@@ -413,12 +596,10 @@ static void parseGPRMC(const char* sentence) {
       gpsStatus.longitude = parseLatLon(lonStr, lonDir);
     }
 
-    // Update Unix time reference
     lastGPSUnixTime = dateTimeToUnix(gpsStatus.time.year, gpsStatus.time.month,
                                       gpsStatus.time.day, gpsStatus.time.hour,
                                       gpsStatus.time.minute, gpsStatus.time.second);
     lastGPSSecondMillis = millis();
-
     gpsStatus.lastUpdate = millis();
 
     Debug.printf(2, "GPS Time: %s %s, Lat: %.6f, Lon: %.6f\n",
@@ -427,8 +608,6 @@ static void parseGPRMC(const char* sentence) {
   }
 }
 
-// Parse GPGGA sentence (Global Positioning System Fix Data)
-// $GPGGA,hhmmss.ss,llll.ll,a,yyyyy.yy,a,x,xx,x.x,x.x,M,x.x,M,x.x,xxxx*hh
 static void parseGPGGA(const char* sentence) {
   char* p = (char*)sentence;
   int fieldIndex = 0;
@@ -438,20 +617,14 @@ static void parseGPGGA(const char* sentence) {
   while (*p) {
     if (*p == ',' || *p == '*') {
       field[fieldLen] = '\0';
-
       switch (fieldIndex) {
-        case 7:  // Number of satellites
-          if (fieldLen > 0) {
-            gpsStatus.satellites = atoi(field);
-          }
+        case 7:
+          if (fieldLen > 0) gpsStatus.satellites = atoi(field);
           break;
-        case 9:  // Altitude
-          if (fieldLen > 0) {
-            gpsStatus.altitude = atof(field);
-          }
+        case 9:
+          if (fieldLen > 0) gpsStatus.altitude = atof(field);
           break;
       }
-
       fieldIndex++;
       fieldLen = 0;
     } else {
@@ -463,23 +636,13 @@ static void parseGPGGA(const char* sentence) {
   }
 }
 
-// Parse latitude/longitude from NMEA format
 static double parseLatLon(const char* str, char dir) {
-  if (strlen(str) == 0) {
-    return 0.0;
-  }
-
-  // Find decimal point
+  if (strlen(str) == 0) return 0.0;
   const char* dot = strchr(str, '.');
-  if (!dot) {
-    return 0.0;
-  }
+  if (!dot) return 0.0;
 
-  // NMEA format: dddmm.mmmm or ddmm.mmmm
-  int degLen = (dot - str) - 2;  // Degrees are everything before the last 2 digits before dot
-  if (degLen < 1 || degLen > 3) {
-    return 0.0;
-  }
+  int degLen = (dot - str) - 2;
+  if (degLen < 1 || degLen > 3) return 0.0;
 
   char degStr[4] = "";
   strncpy(degStr, str, degLen);
@@ -487,45 +650,26 @@ static double parseLatLon(const char* str, char dir) {
 
   double degrees = atof(degStr);
   double minutes = atof(str + degLen);
-
   double result = degrees + (minutes / 60.0);
 
-  if (dir == 'S' || dir == 'W') {
-    result = -result;
-  }
-
+  if (dir == 'S' || dir == 'W') result = -result;
   return result;
 }
 
-// Convert date/time to Unix timestamp
 static uint32_t dateTimeToUnix(uint16_t year, uint8_t month, uint8_t day,
                                 uint8_t hour, uint8_t minute, uint8_t second) {
-  // Days in each month (non-leap year)
   static const uint16_t daysBeforeMonth[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-
-  // Calculate days since 1970
   uint32_t days = 0;
 
-  // Add days for complete years
   for (uint16_t y = 1970; y < year; y++) {
     days += 365;
-    if ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)) {
-      days++;  // Leap year
-    }
+    if ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)) days++;
   }
 
-  // Add days for complete months
   days += daysBeforeMonth[month - 1];
-
-  // Add leap day if applicable
-  if (month > 2 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))) {
-    days++;
-  }
-
-  // Add days in current month
+  if (month > 2 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))) days++;
   days += day - 1;
 
-  // Convert to seconds
   uint32_t unixTime = days * 86400UL;
   unixTime += hour * 3600UL;
   unixTime += minute * 60UL;

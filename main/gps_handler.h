@@ -1,6 +1,6 @@
 /*
  * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)
- * GPS Handler - Provides GPS time and NTP server functionality
+ * GPS and RTC Handler - Provides GPS time, RTC backup, and NTP server functionality
  */
 
 #ifndef GPS_HANDLER_H
@@ -9,7 +9,7 @@
 #include <Arduino.h>
 #include "config.h"
 
-// GPS time structure
+// GPS time structure (also used for RTC)
 struct GPSTime {
   uint16_t year;
   uint8_t month;
@@ -32,14 +32,34 @@ struct GPSStatus {
   unsigned long lastUpdate;
 };
 
-// Global GPS variables
+// Time source enumeration
+enum TimeSource {
+  TIME_SOURCE_NONE = 0,
+  TIME_SOURCE_GPS = 1,
+  TIME_SOURCE_RTC = 2
+};
+
+// Global GPS and RTC variables
 extern bool gpsEnabled;
 extern bool gpsNtpEnabled;
+extern bool rtcPresent;
+extern bool timeSynced;
 extern GPSStatus gpsStatus;
+extern TimeSource currentTimeSource;
 
-// Function prototypes
+// Function prototypes - GPS
 void initGPS();                           // Initialize GPS module
 void handleGPS();                         // Process GPS data in main loop
+
+// Function prototypes - RTC
+void initRTC();                           // Initialize RTC module (DS3231)
+bool isRTCPresent();                      // Check if RTC is detected
+bool readRTC(GPSTime* time);              // Read time from RTC
+bool writeRTC(const GPSTime* time);       // Write time to RTC
+void syncRTCFromGPS();                    // Sync RTC from GPS when GPS has fix
+
+// Function prototypes - NTP
+void initNTP();                           // Initialize NTP server
 void handleNTP();                         // Handle NTP server requests
 
 // GPS control functions
@@ -50,10 +70,15 @@ void setGPSNtpEnabled(bool enabled);      // Enable/disable NTP server
 bool isGPSEnabled();                      // Check if GPS is enabled
 bool isGPSNtpEnabled();                   // Check if NTP server is enabled
 bool hasGPSFix();                         // Check if GPS has valid fix
+bool isTimeSynced();                      // Check if time is synced (GPS or RTC)
+TimeSource getTimeSource();               // Get current time source
 GPSStatus getGPSStatus();                 // Get current GPS status
-String getGPSTimeString();                // Get formatted time string
-String getGPSDateString();                // Get formatted date string
-uint32_t getGPSUnixTime();                // Get Unix timestamp from GPS
+String getTimeString();                   // Get formatted time string (from best source)
+String getDateString();                   // Get formatted date string (from best source)
+String getGPSTimeString();                // Get formatted GPS time string
+String getGPSDateString();                // Get formatted GPS date string
+uint32_t getCurrentUnixTime();            // Get Unix timestamp from best available source
+uint32_t getGPSUnixTime();                // Get Unix timestamp from GPS only
 
 // NTP response helpers
 void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remotePort);

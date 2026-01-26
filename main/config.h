@@ -38,6 +38,11 @@ const int SNOW_SENSOR_RS485_DI = 40;        // RS485 DI (Driver Input)
 const int GPS_TX_PIN = 14;                  // GPS TX -> ESP32 RX (GPIO14)
 const int GPS_RX_PIN = 13;                  // GPS RX -> ESP32 TX (GPIO13)
 
+// I2C Pins for RTC (DS3231)
+const int I2C_SDA_PIN = 8;                  // I2C SDA
+const int I2C_SCL_PIN = 9;                  // I2C SCL
+const uint8_t DS3231_ADDRESS = 0x68;        // DS3231 I2C address
+
 // Sensor Pins - defined as extern, will be set at runtime based on preferences
 extern int LIMIT_SWITCH_OPEN_PIN;           // Limit switch at roof open position
 extern int LIMIT_SWITCH_CLOSED_PIN;         // Limit switch at roof closed position
@@ -73,9 +78,11 @@ const unsigned long DEFAULT_INVERTER_DELAY2 = 1500;  // Default: 1500ms
 // Safety Settings
 extern bool bypassParkSensor;           // Software bypass state for telescope park sensors
 
-// GPS Settings
+// GPS and RTC Settings
 extern bool gpsEnabled;                 // Enable/disable GPS module
 extern bool gpsNtpEnabled;              // Enable/disable NTP server functionality
+extern bool rtcPresent;                 // RTC hardware detected
+extern bool timeSynced;                 // Time has been synced (from GPS or RTC)
 
 // UDP Park Sensor Settings
 #define PREF_PARK_SENSOR_TYPE "parkSensorType"
@@ -138,12 +145,11 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_INVERTER_DELAY1 "inverterDelay1"
 #define PREF_INVERTER_DELAY2 "inverterDelay2"
 
-// GPS Configuration
-// TODO: When RTC support is added, decouple NTP server from GPS so NTP can run
-//       independently using either GPS time or RTC time as the reference source.
+// GPS and RTC Configuration
 #define PREF_GPS_ENABLED "gpsEnabled"
 #define PREF_GPS_NTP_ENABLED "gpsNtpEnabled"
 const int NTP_PORT = 123;                   // Standard NTP port
+// NTP server runs independently once time is synced from GPS or RTC
 
 // Enum for roof status - matches ASCOM ShutterStatus values
 enum RoofStatus {

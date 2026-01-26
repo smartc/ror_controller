@@ -666,35 +666,68 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "</table>\n";
   html += "</div>\n";
 
-  // GPS Status Card (if GPS is enabled)
-  if (gpsEnabled) {
+  // GPS / RTC / NTP Status Card (show if GPS enabled or RTC present or NTP enabled)
+  if (gpsEnabled || rtcPresent || gpsNtpEnabled) {
     GPSStatus gpsStatusData = getGPSStatus();
+    TimeSource timeSource = getTimeSource();
 
     html += "<div class='status-card'>\n";
-    html += "<h2>GPS / NTP Status</h2>\n";
+    html += "<h2>Time / GPS / NTP Status</h2>\n";
     html += "<table class='status-table'>\n";
 
-    // GPS Fix status
-    html += "<tr><th>GPS Fix</th><td>";
-    html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
-    html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
+    // Time source
+    String timeSourceStr = "None";
+    if (timeSource == TIME_SOURCE_GPS) timeSourceStr = "GPS";
+    else if (timeSource == TIME_SOURCE_RTC) timeSourceStr = "RTC";
+    html += "<tr><th>Time Source</th><td>";
+    html += "<span class='status-indicator " + String(timeSynced ? "green" : "red") + "'></span> ";
+    html += timeSourceStr;
     html += "</td></tr>\n";
 
-    // Satellites
-    html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + "</td></tr>\n";
+    // Current time
+    html += "<tr><th>Current Time (UTC)</th><td>" + getTimeString() + "</td></tr>\n";
+    html += "<tr><th>Current Date</th><td>" + getDateString() + "</td></tr>\n";
 
-    // GPS Time
-    html += "<tr><th>GPS Time (UTC)</th><td>" + getGPSTimeString() + "</td></tr>\n";
-    html += "<tr><th>GPS Date</th><td>" + getGPSDateString() + "</td></tr>\n";
+    // RTC status
+    html += "<tr><th>RTC (DS3231)</th><td>";
+    html += "<span class='status-indicator " + String(rtcPresent ? "green" : "red") + "'></span> ";
+    html += rtcPresent ? "Present" : "Not detected";
+    html += "</td></tr>\n";
+
+    if (gpsEnabled) {
+      // GPS Fix status
+      html += "<tr><th>GPS Fix</th><td>";
+      html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
+      html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
+      html += "</td></tr>\n";
+
+      // Satellites
+      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + "</td></tr>\n";
+
+      // GPS Position (if fix available)
+      if (gpsStatusData.hasFix) {
+        char latStr[16], lonStr[16];
+        snprintf(latStr, sizeof(latStr), "%.6f", gpsStatusData.latitude);
+        snprintf(lonStr, sizeof(lonStr), "%.6f", gpsStatusData.longitude);
+        html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>\n";
+        html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>\n";
+      }
+    }
 
     // NTP Server status
     html += "<tr><th>NTP Server</th><td>";
-    html += "<span class='status-indicator " + String(gpsNtpEnabled ? "green" : "red") + "'></span> ";
-    html += gpsNtpEnabled ? "Active (port 123)" : "Disabled";
+    html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
+    if (gpsNtpEnabled && timeSynced) {
+      html += "Active (port 123)";
+    } else if (gpsNtpEnabled) {
+      html += "Waiting for time sync";
+    } else {
+      html += "Disabled";
+    }
     html += "</td></tr>\n";
 
     html += "</table>\n";
-    html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Configure GPS in <a href='/setup'>Device Setup</a></p>\n";
+    html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Configure in <a href='/setup'>Device Setup</a></p>\n";
     html += "</div>\n";
   }
 
@@ -1170,18 +1203,38 @@ inline String getParkSensorConfigCard() {
   return html;
 }
 
-// GPS Configuration card for the setup page
+// GPS and RTC Configuration card for the setup page
 inline String getGPSConfigCard() {
   GPSStatus status = getGPSStatus();
+  TimeSource timeSource = getTimeSource();
 
   String html = "<div class='card'>";
-  html += "<h2>GPS / NTP Server Configuration</h2>";
+  html += "<h2>GPS / RTC / NTP Configuration</h2>";
 
-  // GPS Status Section
+  // Time Status Section
   html += "<div class='toggle-group'>";
-  html += "<h3>GPS Status</h3>";
+  html += "<h3>Time Status</h3>";
 
   html += "<table class='status-table'>";
+
+  // Time source
+  String timeSourceStr = "None";
+  if (timeSource == TIME_SOURCE_GPS) timeSourceStr = "GPS";
+  else if (timeSource == TIME_SOURCE_RTC) timeSourceStr = "RTC";
+  html += "<tr><th>Time Source</th><td>";
+  html += "<span class='status-indicator " + String(timeSynced ? "green" : "red") + "'></span> ";
+  html += timeSourceStr + (timeSynced ? " (synced)" : " (not synced)");
+  html += "</td></tr>";
+
+  // Current time
+  html += "<tr><th>Current Time (UTC)</th><td>" + getTimeString() + "</td></tr>";
+  html += "<tr><th>Current Date</th><td>" + getDateString() + "</td></tr>";
+
+  // RTC status
+  html += "<tr><th>RTC (DS3231)</th><td>";
+  html += "<span class='status-indicator " + String(rtcPresent ? "green" : "red") + "'></span> ";
+  html += rtcPresent ? "Present (I2C 0x68)" : "Not detected";
+  html += "</td></tr>";
 
   // GPS Enabled status
   html += "<tr><th>GPS Module</th><td>";
@@ -1199,10 +1252,6 @@ inline String getGPSConfigCard() {
     // Satellites
     html += "<tr><th>Satellites</th><td>" + String(status.satellites) + "</td></tr>";
 
-    // Date/Time
-    html += "<tr><th>GPS Date</th><td>" + getGPSDateString() + "</td></tr>";
-    html += "<tr><th>GPS Time (UTC)</th><td>" + getGPSTimeString() + "</td></tr>";
-
     // Position (if available)
     if (status.hasFix) {
       char latStr[16], lonStr[16];
@@ -1213,26 +1262,32 @@ inline String getGPSConfigCard() {
       html += "<tr><th>Altitude</th><td>" + String(status.altitude, 1) + " m</td></tr>";
     }
 
-    // NTP Server status
-    html += "<tr><th>NTP Server</th><td>";
-    html += "<span class='status-indicator " + String(gpsNtpEnabled ? "green" : "red") + "'></span> ";
-    html += gpsNtpEnabled ? "Active on port 123" : "Disabled";
-    html += "</td></tr>";
-
     // Last update
     if (status.lastUpdate > 0) {
       unsigned long timeDiff = (millis() - status.lastUpdate) / 1000;
       String lastSeenStr = String(timeDiff) + "s ago";
-      html += "<tr><th>Last Update</th><td>" + lastSeenStr + "</td></tr>";
+      html += "<tr><th>GPS Last Update</th><td>" + lastSeenStr + "</td></tr>";
     }
   }
+
+  // NTP Server status
+  html += "<tr><th>NTP Server</th><td>";
+  html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
+  if (gpsNtpEnabled && timeSynced) {
+    html += "Active on port 123";
+  } else if (gpsNtpEnabled) {
+    html += "Waiting for time sync";
+  } else {
+    html += "Disabled";
+  }
+  html += "</td></tr>";
 
   html += "</table>";
   html += "</div>";  // End status toggle-group
 
-  // GPS Settings Section
+  // Settings Section
   html += "<div class='toggle-group'>";
-  html += "<h3>GPS Settings</h3>";
+  html += "<h3>Settings</h3>";
 
   html += "<div class='toggle-row'>";
 
@@ -1252,15 +1307,15 @@ inline String getGPSConfigCard() {
 
   html += "<div class='toggle-row'>";
 
-  // NTP Server Enable toggle
+  // NTP Server Enable toggle (no longer requires GPS - works with RTC too)
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
-  html += "<input type='checkbox' id='gpsNtpEnabledToggle'" + String(gpsNtpEnabled ? " checked" : "") + " onchange='toggleGPSNtp(this.checked)'" + String(gpsEnabled ? "" : " disabled") + ">";
+  html += "<input type='checkbox' id='gpsNtpEnabledToggle'" + String(gpsNtpEnabled ? " checked" : "") + " onchange='toggleGPSNtp(this.checked)'>";
   html += "<span class='slider'></span>";
   html += "</label>";
   html += "<span class='switch-label'>";
   html += "Enable NTP Server <strong id='gpsNtpEnabledText'>(" + String(gpsNtpEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
-  html += "<small>Provides NTP time service on UDP port 123 using GPS time</small>";
+  html += "<small>Provides NTP time service on UDP port 123 using GPS or RTC time</small>";
   html += "</span>";
   html += "</div>";
 
@@ -1273,6 +1328,7 @@ inline String getGPSConfigCard() {
   html += "<p style='margin: 5px 0; color: #81c784;'>Server: <code>" + WiFi.localIP().toString() + "</code></p>";
   html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Linux: <code>ntpdate -q " + WiFi.localIP().toString() + "</code></small></p>";
   html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Windows: <code>w32tm /stripchart /computer:" + WiFi.localIP().toString() + "</code></small></p>";
+  html += "<p style='margin: 5px 0; color: #ffb74d;'><small>Note: NTP server requires time to be synced from GPS or RTC</small></p>";
   html += "</div>";
 
   html += "</div>";  // End card

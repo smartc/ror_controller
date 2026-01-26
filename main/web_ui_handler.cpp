@@ -1020,7 +1020,7 @@ void handleClearError() {
 
 // API endpoint for real-time status updates (returns JSON)
 void handleApiStatus() {
-  DynamicJsonDocument doc(768);
+  DynamicJsonDocument doc(1024);
 
   // Roof status
   doc["status"] = getRoofStatusString();
@@ -1038,14 +1038,24 @@ void handleApiStatus() {
   // Park sensor type
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
 
+  // Time status
+  doc["time_synced"] = timeSynced;
+  doc["rtc_present"] = rtcPresent;
+  TimeSource ts = getTimeSource();
+  doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
+  doc["current_time"] = getTimeString();
+  doc["current_date"] = getDateString();
+
   // GPS status
   doc["gps_enabled"] = gpsEnabled;
+  doc["ntp_enabled"] = gpsNtpEnabled;
   if (gpsEnabled) {
     GPSStatus gpsStatusData = getGPSStatus();
     doc["gps_fix"] = gpsStatusData.hasFix;
     doc["gps_satellites"] = gpsStatusData.satellites;
     doc["gps_time"] = getGPSTimeString();
-    doc["ntp_enabled"] = gpsNtpEnabled;
+    doc["gps_latitude"] = gpsStatusData.latitude;
+    doc["gps_longitude"] = gpsStatusData.longitude;
   }
 
   String jsonResponse;
@@ -1086,12 +1096,24 @@ void handleGPSNtpEnabled() {
   }
 }
 
-// Handler for getting GPS status (JSON)
+// Handler for getting GPS and RTC status (JSON)
 void handleGPSStatus() {
   GPSStatus status = getGPSStatus();
+  TimeSource ts = getTimeSource();
 
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(768);
 
+  // Time status
+  doc["time_synced"] = timeSynced;
+  doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
+  doc["current_time"] = getTimeString();
+  doc["current_date"] = getDateString();
+  doc["unix_time"] = getCurrentUnixTime();
+
+  // RTC status
+  doc["rtc_present"] = rtcPresent;
+
+  // GPS status
   doc["gps_enabled"] = gpsEnabled;
   doc["ntp_enabled"] = gpsNtpEnabled;
   doc["has_fix"] = status.hasFix;
@@ -1099,9 +1121,8 @@ void handleGPSStatus() {
   doc["latitude"] = status.latitude;
   doc["longitude"] = status.longitude;
   doc["altitude"] = status.altitude;
-  doc["time"] = getGPSTimeString();
-  doc["date"] = getGPSDateString();
-  doc["unix_time"] = getGPSUnixTime();
+  doc["gps_time"] = getGPSTimeString();
+  doc["gps_date"] = getGPSDateString();
 
   String jsonResponse;
   serializeJson(doc, jsonResponse);

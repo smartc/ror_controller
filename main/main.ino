@@ -61,7 +61,10 @@ void setup() {
   
   // Initialize roof controller hardware
   initializeRoofController();
-  
+
+  // Initialize RTC (DS3231) - do this early to have time available
+  initRTC();
+
   // Initialize WiFi
   initWiFi();
   
@@ -86,6 +89,11 @@ void setup() {
     initGPS();
   } else {
     Debug.println("GPS is disabled");
+  }
+
+  // Initialize NTP server if enabled (works with GPS or RTC time)
+  if (gpsNtpEnabled) {
+    initNTP();
   }
 
   Debug.println("Setup complete!");
@@ -140,11 +148,13 @@ void loop() {
   // Handle web UI requests
   handleWebUI();
 
-  // Handle GPS data and NTP server
+  // Handle GPS data
   if (gpsEnabled) {
     handleGPS();
-    handleNTP();
   }
+
+  // Handle NTP server (independent of GPS - uses GPS or RTC time)
+  handleNTP();
 
   // Clear timed out park sensors periodically (every 5 minutes)
   static unsigned long lastSensorCleanup = 0;
@@ -161,13 +171,20 @@ void loop() {
                  WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected",
                  mqttClient.connected() ? "Connected" : "Disconnected",
                  ESP.getFreeHeap());
+    // Time source status
+    TimeSource ts = getTimeSource();
+    Debug.printf(2, "Time: %s %s (Source: %s, RTC: %s)\n",
+                 getDateString().c_str(),
+                 getTimeString().c_str(),
+                 ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None"),
+                 isRTCPresent() ? "Present" : "Not found");
     if (gpsEnabled) {
       GPSStatus gpsStatusData = getGPSStatus();
-      Debug.printf(2, "GPS: Fix=%s, Sats=%d, Time=%s %s\n",
+      Debug.printf(2, "GPS: Fix=%s, Sats=%d, Lat=%.6f, Lon=%.6f\n",
                    gpsStatusData.hasFix ? "Yes" : "No",
                    gpsStatusData.satellites,
-                   getGPSDateString().c_str(),
-                   getGPSTimeString().c_str());
+                   gpsStatusData.latitude,
+                   gpsStatusData.longitude);
     }
     lastStatusUpdate = currentTime;
   }
