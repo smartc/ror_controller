@@ -1083,9 +1083,12 @@ void handleApiStatus() {
     GPSStatus gpsStatusData = getGPSStatus();
     doc["gps_fix"] = gpsStatusData.hasFix;
     doc["gps_satellites"] = gpsStatusData.satellites;
+    doc["gps_satellites_in_view"] = gpsStatusData.satellites_in_view;
+    doc["gps_hdop"] = gpsStatusData.hdop;
     doc["gps_time"] = getGPSTimeString();
     doc["gps_latitude"] = gpsStatusData.latitude;
     doc["gps_longitude"] = gpsStatusData.longitude;
+    doc["gps_altitude"] = gpsStatusData.altitude;
   }
 
   String jsonResponse;
@@ -1155,6 +1158,8 @@ void handleGPSStatus() {
   doc["ntp_enabled"] = gpsNtpEnabled;
   doc["has_fix"] = status.hasFix;
   doc["satellites"] = status.satellites;
+  doc["satellites_in_view"] = status.satellites_in_view;
+  doc["hdop"] = status.hdop;
   doc["latitude"] = status.latitude;
   doc["longitude"] = status.longitude;
   doc["altitude"] = status.altitude;

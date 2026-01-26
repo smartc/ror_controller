@@ -238,7 +238,7 @@ inline String getControlJS() {
     "  .then(data => {\n"
     "    console.log(data);\n"
     "    document.getElementById('bypassText').innerHTML = checked ? '(ENABLED)' : '(DISABLED)';\n"
-    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#e57373' : '#e0e0e0';\n"
+    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#e57373' : '#ffffff';\n"
     "  });\n"
     "}\n"
     
@@ -766,22 +766,29 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += "</td></tr>\n";
 
     if (gpsEnabled) {
-      // GPS Fix status
+      // GPS Fix status with accuracy (HDOP)
       html += "<tr><th>GPS Fix</th><td>";
       html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
       html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
+      if (gpsStatusData.hasFix && gpsStatusData.hdop > 0) {
+        char hdopStr[16];
+        snprintf(hdopStr, sizeof(hdopStr), " (HDOP: %.1f)", gpsStatusData.hdop);
+        html += hdopStr;
+      }
       html += "</td></tr>\n";
 
-      // Satellites
-      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + "</td></tr>\n";
+      // Satellites (used / in view)
+      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + " / " + String(gpsStatusData.satellites_in_view) + "</td></tr>\n";
 
       // GPS Position (if fix available)
       if (gpsStatusData.hasFix) {
-        char latStr[16], lonStr[16];
+        char latStr[16], lonStr[16], altStr[16];
         snprintf(latStr, sizeof(latStr), "%.6f", gpsStatusData.latitude);
         snprintf(lonStr, sizeof(lonStr), "%.6f", gpsStatusData.longitude);
+        snprintf(altStr, sizeof(altStr), "%.1f m", gpsStatusData.altitude);
         html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>\n";
         html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>\n";
+        html += "<tr><th>Altitude</th><td>" + String(altStr) + "</td></tr>\n";
       }
     }
 
@@ -1008,7 +1015,7 @@ inline String getSwitchConfigCard() {
   html += "<input type='checkbox' id='bypassToggle' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange=\"toggleBypass(this.checked)\">";
   html += "<span class='slider'></span>";
   html += "</label>";
-  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>";
+  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#e57373" : "#ffffff") + ";'>";
   html += "Bypass Telescope Park Sensor <strong id='bypassText'>(" + String(bypassParkSensor ? "ENABLED" : "DISABLED") + ")</strong><br>";
   html += "<small>Warning: When enabled, allows roof to move regardless of telescope position</small><br>";
   html += "<small style='color: #ffb74d;'><strong>Note:</strong> This setting is not retained between restarts. Use a physical jumper on the PARK terminals if no sensor is installed.</small>";
@@ -1323,14 +1330,19 @@ inline String getGPSConfigCard() {
   html += "</td></tr>";
 
   if (gpsEnabled) {
-    // Fix status
+    // Fix status with accuracy (HDOP)
     html += "<tr><th>GPS Fix</th><td>";
     html += "<span class='status-indicator " + String(status.hasFix ? "green" : "red blink") + "'></span> ";
     html += status.hasFix ? "Valid Fix" : "No Fix";
+    if (status.hasFix && status.hdop > 0) {
+      char hdopStr[16];
+      snprintf(hdopStr, sizeof(hdopStr), " (HDOP: %.1f)", status.hdop);
+      html += hdopStr;
+    }
     html += "</td></tr>";
 
-    // Satellites
-    html += "<tr><th>Satellites</th><td>" + String(status.satellites) + "</td></tr>";
+    // Satellites (used / in view)
+    html += "<tr><th>Satellites</th><td>" + String(status.satellites) + " / " + String(status.satellites_in_view) + "</td></tr>";
 
     // Position (if available)
     if (status.hasFix) {
@@ -1802,7 +1814,7 @@ inline String getRoofControlPage() {
   html += "<input type='checkbox' id='bypassToggleControl' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange='toggleBypassControl(this.checked)'>\n";
   html += "<span class='slider'></span>\n";
   html += "</label>\n";
-  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>\n";
+  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#e57373" : "#ffffff") + ";'>\n";
   html += "Bypass Park Sensor <strong>" + String(bypassParkSensor ? "(ENABLED)" : "(DISABLED)") + "</strong><br>\n";
   html += "<small style='color: #e0e0e0;'>Enable to control roof regardless of telescope position</small>\n";
   html += "</span>\n";
@@ -1903,7 +1915,7 @@ inline String getRoofControlPage() {
   html += "    console.log(data);\n";
   html += "    const label = document.getElementById('bypassLabelControl');\n";
   html += "    if (label) {\n";
-  html += "      label.style.color = checked ? '#e57373' : '#e0e0e0';\n";
+  html += "      label.style.color = checked ? '#e57373' : '#ffffff';\n";
   html += "      label.innerHTML = 'Bypass Park Sensor <strong>' + (checked ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "    }\n";
   html += "    updateStatus(); // Refresh status\n";
