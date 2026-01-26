@@ -522,7 +522,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
     bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
     if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
-      statusDisplayString = statusString + " (Timeout - manual intervention required)";
+      statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
     } else {
       String trimmedReason = roofErrorReason;
       trimmedReason.trim();
@@ -860,7 +860,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
   html += "          // Check for timeout with no limit switches - show brief message\n";
   html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
-  html += "            statusText.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "            statusText.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
   html += "          } else {\n";
   html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
   html += "          }\n";
@@ -1589,7 +1589,7 @@ inline String getSetupPage() {
     bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
     bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
     if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
-      statusDisplayString = statusString + " (Timeout - manual intervention required)";
+      statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
     } else {
       String trimmedReason = roofErrorReason;
       trimmedReason.trim();
@@ -1671,7 +1671,7 @@ inline String getSetupPage() {
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
   html += "          // Check for timeout with no limit switches - show brief message\n";
   html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
-  html += "            statusText.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "            statusText.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
   html += "          } else {\n";
   html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
   html += "          }\n";
@@ -1769,7 +1769,7 @@ inline String getRoofControlPage() {
     bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
     bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
     if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
-      statusDisplayString = statusString + " (Timeout - manual intervention required)";
+      statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
     } else {
       String trimmedReason = roofErrorReason;
       trimmedReason.trim();
@@ -2023,7 +2023,7 @@ inline String getRoofControlPage() {
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
   html += "          // Check for timeout with no limit switches - show brief message\n";
   html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
-  html += "            statusEl.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "            statusEl.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
   html += "          } else {\n";
   html += "            statusEl.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
   html += "          }\n";
@@ -2132,7 +2132,7 @@ inline String getRoofControlPage() {
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
   html += "          // Check for timeout with no limit switches - show brief message\n";
   html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
-  html += "            statusText.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "            statusText.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
   html += "          } else {\n";
   html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
   html += "          }\n";
