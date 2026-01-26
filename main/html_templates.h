@@ -1439,6 +1439,14 @@ inline String getRoofControlPage() {
     html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'><strong>START/STOP:</strong> Mimics physical button | <strong>OPEN/CLOSE:</strong> Intelligent control</p>\n";
   }
 
+  // Clear Error button - only show when in error state
+  if (roofStatus == ROOF_ERROR) {
+    html += "<div style='margin-top: 15px;'>\n";
+    html += "<button class='btn' onclick='clearRoofError()' style='background-color: #e74c3c; font-size: 16px; padding: 10px 20px;'>Clear Error</button>\n";
+    html += "<p style='font-size: 12px; color: #e74c3c; margin-top: 5px;'>Clear error state and re-check limit switches</p>\n";
+    html += "</div>\n";
+  }
+
   html += "</div>\n";
   html += "</div>\n";
 
@@ -1489,6 +1497,13 @@ inline String getRoofControlPage() {
   html += "  fetch('/roof_openclose', { method: 'POST' })\n";
   html += "    .then(response => response.text())\n";
   html += "    .then(data => { console.log('Intelligent roof control:', data); })\n";
+  html += "    .catch(error => alert('Error: ' + error));\n";
+  html += "}\n\n";
+
+  html += "function clearRoofError() {\n";
+  html += "  fetch('/clear_error', { method: 'POST' })\n";
+  html += "    .then(response => response.text())\n";
+  html += "    .then(data => { console.log('Clear error:', data); location.reload(); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
 

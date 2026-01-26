@@ -524,6 +524,7 @@ void initWebUI() {
   webUiServer.on("/roof_control", HTTP_POST, handleRoofControl);
   webUiServer.on("/roof_button", HTTP_POST, handleRoofButton);
   webUiServer.on("/roof_openclose", HTTP_POST, handleRoofOpenClose);
+  webUiServer.on("/clear_error", HTTP_POST, handleClearError);
 
   // API endpoint for real-time status
   webUiServer.on("/api/status", HTTP_GET, handleApiStatus);
@@ -985,6 +986,21 @@ void handleRoofOpenClose() {
     Debug.printf("Intelligent roof control failed: Cannot %s roof\n", action.c_str());
     webUiServer.send(400, "text/plain", "Cannot " + action + " roof - check safety interlocks");
   }
+}
+
+// Handle clear error request
+void handleClearError() {
+  Debug.println("Clear error request via web interface");
+
+  if (roofStatus != ROOF_ERROR) {
+    webUiServer.send(200, "text/plain", "No error to clear");
+    return;
+  }
+
+  // Clear the error state
+  clearRoofError();
+
+  webUiServer.send(200, "text/plain", "Error cleared - status: " + getRoofStatusString());
 }
 
 // API endpoint for real-time status updates (returns JSON)

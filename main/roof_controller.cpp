@@ -38,6 +38,9 @@ bool slaved = false;
 bool isConnected = true;                        // Device is always connected in this implementation
 bool swapLimitSwitches = false;                 // Flag for swapping limit switch pins
 
+// Error tracking for ASCOM compliance (error reason for Slewing exception)
+String roofErrorReason = "";
+
 // Timestamps for various operations
 unsigned long lastSwitchTime = 0;
 unsigned long movementStartTime = 0;
@@ -145,21 +148,27 @@ void determineInitialRoofStatus() {
   // Determine status based on majority readings
   if (openTriggeredCount >= 3 && closedTriggeredCount >= 3) {
     // Both switches triggered is an error condition
+    roofErrorReason = "Controller startup detected both limit switches triggered. "
+                      "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
     roofStatus = ROOF_ERROR;
     Debug.println("INITIAL STATUS: ERROR - Both limit switches triggered!");
-  } 
+  }
   else if (openTriggeredCount >= 3) {
     // Roof is open
+    roofErrorReason = "";  // Clear any previous error
     roofStatus = ROOF_OPEN;
     Debug.println("INITIAL STATUS: Roof is OPEN");
-  } 
+  }
   else if (closedTriggeredCount >= 3) {
     // Roof is closed
+    roofErrorReason = "";  // Clear any previous error
     roofStatus = ROOF_CLOSED;
     Debug.println("INITIAL STATUS: Roof is CLOSED");
-  } 
+  }
   else {
     // Roof is in between - assume it's stationary
+    roofErrorReason = "Controller startup detected roof in unknown position (neither limit switch triggered). "
+                      "Manual intervention may be required to move roof to a known position.";
     roofStatus = ROOF_ERROR;  // Use ERROR state for an in-between position that's not moving
     Debug.println("INITIAL STATUS: Roof is IN BETWEEN (not at either limit)");
   }
@@ -209,40 +218,74 @@ void updateRoofStatus() {
   // Handle clear terminal states first
   if (isOpenLimitTriggered && isClosedLimitTriggered) {
     // Both switches triggered is an error condition
+    roofErrorReason = "Both open and closed limit switches are triggered simultaneously. "
+                      "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
     roofStatus = ROOF_ERROR;
     digitalWrite(INVERTER_PIN, LOW); // Turn off inverter for safety
     inverterRelayState = false;
     statusMessage = "ERROR: Both limit switches triggered!";
   }
   else if (isOpenLimitTriggered) {
-    // If the open switch is triggered, the roof is open regardless of previous state
-    // BUT if limit switch timeout monitoring is disabled and we're currently CLOSING (trying to close from open),
-    // stay in CLOSING state to allow the movement timeout to trigger
-    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_CLOSING) {
-      if (roofStatus != ROOF_OPEN) {
-        statusMessage = "Roof fully open";
-        // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
-        if (limitSwitchTimeoutEnabled || (roofStatus == ROOF_OPENING)) {
-          digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
-          inverterRelayState = false;
-        }
-      }
+    // Open switch is triggered.
+    if (roofStatus == ROOF_CLOSING) {
+      // We're trying to CLOSE but open switch is still triggered after limitSwitchTimeout.
+      // This means the roof failed to START moving - immediate error.
+      roofErrorReason = "Roof failed to start closing. Open limit switch still triggered after " +
+                        String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
+      statusMessage = "ERROR: Roof failed to start closing";
+      Debug.println("Error reason: " + roofErrorReason);
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_ERROR;
+    }
+    else if (roofStatus == ROOF_OPENING) {
+      // We were opening and reached the open position - success!
+      statusMessage = "Roof fully open";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_OPEN;
+    }
+    else if (roofStatus == ROOF_ERROR) {
+      // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
+      // Error must be explicitly cleared via clearRoofError() or by starting a new movement.
+    }
+    else if (roofStatus != ROOF_OPEN) {
+      // Transitioning to OPEN from CLOSED state (manual movement detected)
+      statusMessage = "Roof fully open";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
       roofStatus = ROOF_OPEN;
     }
   }
   else if (isClosedLimitTriggered) {
-    // If the closed switch is triggered, the roof is closed regardless of previous state
-    // BUT if limit switch timeout monitoring is disabled and we're currently OPENING (trying to open from closed),
-    // stay in OPENING state to allow the movement timeout to trigger
-    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_OPENING) {
-      if (roofStatus != ROOF_CLOSED) {
-        statusMessage = "Roof fully closed";
-        // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
-        if (limitSwitchTimeoutEnabled || (roofStatus == ROOF_CLOSING)) {
-          digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
-          inverterRelayState = false;
-        }
-      }
+    // Closed switch is triggered.
+    if (roofStatus == ROOF_OPENING) {
+      // We're trying to OPEN but closed switch is still triggered after limitSwitchTimeout.
+      // This means the roof failed to START moving - immediate error.
+      roofErrorReason = "Roof failed to start opening. Closed limit switch still triggered after " +
+                        String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
+      statusMessage = "ERROR: Roof failed to start opening";
+      Debug.println("Error reason: " + roofErrorReason);
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_ERROR;
+    }
+    else if (roofStatus == ROOF_CLOSING) {
+      // We were closing and reached the closed position - success!
+      statusMessage = "Roof fully closed";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_CLOSED;
+    }
+    else if (roofStatus == ROOF_ERROR) {
+      // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
+      // Error must be explicitly cleared via clearRoofError() or by starting a new movement.
+    }
+    else if (roofStatus != ROOF_CLOSED) {
+      // Transitioning to CLOSED from OPEN state (manual movement detected)
+      statusMessage = "Roof fully closed";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
       roofStatus = ROOF_CLOSED;
     }
   } 
@@ -292,10 +335,22 @@ void checkMovementTimeout() {
   if ((roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) &&
       (millis() - movementStartTime > movementTimeout)) {
 
-    // Stop the roof due to timeout
-    Debug.println("Roof movement timed out!");
-    stopRoofMovement();
+    // Set error reason for ASCOM Slewing exception
+    String operation = (roofStatus == ROOF_OPENING) ? "open" : "close";
+    roofErrorReason = "Roof movement timed out after " + String(movementTimeout / 1000) +
+                      " seconds while trying to " + operation +
+                      ". Limit switch did not trigger. Check mechanical obstruction or motor failure.";
+
+    // IMPORTANT: Set error state BEFORE stopping to avoid race condition.
+    // If we call stopRoofMovement() first, it calls updateRoofStatus() which might
+    // set roofStatus to ROOF_CLOSED (based on limit switches), creating a window
+    // where ASCOM clients polling Slewing would see false instead of an exception.
     roofStatus = ROOF_ERROR;
+
+    // Stop the roof due to timeout (don't update status - we already set ERROR)
+    Debug.println("Roof movement timed out!");
+    Debug.println("Error reason: " + roofErrorReason);
+    stopRoofMovement(false);  // Pass false to skip status update
 
     // Publish status change due to timeout
     publishStatusToMQTT();
@@ -378,6 +433,9 @@ bool startOpeningRoof() {
 
   // Step 3: Send roof control button press (K2 relay)
   sendButtonPress();
+
+  // Clear any previous error state since we're starting a new movement
+  roofErrorReason = "";
 
   // Update roof status
   roofStatus = ROOF_OPENING;
@@ -467,6 +525,9 @@ bool startClosingRoof() {
   // Step 3: Send roof control button press (K2 relay)
   sendButtonPress();
 
+  // Clear any previous error state since we're starting a new movement
+  roofErrorReason = "";
+
   // Update roof status
   roofStatus = ROOF_CLOSING;
   movementStartTime = millis();
@@ -480,12 +541,16 @@ bool startClosingRoof() {
 }
 
 // Stop roof movement
-bool stopRoofMovement() {
+// updateStatus: if true (default), updates roof status based on limit switches
+//               if false, preserves current status (used during timeout to keep ERROR state)
+bool stopRoofMovement(bool updateStatus) {
   // Send a button press to stop the movement (K2 relay)
   sendButtonPress();
 
-  // Update status based on limit switches
-  updateRoofStatus();
+  // Update status based on limit switches (unless caller wants to preserve current state)
+  if (updateStatus) {
+    updateRoofStatus();
+  }
 
   // Turn off the inverter if relay control is enabled (K1 relay)
   if (inverterRelayEnabled) {
@@ -502,6 +567,22 @@ bool stopRoofMovement() {
 
   Debug.println("Roof movement stopped");
   return true;
+}
+
+// Clear error state and reason (for recovery from error conditions)
+void clearRoofError() {
+  if (roofStatus == ROOF_ERROR) {
+    Debug.println("Clearing roof error state");
+    Debug.println("Previous error: " + roofErrorReason);
+
+    // Clear the error reason
+    roofErrorReason = "";
+
+    // Re-determine status based on current limit switch states
+    determineInitialRoofStatus();
+
+    Debug.println("Roof status after clearing error: " + getRoofStatusString());
+  }
 }
 
 // Send a button press to the roof controller
