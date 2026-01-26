@@ -8,6 +8,7 @@
 #include "mqtt_handler.h"
 #include "roof_controller.h"
 #include "park_sensor_udp.h"
+#include "gps_handler.h"
 #include "Debug.h"
 #include <HTTPClient.h>
 
@@ -147,11 +148,41 @@ void loadConfiguration() {
     inverterDelay2 = preferences.getULong(PREF_INVERTER_DELAY2, DEFAULT_INVERTER_DELAY2);
   }
 
+  // Load GPS settings
+  if (preferences.isKey(PREF_GPS_ENABLED)) {
+    gpsEnabled = preferences.getBool(PREF_GPS_ENABLED, false);
+  }
+  if (preferences.isKey(PREF_GPS_NTP_ENABLED)) {
+    gpsNtpEnabled = preferences.getBool(PREF_GPS_NTP_ENABLED, false);
+  }
+
+  // Load GPS pin settings
+  if (preferences.isKey(PREF_GPS_TX_PIN)) {
+    gpsTxPin = preferences.getInt(PREF_GPS_TX_PIN, DEFAULT_GPS_TX_PIN);
+  }
+  if (preferences.isKey(PREF_GPS_RX_PIN)) {
+    gpsRxPin = preferences.getInt(PREF_GPS_RX_PIN, DEFAULT_GPS_RX_PIN);
+  }
+  if (preferences.isKey(PREF_GPS_PPS_PIN)) {
+    gpsPpsPin = preferences.getInt(PREF_GPS_PPS_PIN, DEFAULT_GPS_PPS_PIN);
+  }
+
+  // Load timezone settings
+  if (preferences.isKey(PREF_TIMEZONE_OFFSET)) {
+    timezoneOffset = preferences.getShort(PREF_TIMEZONE_OFFSET, DEFAULT_TIMEZONE_OFFSET);
+  }
+  if (preferences.isKey(PREF_DST_ENABLED)) {
+    dstEnabled = preferences.getBool(PREF_DST_ENABLED, DEFAULT_DST_ENABLED);
+  }
+
   preferences.end();
 
   Debug.println("Configuration loaded from preferences");
   Debug.printf("Movement timeout: %lu ms (%lu seconds)\n", movementTimeout, movementTimeout / 1000);
   Debug.printf("Inverter Delay 1: %lu ms, Delay 2: %lu ms\n", inverterDelay1, inverterDelay2);
+  Debug.printf("GPS: %s, NTP Server: %s\n", gpsEnabled ? "Enabled" : "Disabled", gpsNtpEnabled ? "Enabled" : "Disabled");
+  Debug.printf("GPS Pins: TX=%d, RX=%d, PPS=%d\n", gpsTxPin, gpsRxPin, gpsPpsPin);
+  Debug.printf("Timezone: %+d minutes, DST: %s\n", timezoneOffset, dstEnabled ? "Enabled" : "Disabled");
 }
 
 // Save configuration to preferences
@@ -528,6 +559,16 @@ void initWebUI() {
 
   // API endpoint for real-time status
   webUiServer.on("/api/status", HTTP_GET, handleApiStatus);
+
+  // GPS control endpoints
+  webUiServer.on("/gps_enabled", HTTP_POST, handleGPSEnabled);
+  webUiServer.on("/gps_ntp_enabled", HTTP_POST, handleGPSNtpEnabled);
+  webUiServer.on("/gps_pins", HTTP_POST, handleGPSPins);
+  webUiServer.on("/api/gps_status", HTTP_GET, handleGPSStatus);
+
+  // Timezone control endpoints
+  webUiServer.on("/timezone_offset", HTTP_POST, handleTimezoneOffset);
+  webUiServer.on("/dst_enabled", HTTP_POST, handleDSTEnabled);
 
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
@@ -1005,7 +1046,7 @@ void handleClearError() {
 
 // API endpoint for real-time status updates (returns JSON)
 void handleApiStatus() {
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(1024);
 
   // Roof status
   doc["status"] = getRoofStatusString();
@@ -1023,8 +1064,185 @@ void handleApiStatus() {
   // Park sensor type
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
 
+  // Time status
+  doc["time_synced"] = timeSynced;
+  doc["rtc_present"] = rtcPresent;
+  TimeSource ts = getTimeSource();
+  doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
+  doc["current_time"] = getTimeString();
+  doc["current_date"] = getDateString();
+  doc["local_time"] = getLocalTimeString();
+  doc["local_date"] = getLocalDateString();
+  doc["timezone_offset"] = timezoneOffset;
+  doc["dst_enabled"] = dstEnabled;
+
+  // GPS status
+  doc["gps_enabled"] = gpsEnabled;
+  doc["ntp_enabled"] = gpsNtpEnabled;
+  if (gpsEnabled) {
+    GPSStatus gpsStatusData = getGPSStatus();
+    doc["gps_fix"] = gpsStatusData.hasFix;
+    doc["gps_satellites"] = gpsStatusData.satellites;
+    doc["gps_time"] = getGPSTimeString();
+    doc["gps_latitude"] = gpsStatusData.latitude;
+    doc["gps_longitude"] = gpsStatusData.longitude;
+  }
+
   String jsonResponse;
   serializeJson(doc, jsonResponse);
 
   webUiServer.send(200, "application/json", jsonResponse);
+}
+
+// ========== GPS CONTROL HANDLERS ==========
+
+// Handler for enabling/disabling GPS module
+void handleGPSEnabled() {
+  if (webUiServer.hasArg("enabled")) {
+    bool enabled = webUiServer.arg("enabled").equals("true");
+
+    setGPSEnabled(enabled);
+
+    Debug.printf("GPS %s via web interface\n", enabled ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "GPS " + String(enabled ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing enabled parameter");
+    Debug.println("GPS enabled error: Missing parameter");
+  }
+}
+
+// Handler for enabling/disabling NTP server
+void handleGPSNtpEnabled() {
+  if (webUiServer.hasArg("enabled")) {
+    bool enabled = webUiServer.arg("enabled").equals("true");
+
+    setGPSNtpEnabled(enabled);
+
+    Debug.printf("NTP server %s via web interface\n", enabled ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "NTP server " + String(enabled ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing enabled parameter");
+    Debug.println("NTP enabled error: Missing parameter");
+  }
+}
+
+// Handler for getting GPS and RTC status (JSON)
+void handleGPSStatus() {
+  GPSStatus status = getGPSStatus();
+  TimeSource ts = getTimeSource();
+
+  DynamicJsonDocument doc(1024);
+
+  // Time status
+  doc["time_synced"] = timeSynced;
+  doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
+  doc["current_time"] = getTimeString();
+  doc["current_date"] = getDateString();
+  doc["local_time"] = getLocalTimeString();
+  doc["local_date"] = getLocalDateString();
+  doc["unix_time"] = getCurrentUnixTime();
+
+  // Timezone settings
+  doc["timezone_offset"] = timezoneOffset;
+  doc["dst_enabled"] = dstEnabled;
+  doc["total_offset"] = getTotalOffset();
+
+  // RTC status
+  doc["rtc_present"] = rtcPresent;
+
+  // GPS status
+  doc["gps_enabled"] = gpsEnabled;
+  doc["ntp_enabled"] = gpsNtpEnabled;
+  doc["has_fix"] = status.hasFix;
+  doc["satellites"] = status.satellites;
+  doc["latitude"] = status.latitude;
+  doc["longitude"] = status.longitude;
+  doc["altitude"] = status.altitude;
+  doc["gps_time"] = getGPSTimeString();
+  doc["gps_date"] = getGPSDateString();
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+
+  webUiServer.send(200, "application/json", jsonResponse);
+}
+
+// Handler for setting timezone offset
+void handleTimezoneOffset() {
+  if (webUiServer.hasArg("offset")) {
+    int16_t offset = webUiServer.arg("offset").toInt();
+
+    // Validate offset (-720 to +840 minutes = UTC-12 to UTC+14)
+    if (offset < -720 || offset > 840) {
+      webUiServer.send(400, "text/plain", "Invalid timezone offset (must be -720 to +840 minutes)");
+      return;
+    }
+
+    setTimezoneOffset(offset);
+
+    Debug.printf("Timezone offset set to %d minutes via web interface\n", offset);
+    webUiServer.send(200, "text/plain", "Timezone offset set to " + String(offset) + " minutes");
+  } else {
+    webUiServer.send(400, "text/plain", "Missing offset parameter");
+    Debug.println("Timezone offset error: Missing parameter");
+  }
+}
+
+// Handler for enabling/disabling DST
+void handleDSTEnabled() {
+  if (webUiServer.hasArg("enabled")) {
+    bool enabled = webUiServer.arg("enabled").equals("true");
+
+    setDSTEnabled(enabled);
+
+    Debug.printf("DST %s via web interface\n", enabled ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "DST " + String(enabled ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing enabled parameter");
+    Debug.println("DST enabled error: Missing parameter");
+  }
+}
+
+// Handler for setting GPS pin configuration
+void handleGPSPins() {
+  bool changed = false;
+
+  if (webUiServer.hasArg("tx_pin")) {
+    int txPin = webUiServer.arg("tx_pin").toInt();
+    if (txPin >= 0 && txPin <= 48) {  // Valid ESP32-S3 GPIO range
+      gpsTxPin = txPin;
+      changed = true;
+    }
+  }
+
+  if (webUiServer.hasArg("rx_pin")) {
+    int rxPin = webUiServer.arg("rx_pin").toInt();
+    if (rxPin >= -1 && rxPin <= 48) {  // -1 = disabled
+      gpsRxPin = rxPin;
+      changed = true;
+    }
+  }
+
+  if (webUiServer.hasArg("pps_pin")) {
+    int ppsPin = webUiServer.arg("pps_pin").toInt();
+    if (ppsPin >= -1 && ppsPin <= 48) {  // -1 = disabled
+      gpsPpsPin = ppsPin;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    // Save to preferences
+    Preferences prefs;
+    prefs.begin(PREFERENCES_NAMESPACE, false);
+    prefs.putInt(PREF_GPS_TX_PIN, gpsTxPin);
+    prefs.putInt(PREF_GPS_RX_PIN, gpsRxPin);
+    prefs.putInt(PREF_GPS_PPS_PIN, gpsPpsPin);
+    prefs.end();
+
+    Debug.printf("GPS pins updated: TX=%d, RX=%d, PPS=%d\n", gpsTxPin, gpsRxPin, gpsPpsPin);
+    webUiServer.send(200, "text/plain", "GPS pins saved. Restart required for changes to take effect.");
+  } else {
+    webUiServer.send(400, "text/plain", "No valid pin parameters provided");
+  }
 }

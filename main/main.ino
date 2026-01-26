@@ -36,6 +36,7 @@
 #include "mqtt_handler.h"
 #include "web_ui_handler.h"
 #include "park_sensor_udp.h"
+#include "gps_handler.h"
 
 // WiFi credentials and configuration
 char ssid[SSID_SIZE] = DEFAULT_WIFI_SSID;
@@ -60,7 +61,10 @@ void setup() {
   
   // Initialize roof controller hardware
   initializeRoofController();
-  
+
+  // Initialize RTC (DS3231) - do this early to have time available
+  initRTC();
+
   // Initialize WiFi
   initWiFi();
   
@@ -76,10 +80,22 @@ void setup() {
   
   // Initialize Alpaca API
   setupAlpacaAPI();
-  
+
   // Initialize Web UI
   initWebUI();
-  
+
+  // Initialize GPS if enabled
+  if (gpsEnabled) {
+    initGPS();
+  } else {
+    Debug.println("GPS is disabled");
+  }
+
+  // Initialize NTP server if enabled (works with GPS or RTC time)
+  if (gpsNtpEnabled) {
+    initNTP();
+  }
+
   Debug.println("Setup complete!");
   Debug.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
 }
@@ -131,7 +147,15 @@ void loop() {
   
   // Handle web UI requests
   handleWebUI();
-  
+
+  // Handle GPS data
+  if (gpsEnabled) {
+    handleGPS();
+  }
+
+  // Handle NTP server (independent of GPS - uses GPS or RTC time)
+  handleNTP();
+
   // Clear timed out park sensors periodically (every 5 minutes)
   static unsigned long lastSensorCleanup = 0;
   if (currentTime - lastSensorCleanup > 300000) {
@@ -147,6 +171,26 @@ void loop() {
                  WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected",
                  mqttClient.connected() ? "Connected" : "Disconnected",
                  ESP.getFreeHeap());
+    // Time source status
+    TimeSource ts = getTimeSource();
+    Debug.printf(2, "Time: %s %s UTC (Source: %s, RTC: %s)\n",
+                 getDateString().c_str(),
+                 getTimeString().c_str(),
+                 ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None"),
+                 isRTCPresent() ? "Present" : "Not found");
+    Debug.printf(2, "Local: %s %s (TZ: %+d min, DST: %s)\n",
+                 getLocalDateString().c_str(),
+                 getLocalTimeString().c_str(),
+                 timezoneOffset,
+                 dstEnabled ? "On" : "Off");
+    if (gpsEnabled) {
+      GPSStatus gpsStatusData = getGPSStatus();
+      Debug.printf(2, "GPS: Fix=%s, Sats=%d, Lat=%.6f, Lon=%.6f\n",
+                   gpsStatusData.hasFix ? "Yes" : "No",
+                   gpsStatusData.satellites,
+                   gpsStatusData.latitude,
+                   gpsStatusData.longitude);
+    }
     lastStatusUpdate = currentTime;
   }
   

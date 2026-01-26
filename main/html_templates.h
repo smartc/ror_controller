@@ -11,6 +11,7 @@
 #include "mqtt_handler.h"
 #include "roof_controller.h"
 #include "park_sensor_udp.h"
+#include "gps_handler.h"
 #include <WiFi.h>
 
 // Forward declarations of template components
@@ -30,6 +31,7 @@ String getSwitchConfigCard();
 String getSystemManagementCard();
 String getStatusCard();
 String getParkSensorConfigCard();  // New function for park sensor configuration
+String getGPSConfigCard();         // GPS and NTP server configuration
 
 // Common CSS styles used across pages - Dark Theme
 inline String getCommonStyles() {
@@ -343,6 +345,104 @@ inline String getControlJS() {
     "function refreshSensors() {\n"
     "  location.reload();\n"
     "}\n"
+
+    // GPS toggle functions
+    "function toggleGPS(enabled) {\n"
+    "  fetch('/gps_enabled', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'enabled=' + enabled\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    document.getElementById('gpsEnabledText').innerHTML = enabled ? '(ENABLED)' : '(DISABLED)';\n"
+    "    // Enable/disable NTP toggle based on GPS state\n"
+    "    const ntpToggle = document.getElementById('gpsNtpEnabledToggle');\n"
+    "    if (ntpToggle) ntpToggle.disabled = !enabled;\n"
+    "    setTimeout(() => location.reload(), 500);\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error toggling GPS: ' + err);\n"
+    "  });\n"
+    "}\n"
+
+    "function toggleGPSNtp(enabled) {\n"
+    "  fetch('/gps_ntp_enabled', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'enabled=' + enabled\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    document.getElementById('gpsNtpEnabledText').innerHTML = enabled ? '(ENABLED)' : '(DISABLED)';\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error toggling NTP server: ' + err);\n"
+    "  });\n"
+    "}\n"
+
+    // Timezone functions
+    "function setTimezone() {\n"
+    "  const offset = document.getElementById('timezoneOffset').value;\n"
+    "  fetch('/timezone_offset', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'offset=' + offset\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    alert(data);\n"
+    "    location.reload();\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error setting timezone: ' + err);\n"
+    "  });\n"
+    "}\n"
+
+    "function toggleDST(enabled) {\n"
+    "  fetch('/dst_enabled', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'enabled=' + enabled\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    document.getElementById('dstEnabledText').innerHTML = enabled ? '(ON)' : '(OFF)';\n"
+    "    location.reload();\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error toggling DST: ' + err);\n"
+    "  });\n"
+    "}\n"
+
+    // GPS pin configuration function
+    "function saveGPSPins() {\n"
+    "  const txPin = document.getElementById('gpsTxPin').value;\n"
+    "  const rxPin = document.getElementById('gpsRxPin').value;\n"
+    "  const ppsPin = document.getElementById('gpsPpsPin').value;\n"
+    "  fetch('/gps_pins', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'tx_pin=' + txPin + '&rx_pin=' + rxPin + '&pps_pin=' + ppsPin\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    alert(data);\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error saving GPS pins: ' + err);\n"
+    "  });\n"
+    "}\n"
     "</script>\n";
   
   return js;
@@ -624,7 +724,84 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   html += "</table>\n";
   html += "</div>\n";
-  
+
+  // GPS / RTC / NTP Status Card (show if GPS enabled or RTC present or NTP enabled)
+  if (gpsEnabled || rtcPresent || gpsNtpEnabled) {
+    GPSStatus gpsStatusData = getGPSStatus();
+    TimeSource timeSource = getTimeSource();
+
+    html += "<div class='status-card'>\n";
+    html += "<h2>Time / GPS / NTP Status</h2>\n";
+    html += "<table class='status-table'>\n";
+
+    // Time source
+    String timeSourceStr = "None";
+    if (timeSource == TIME_SOURCE_GPS) timeSourceStr = "GPS";
+    else if (timeSource == TIME_SOURCE_RTC) timeSourceStr = "RTC";
+    html += "<tr><th>Time Source</th><td>";
+    html += "<span class='status-indicator " + String(timeSynced ? "green" : "red") + "'></span> ";
+    html += timeSourceStr;
+    html += "</td></tr>\n";
+
+    // Current UTC time (with ID for real-time update)
+    // Local time display
+    int16_t totalOffset = timezoneOffset + (dstEnabled ? 60 : 0);
+    int16_t offsetHours = totalOffset / 60;
+    int16_t offsetMins = abs(totalOffset % 60);
+    char offsetStr[16];
+    snprintf(offsetStr, sizeof(offsetStr), "UTC%+d:%02d", offsetHours, offsetMins);
+
+    // Combined time row: UTC and Local side by side
+    html += "<tr><th>Time (UTC)</th><td><span id='utcTimeDisplay'>" + getTimeString() + "</span>";
+    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local (" + String(offsetStr) + "):</span> <span id='localTimeDisplay'>" + getLocalTimeString() + "</span></td></tr>\n";
+
+    // Combined date row: UTC and Local side by side
+    html += "<tr><th>Date (UTC)</th><td><span id='utcDateDisplay'>" + getDateString() + "</span>";
+    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local:</span> <span id='localDateDisplay'>" + getLocalDateString() + "</span></td></tr>\n";
+
+    // RTC status
+    html += "<tr><th>RTC (DS3231)</th><td>";
+    html += "<span class='status-indicator " + String(rtcPresent ? "green" : "red") + "'></span> ";
+    html += rtcPresent ? "Present" : "Not detected";
+    html += "</td></tr>\n";
+
+    if (gpsEnabled) {
+      // GPS Fix status
+      html += "<tr><th>GPS Fix</th><td>";
+      html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
+      html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
+      html += "</td></tr>\n";
+
+      // Satellites
+      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + "</td></tr>\n";
+
+      // GPS Position (if fix available)
+      if (gpsStatusData.hasFix) {
+        char latStr[16], lonStr[16];
+        snprintf(latStr, sizeof(latStr), "%.6f", gpsStatusData.latitude);
+        snprintf(lonStr, sizeof(lonStr), "%.6f", gpsStatusData.longitude);
+        html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>\n";
+        html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>\n";
+      }
+    }
+
+    // NTP Server status
+    html += "<tr><th>NTP Server</th><td>";
+    html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
+    if (gpsNtpEnabled && timeSynced) {
+      html += "Active (port 123)";
+    } else if (gpsNtpEnabled) {
+      html += "Waiting for time sync";
+    } else {
+      html += "Disabled";
+    }
+    html += "</td></tr>\n";
+
+    html += "</table>\n";
+    html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Configure in <a href='/setup'>Device Setup</a></p>\n";
+    html += "</div>\n";
+  }
+
   // Simple JavaScript for real-time status updates
   html += "<script>\n";
   html += "document.addEventListener('DOMContentLoaded', function() {\n";
@@ -674,6 +851,15 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "          statusIndicator.className += 'red blink';\n";
   html += "        }\n";
   html += "      }\n";
+  html += "      // Update time displays in real-time\n";
+  html += "      const utcTime = document.getElementById('utcTimeDisplay');\n";
+  html += "      const utcDate = document.getElementById('utcDateDisplay');\n";
+  html += "      const localTime = document.getElementById('localTimeDisplay');\n";
+  html += "      const localDate = document.getElementById('localDateDisplay');\n";
+  html += "      if (utcTime && data.current_time) utcTime.textContent = data.current_time;\n";
+  html += "      if (utcDate && data.current_date) utcDate.textContent = data.current_date;\n";
+  html += "      if (localTime && data.local_time) localTime.textContent = data.local_time;\n";
+  html += "      if (localDate && data.local_date) localDate.textContent = data.local_date;\n";
   html += "    })\n";
   html += "    .catch(error => console.error('Error updating status:', error));\n";
   html += "}\n\n";
@@ -1097,6 +1283,204 @@ inline String getParkSensorConfigCard() {
   return html;
 }
 
+// GPS and RTC Configuration card for the setup page
+inline String getGPSConfigCard() {
+  GPSStatus status = getGPSStatus();
+  TimeSource timeSource = getTimeSource();
+
+  String html = "<div class='card'>";
+  html += "<h2>GPS / RTC / NTP Configuration</h2>";
+
+  // Time Status Section
+  html += "<div class='toggle-group'>";
+  html += "<h3>Time Status</h3>";
+
+  html += "<table class='status-table'>";
+
+  // Time source
+  String timeSourceStr = "None";
+  if (timeSource == TIME_SOURCE_GPS) timeSourceStr = "GPS";
+  else if (timeSource == TIME_SOURCE_RTC) timeSourceStr = "RTC";
+  html += "<tr><th>Time Source</th><td>";
+  html += "<span class='status-indicator " + String(timeSynced ? "green" : "red") + "'></span> ";
+  html += timeSourceStr + (timeSynced ? " (synced)" : " (not synced)");
+  html += "</td></tr>";
+
+  // Current time
+  html += "<tr><th>Current Time (UTC)</th><td>" + getTimeString() + "</td></tr>";
+  html += "<tr><th>Current Date</th><td>" + getDateString() + "</td></tr>";
+
+  // RTC status
+  html += "<tr><th>RTC (DS3231)</th><td>";
+  html += "<span class='status-indicator " + String(rtcPresent ? "green" : "red") + "'></span> ";
+  html += rtcPresent ? "Present (I2C 0x68)" : "Not detected";
+  html += "</td></tr>";
+
+  // GPS Enabled status
+  html += "<tr><th>GPS Module</th><td>";
+  html += "<span class='status-indicator " + String(gpsEnabled ? "green" : "red") + "'></span> ";
+  html += gpsEnabled ? "Enabled" : "Disabled";
+  html += "</td></tr>";
+
+  if (gpsEnabled) {
+    // Fix status
+    html += "<tr><th>GPS Fix</th><td>";
+    html += "<span class='status-indicator " + String(status.hasFix ? "green" : "red blink") + "'></span> ";
+    html += status.hasFix ? "Valid Fix" : "No Fix";
+    html += "</td></tr>";
+
+    // Satellites
+    html += "<tr><th>Satellites</th><td>" + String(status.satellites) + "</td></tr>";
+
+    // Position (if available)
+    if (status.hasFix) {
+      char latStr[16], lonStr[16];
+      snprintf(latStr, sizeof(latStr), "%.6f", status.latitude);
+      snprintf(lonStr, sizeof(lonStr), "%.6f", status.longitude);
+      html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>";
+      html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>";
+      html += "<tr><th>Altitude</th><td>" + String(status.altitude, 1) + " m</td></tr>";
+    }
+
+    // Last update
+    if (status.lastUpdate > 0) {
+      unsigned long timeDiff = (millis() - status.lastUpdate) / 1000;
+      String lastSeenStr = String(timeDiff) + "s ago";
+      html += "<tr><th>GPS Last Update</th><td>" + lastSeenStr + "</td></tr>";
+    }
+  }
+
+  // NTP Server status
+  html += "<tr><th>NTP Server</th><td>";
+  html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
+  if (gpsNtpEnabled && timeSynced) {
+    html += "Active on port 123";
+  } else if (gpsNtpEnabled) {
+    html += "Waiting for time sync";
+  } else {
+    html += "Disabled";
+  }
+  html += "</td></tr>";
+
+  html += "</table>";
+  html += "</div>";  // End status toggle-group
+
+  // Settings Section
+  html += "<div class='toggle-group'>";
+  html += "<h3>Settings</h3>";
+
+  html += "<div class='toggle-row'>";
+
+  // GPS Enable toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='gpsEnabledToggle'" + String(gpsEnabled ? " checked" : "") + " onchange='toggleGPS(this.checked)'>";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Enable GPS Module <strong id='gpsEnabledText'>(" + String(gpsEnabled ? "ENABLED" : "DISABLED") + ")</strong>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>";  // End toggle-row
+
+  html += "<div class='toggle-row'>";
+
+  // NTP Server Enable toggle (no longer requires GPS - works with RTC too)
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='gpsNtpEnabledToggle'" + String(gpsNtpEnabled ? " checked" : "") + " onchange='toggleGPSNtp(this.checked)'>";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Enable NTP Server <strong id='gpsNtpEnabledText'>(" + String(gpsNtpEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Provides NTP time service on UDP port 123 using GPS or RTC time</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>";  // End toggle-row
+
+  // GPS Pin Configuration Section
+  html += "<h3>GPS Pin Configuration</h3>";
+  html += "<p style='color: #b0b0b0; margin-bottom: 10px;'><small>Set to -1 to disable a pin. Changes require restart.</small></p>";
+
+  html += "<div style='display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;'>";
+
+  // TX Pin (GPS -> ESP32, required for receiving GPS data)
+  html += "<div>";
+  html += "<label for='gpsTxPin' style='display: block; margin-bottom: 5px;'>GPS TX Pin (data in):</label>";
+  html += "<input type='number' id='gpsTxPin' value='" + String(gpsTxPin) + "' min='0' max='48' style='width: 80px;'>";
+  html += "</div>";
+
+  // RX Pin (ESP32 -> GPS, optional for sending commands)
+  html += "<div>";
+  html += "<label for='gpsRxPin' style='display: block; margin-bottom: 5px;'>GPS RX Pin (cmd out):</label>";
+  html += "<input type='number' id='gpsRxPin' value='" + String(gpsRxPin) + "' min='-1' max='48' style='width: 80px;'>";
+  html += "</div>";
+
+  // PPS Pin (optional, for precise timing)
+  html += "<div>";
+  html += "<label for='gpsPpsPin' style='display: block; margin-bottom: 5px;'>GPS PPS Pin:</label>";
+  html += "<input type='number' id='gpsPpsPin' value='" + String(gpsPpsPin) + "' min='-1' max='48' style='width: 80px;'>";
+  html += "</div>";
+
+  html += "<div style='align-self: flex-end;'>";
+  html += "<button onclick='saveGPSPins()' class='button-primary' style='padding: 8px 15px;'>Save Pins</button>";
+  html += "</div>";
+
+  html += "</div>";
+
+  // Timezone Settings Section
+  html += "<h3>Timezone Settings</h3>";
+
+  // Timezone offset input
+  html += "<div style='margin-bottom: 15px;'>";
+  html += "<label for='timezoneOffset' style='display: inline-block; width: 200px;'>Timezone Offset (minutes from UTC):</label>";
+  html += "<input type='number' id='timezoneOffset' value='" + String(timezoneOffset) + "' min='-720' max='840' style='width: 100px; margin-right: 10px;'>";
+  html += "<button onclick='setTimezone()' class='button-primary' style='padding: 8px 15px;'>Set</button>";
+  html += "<br><small style='color: #b0b0b0; margin-left: 200px;'>Examples: -300 (EST/UTC-5), -480 (PST/UTC-8), 60 (CET/UTC+1), 330 (IST/UTC+5:30)</small>";
+  html += "</div>";
+
+  // DST toggle
+  html += "<div class='toggle-row'>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='dstEnabledToggle'" + String(dstEnabled ? " checked" : "") + " onchange='toggleDST(this.checked)'>";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Daylight Saving Time <strong id='dstEnabledText'>(" + String(dstEnabled ? "ON" : "OFF") + ")</strong><br>";
+  html += "<small>Adds 1 hour to local time when enabled</small>";
+  html += "</span>";
+  html += "</div>";
+  html += "</div>";  // End toggle-row
+
+  // Current local time display
+  int16_t totalOffset = timezoneOffset + (dstEnabled ? 60 : 0);
+  int16_t offsetHours = totalOffset / 60;
+  int16_t offsetMins = abs(totalOffset % 60);
+  char offsetStr[16];
+  snprintf(offsetStr, sizeof(offsetStr), "UTC%+d:%02d", offsetHours, offsetMins);
+  html += "<div style='margin-top: 10px; padding: 10px; background-color: #333; border-radius: 4px;'>";
+  html += "<p style='margin: 5px 0; color: #81c784;'>Current Local Time (" + String(offsetStr) + "): <strong id='localTimeDisplay'>" + getLocalTimeString() + "</strong></p>";
+  html += "</div>";
+
+  html += "</div>";  // End settings toggle-group
+
+  // Usage information
+  html += "<div style='margin-top: 15px; padding: 10px; background-color: #333; border-radius: 4px; font-size: 0.9em;'>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><strong>NTP Client Configuration:</strong></p>";
+  html += "<p style='margin: 5px 0; color: #81c784;'>Server: <code>" + WiFi.localIP().toString() + "</code></p>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Linux: <code>ntpdate -q " + WiFi.localIP().toString() + "</code></small></p>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Windows: <code>w32tm /stripchart /computer:" + WiFi.localIP().toString() + "</code></small></p>";
+  html += "<p style='margin: 5px 0; color: #ffb74d;'><small>Note: NTP server requires time to be synced from GPS or RTC</small></p>";
+  html += "</div>";
+
+  html += "</div>";  // End card
+
+  return html;
+}
+
 // System management card for the setup page
 inline String getSystemManagementCard() {
   String html = "<div class='card'>";
@@ -1196,7 +1580,10 @@ inline String getSetupPage() {
   
   // Park Sensor Configuration Card
   html += getParkSensorConfigCard();
-  
+
+  // GPS Configuration Card
+  html += getGPSConfigCard();
+
   // WiFi Settings Card
   html += getWifiSettingsCard();
   
@@ -1439,13 +1826,11 @@ inline String getRoofControlPage() {
     html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'><strong>START/STOP:</strong> Mimics physical button | <strong>OPEN/CLOSE:</strong> Intelligent control</p>\n";
   }
 
-  // Clear Error button - only show when in error state
-  if (roofStatus == ROOF_ERROR) {
-    html += "<div style='margin-top: 15px;'>\n";
-    html += "<button class='btn' onclick='clearRoofError()' style='background-color: #e74c3c; font-size: 16px; padding: 10px 20px;'>Clear Error</button>\n";
-    html += "<p style='font-size: 12px; color: #e74c3c; margin-top: 5px;'>Clear error state and re-check limit switches</p>\n";
-    html += "</div>\n";
-  }
+  // Clear Error button - always rendered, visibility controlled by JavaScript
+  html += "<div id='clearErrorDiv' style='margin-top: 15px; display: " + String(roofStatus == ROOF_ERROR ? "block" : "none") + ";'>\n";
+  html += "<button class='btn' onclick='clearRoofError()' style='background-color: #e74c3c; font-size: 16px; padding: 10px 20px;'>Clear Error</button>\n";
+  html += "<p style='font-size: 12px; color: #e74c3c; margin-top: 5px;'>Clear error state and re-check limit switches</p>\n";
+  html += "</div>\n";
 
   html += "</div>\n";
   html += "</div>\n";
@@ -1592,6 +1977,12 @@ inline String getRoofControlPage() {
   html += "          openCloseButton.style.opacity = '1';\n";
   html += "          openCloseButton.style.cursor = 'pointer';\n";
   html += "        }\n";
+  html += "      }\n\n";
+
+  html += "      // Show/hide Clear Error button based on error state\n";
+  html += "      const clearErrorDiv = document.getElementById('clearErrorDiv');\n";
+  html += "      if (clearErrorDiv) {\n";
+  html += "        clearErrorDiv.style.display = (data.status === 'Error') ? 'block' : 'none';\n";
   html += "      }\n\n";
 
   html += "      // Update open limit switch\n";
