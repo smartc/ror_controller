@@ -34,6 +34,10 @@ const int SNOW_SENSOR_RS485_RO = 41;        // RS485 RO (Receiver Output)
 const int SNOW_SENSOR_RS485_RE_DE = 39;     // RS485 RE/DE (Receiver Enable / Driver Enable)
 const int SNOW_SENSOR_RS485_DI = 40;        // RS485 DI (Driver Input)
 
+// GPS Module Pins
+const int GPS_TX_PIN = 14;                  // GPS TX -> ESP32 RX (GPIO14)
+const int GPS_RX_PIN = 13;                  // GPS RX -> ESP32 TX (GPIO13)
+
 // Sensor Pins - defined as extern, will be set at runtime based on preferences
 extern int LIMIT_SWITCH_OPEN_PIN;           // Limit switch at roof open position
 extern int LIMIT_SWITCH_CLOSED_PIN;         // Limit switch at roof closed position
@@ -68,6 +72,10 @@ const unsigned long DEFAULT_INVERTER_DELAY2 = 1500;  // Default: 1500ms
 
 // Safety Settings
 extern bool bypassParkSensor;           // Software bypass state for telescope park sensors
+
+// GPS Settings
+extern bool gpsEnabled;                 // Enable/disable GPS module
+extern bool gpsNtpEnabled;              // Enable/disable NTP server functionality
 
 // UDP Park Sensor Settings
 #define PREF_PARK_SENSOR_TYPE "parkSensorType"
@@ -129,6 +137,11 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_INVERTER_SOFTPWR_ENABLED "inverterSoftEn"
 #define PREF_INVERTER_DELAY1 "inverterDelay1"
 #define PREF_INVERTER_DELAY2 "inverterDelay2"
+
+// GPS Configuration
+#define PREF_GPS_ENABLED "gpsEnabled"
+#define PREF_GPS_NTP_ENABLED "gpsNtpEnabled"
+const int NTP_PORT = 123;                   // Standard NTP port
 
 // Enum for roof status - matches ASCOM ShutterStatus values
 enum RoofStatus {

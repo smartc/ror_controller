@@ -11,6 +11,7 @@
 #include "mqtt_handler.h"
 #include "roof_controller.h"
 #include "park_sensor_udp.h"
+#include "gps_handler.h"
 #include <WiFi.h>
 
 // Forward declarations of template components
@@ -30,6 +31,7 @@ String getSwitchConfigCard();
 String getSystemManagementCard();
 String getStatusCard();
 String getParkSensorConfigCard();  // New function for park sensor configuration
+String getGPSConfigCard();         // GPS and NTP server configuration
 
 // Common CSS styles used across pages - Dark Theme
 inline String getCommonStyles() {
@@ -343,6 +345,45 @@ inline String getControlJS() {
     "function refreshSensors() {\n"
     "  location.reload();\n"
     "}\n"
+
+    // GPS toggle functions
+    "function toggleGPS(enabled) {\n"
+    "  fetch('/gps_enabled', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'enabled=' + enabled\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    document.getElementById('gpsEnabledText').innerHTML = enabled ? '(ENABLED)' : '(DISABLED)';\n"
+    "    // Enable/disable NTP toggle based on GPS state\n"
+    "    const ntpToggle = document.getElementById('gpsNtpEnabledToggle');\n"
+    "    if (ntpToggle) ntpToggle.disabled = !enabled;\n"
+    "    setTimeout(() => location.reload(), 500);\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error toggling GPS: ' + err);\n"
+    "  });\n"
+    "}\n"
+
+    "function toggleGPSNtp(enabled) {\n"
+    "  fetch('/gps_ntp_enabled', {\n"
+    "    method: 'POST',\n"
+    "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
+    "    body: 'enabled=' + enabled\n"
+    "  })\n"
+    "  .then(response => response.text())\n"
+    "  .then(data => {\n"
+    "    console.log(data);\n"
+    "    document.getElementById('gpsNtpEnabledText').innerHTML = enabled ? '(ENABLED)' : '(DISABLED)';\n"
+    "  })\n"
+    "  .catch(err => {\n"
+    "    console.error('Error:', err);\n"
+    "    alert('Error toggling NTP server: ' + err);\n"
+    "  });\n"
+    "}\n"
     "</script>\n";
   
   return js;
@@ -624,7 +665,39 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   html += "</table>\n";
   html += "</div>\n";
-  
+
+  // GPS Status Card (if GPS is enabled)
+  if (gpsEnabled) {
+    GPSStatus gpsStatusData = getGPSStatus();
+
+    html += "<div class='status-card'>\n";
+    html += "<h2>GPS / NTP Status</h2>\n";
+    html += "<table class='status-table'>\n";
+
+    // GPS Fix status
+    html += "<tr><th>GPS Fix</th><td>";
+    html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
+    html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
+    html += "</td></tr>\n";
+
+    // Satellites
+    html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + "</td></tr>\n";
+
+    // GPS Time
+    html += "<tr><th>GPS Time (UTC)</th><td>" + getGPSTimeString() + "</td></tr>\n";
+    html += "<tr><th>GPS Date</th><td>" + getGPSDateString() + "</td></tr>\n";
+
+    // NTP Server status
+    html += "<tr><th>NTP Server</th><td>";
+    html += "<span class='status-indicator " + String(gpsNtpEnabled ? "green" : "red") + "'></span> ";
+    html += gpsNtpEnabled ? "Active (port 123)" : "Disabled";
+    html += "</td></tr>\n";
+
+    html += "</table>\n";
+    html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Configure GPS in <a href='/setup'>Device Setup</a></p>\n";
+    html += "</div>\n";
+  }
+
   // Simple JavaScript for real-time status updates
   html += "<script>\n";
   html += "document.addEventListener('DOMContentLoaded', function() {\n";
@@ -1097,6 +1170,116 @@ inline String getParkSensorConfigCard() {
   return html;
 }
 
+// GPS Configuration card for the setup page
+inline String getGPSConfigCard() {
+  GPSStatus status = getGPSStatus();
+
+  String html = "<div class='card'>";
+  html += "<h2>GPS / NTP Server Configuration</h2>";
+
+  // GPS Status Section
+  html += "<div class='toggle-group'>";
+  html += "<h3>GPS Status</h3>";
+
+  html += "<table class='status-table'>";
+
+  // GPS Enabled status
+  html += "<tr><th>GPS Module</th><td>";
+  html += "<span class='status-indicator " + String(gpsEnabled ? "green" : "red") + "'></span> ";
+  html += gpsEnabled ? "Enabled" : "Disabled";
+  html += "</td></tr>";
+
+  if (gpsEnabled) {
+    // Fix status
+    html += "<tr><th>GPS Fix</th><td>";
+    html += "<span class='status-indicator " + String(status.hasFix ? "green" : "red blink") + "'></span> ";
+    html += status.hasFix ? "Valid Fix" : "No Fix";
+    html += "</td></tr>";
+
+    // Satellites
+    html += "<tr><th>Satellites</th><td>" + String(status.satellites) + "</td></tr>";
+
+    // Date/Time
+    html += "<tr><th>GPS Date</th><td>" + getGPSDateString() + "</td></tr>";
+    html += "<tr><th>GPS Time (UTC)</th><td>" + getGPSTimeString() + "</td></tr>";
+
+    // Position (if available)
+    if (status.hasFix) {
+      char latStr[16], lonStr[16];
+      snprintf(latStr, sizeof(latStr), "%.6f", status.latitude);
+      snprintf(lonStr, sizeof(lonStr), "%.6f", status.longitude);
+      html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>";
+      html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>";
+      html += "<tr><th>Altitude</th><td>" + String(status.altitude, 1) + " m</td></tr>";
+    }
+
+    // NTP Server status
+    html += "<tr><th>NTP Server</th><td>";
+    html += "<span class='status-indicator " + String(gpsNtpEnabled ? "green" : "red") + "'></span> ";
+    html += gpsNtpEnabled ? "Active on port 123" : "Disabled";
+    html += "</td></tr>";
+
+    // Last update
+    if (status.lastUpdate > 0) {
+      unsigned long timeDiff = (millis() - status.lastUpdate) / 1000;
+      String lastSeenStr = String(timeDiff) + "s ago";
+      html += "<tr><th>Last Update</th><td>" + lastSeenStr + "</td></tr>";
+    }
+  }
+
+  html += "</table>";
+  html += "</div>";  // End status toggle-group
+
+  // GPS Settings Section
+  html += "<div class='toggle-group'>";
+  html += "<h3>GPS Settings</h3>";
+
+  html += "<div class='toggle-row'>";
+
+  // GPS Enable toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='gpsEnabledToggle'" + String(gpsEnabled ? " checked" : "") + " onchange='toggleGPS(this.checked)'>";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Enable GPS Module <strong id='gpsEnabledText'>(" + String(gpsEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>GPS connected to GPIO" + String(GPS_TX_PIN) + " (RX) and GPIO" + String(GPS_RX_PIN) + " (TX)</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>";  // End toggle-row
+
+  html += "<div class='toggle-row'>";
+
+  // NTP Server Enable toggle
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='gpsNtpEnabledToggle'" + String(gpsNtpEnabled ? " checked" : "") + " onchange='toggleGPSNtp(this.checked)'" + String(gpsEnabled ? "" : " disabled") + ">";
+  html += "<span class='slider'></span>";
+  html += "</label>";
+  html += "<span class='switch-label'>";
+  html += "Enable NTP Server <strong id='gpsNtpEnabledText'>(" + String(gpsNtpEnabled ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Provides NTP time service on UDP port 123 using GPS time</small>";
+  html += "</span>";
+  html += "</div>";
+
+  html += "</div>";  // End toggle-row
+  html += "</div>";  // End settings toggle-group
+
+  // Usage information
+  html += "<div style='margin-top: 15px; padding: 10px; background-color: #333; border-radius: 4px; font-size: 0.9em;'>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><strong>NTP Client Configuration:</strong></p>";
+  html += "<p style='margin: 5px 0; color: #81c784;'>Server: <code>" + WiFi.localIP().toString() + "</code></p>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Linux: <code>ntpdate -q " + WiFi.localIP().toString() + "</code></small></p>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Windows: <code>w32tm /stripchart /computer:" + WiFi.localIP().toString() + "</code></small></p>";
+  html += "</div>";
+
+  html += "</div>";  // End card
+
+  return html;
+}
+
 // System management card for the setup page
 inline String getSystemManagementCard() {
   String html = "<div class='card'>";
@@ -1196,7 +1379,10 @@ inline String getSetupPage() {
   
   // Park Sensor Configuration Card
   html += getParkSensorConfigCard();
-  
+
+  // GPS Configuration Card
+  html += getGPSConfigCard();
+
   // WiFi Settings Card
   html += getWifiSettingsCard();
   

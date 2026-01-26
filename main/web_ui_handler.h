@@ -10,6 +10,7 @@
 #include <Preferences.h>
 #include "config.h"
 #include "park_sensor_udp.h"
+#include "gps_handler.h"
 #include <ElegantOTA.h>
 
 // External references
@@ -63,5 +64,10 @@ void handleClearError();             // Clear error state and re-check limit swi
 
 // API endpoint for real-time status updates
 void handleApiStatus();              // Return JSON status for AJAX polling
+
+// GPS control handlers
+void handleGPSEnabled();             // Enable/disable GPS module
+void handleGPSNtpEnabled();          // Enable/disable NTP server
+void handleGPSStatus();              // Get GPS status (JSON)
 
 #endif // WEB_UI_HANDLER_H

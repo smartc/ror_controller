@@ -36,6 +36,7 @@
 #include "mqtt_handler.h"
 #include "web_ui_handler.h"
 #include "park_sensor_udp.h"
+#include "gps_handler.h"
 
 // WiFi credentials and configuration
 char ssid[SSID_SIZE] = DEFAULT_WIFI_SSID;
@@ -76,10 +77,17 @@ void setup() {
   
   // Initialize Alpaca API
   setupAlpacaAPI();
-  
+
   // Initialize Web UI
   initWebUI();
-  
+
+  // Initialize GPS if enabled
+  if (gpsEnabled) {
+    initGPS();
+  } else {
+    Debug.println("GPS is disabled");
+  }
+
   Debug.println("Setup complete!");
   Debug.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
 }
@@ -131,7 +139,13 @@ void loop() {
   
   // Handle web UI requests
   handleWebUI();
-  
+
+  // Handle GPS data and NTP server
+  if (gpsEnabled) {
+    handleGPS();
+    handleNTP();
+  }
+
   // Clear timed out park sensors periodically (every 5 minutes)
   static unsigned long lastSensorCleanup = 0;
   if (currentTime - lastSensorCleanup > 300000) {
@@ -147,6 +161,14 @@ void loop() {
                  WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected",
                  mqttClient.connected() ? "Connected" : "Disconnected",
                  ESP.getFreeHeap());
+    if (gpsEnabled) {
+      GPSStatus gpsStatusData = getGPSStatus();
+      Debug.printf(2, "GPS: Fix=%s, Sats=%d, Time=%s %s\n",
+                   gpsStatusData.hasFix ? "Yes" : "No",
+                   gpsStatusData.satellites,
+                   getGPSDateString().c_str(),
+                   getGPSTimeString().c_str());
+    }
     lastStatusUpdate = currentTime;
   }
   

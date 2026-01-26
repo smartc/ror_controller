@@ -8,6 +8,7 @@
 #include "mqtt_handler.h"
 #include "roof_controller.h"
 #include "park_sensor_udp.h"
+#include "gps_handler.h"
 #include "Debug.h"
 #include <HTTPClient.h>
 
@@ -147,11 +148,20 @@ void loadConfiguration() {
     inverterDelay2 = preferences.getULong(PREF_INVERTER_DELAY2, DEFAULT_INVERTER_DELAY2);
   }
 
+  // Load GPS settings
+  if (preferences.isKey(PREF_GPS_ENABLED)) {
+    gpsEnabled = preferences.getBool(PREF_GPS_ENABLED, false);
+  }
+  if (preferences.isKey(PREF_GPS_NTP_ENABLED)) {
+    gpsNtpEnabled = preferences.getBool(PREF_GPS_NTP_ENABLED, false);
+  }
+
   preferences.end();
 
   Debug.println("Configuration loaded from preferences");
   Debug.printf("Movement timeout: %lu ms (%lu seconds)\n", movementTimeout, movementTimeout / 1000);
   Debug.printf("Inverter Delay 1: %lu ms, Delay 2: %lu ms\n", inverterDelay1, inverterDelay2);
+  Debug.printf("GPS: %s, NTP Server: %s\n", gpsEnabled ? "Enabled" : "Disabled", gpsNtpEnabled ? "Enabled" : "Disabled");
 }
 
 // Save configuration to preferences
@@ -528,6 +538,11 @@ void initWebUI() {
 
   // API endpoint for real-time status
   webUiServer.on("/api/status", HTTP_GET, handleApiStatus);
+
+  // GPS control endpoints
+  webUiServer.on("/gps_enabled", HTTP_POST, handleGPSEnabled);
+  webUiServer.on("/gps_ntp_enabled", HTTP_POST, handleGPSNtpEnabled);
+  webUiServer.on("/api/gps_status", HTTP_GET, handleGPSStatus);
 
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
@@ -1005,7 +1020,7 @@ void handleClearError() {
 
 // API endpoint for real-time status updates (returns JSON)
 void handleApiStatus() {
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(768);
 
   // Roof status
   doc["status"] = getRoofStatusString();
@@ -1022,6 +1037,71 @@ void handleApiStatus() {
 
   // Park sensor type
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
+
+  // GPS status
+  doc["gps_enabled"] = gpsEnabled;
+  if (gpsEnabled) {
+    GPSStatus gpsStatusData = getGPSStatus();
+    doc["gps_fix"] = gpsStatusData.hasFix;
+    doc["gps_satellites"] = gpsStatusData.satellites;
+    doc["gps_time"] = getGPSTimeString();
+    doc["ntp_enabled"] = gpsNtpEnabled;
+  }
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+
+  webUiServer.send(200, "application/json", jsonResponse);
+}
+
+// ========== GPS CONTROL HANDLERS ==========
+
+// Handler for enabling/disabling GPS module
+void handleGPSEnabled() {
+  if (webUiServer.hasArg("enabled")) {
+    bool enabled = webUiServer.arg("enabled").equals("true");
+
+    setGPSEnabled(enabled);
+
+    Debug.printf("GPS %s via web interface\n", enabled ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "GPS " + String(enabled ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing enabled parameter");
+    Debug.println("GPS enabled error: Missing parameter");
+  }
+}
+
+// Handler for enabling/disabling NTP server
+void handleGPSNtpEnabled() {
+  if (webUiServer.hasArg("enabled")) {
+    bool enabled = webUiServer.arg("enabled").equals("true");
+
+    setGPSNtpEnabled(enabled);
+
+    Debug.printf("NTP server %s via web interface\n", enabled ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "NTP server " + String(enabled ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing enabled parameter");
+    Debug.println("NTP enabled error: Missing parameter");
+  }
+}
+
+// Handler for getting GPS status (JSON)
+void handleGPSStatus() {
+  GPSStatus status = getGPSStatus();
+
+  DynamicJsonDocument doc(512);
+
+  doc["gps_enabled"] = gpsEnabled;
+  doc["ntp_enabled"] = gpsNtpEnabled;
+  doc["has_fix"] = status.hasFix;
+  doc["satellites"] = status.satellites;
+  doc["latitude"] = status.latitude;
+  doc["longitude"] = status.longitude;
+  doc["altitude"] = status.altitude;
+  doc["time"] = getGPSTimeString();
+  doc["date"] = getGPSDateString();
+  doc["unix_time"] = getGPSUnixTime();
 
   String jsonResponse;
   serializeJson(doc, jsonResponse);
