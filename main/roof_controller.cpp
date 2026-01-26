@@ -245,8 +245,12 @@ void updateRoofStatus() {
       inverterRelayState = false;
       roofStatus = ROOF_OPEN;
     }
+    else if (roofStatus == ROOF_ERROR) {
+      // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
+      // Error must be explicitly cleared via clearRoofError() or by starting a new movement.
+    }
     else if (roofStatus != ROOF_OPEN) {
-      // Transitioning to OPEN from some other state (ERROR, etc.)
+      // Transitioning to OPEN from CLOSED state (manual movement detected)
       statusMessage = "Roof fully open";
       digitalWrite(INVERTER_PIN, LOW);
       inverterRelayState = false;
@@ -273,8 +277,12 @@ void updateRoofStatus() {
       inverterRelayState = false;
       roofStatus = ROOF_CLOSED;
     }
+    else if (roofStatus == ROOF_ERROR) {
+      // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
+      // Error must be explicitly cleared via clearRoofError() or by starting a new movement.
+    }
     else if (roofStatus != ROOF_CLOSED) {
-      // Transitioning to CLOSED from some other state (ERROR, etc.)
+      // Transitioning to CLOSED from OPEN state (manual movement detected)
       statusMessage = "Roof fully closed";
       digitalWrite(INVERTER_PIN, LOW);
       inverterRelayState = false;
