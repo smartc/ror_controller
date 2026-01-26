@@ -157,7 +157,7 @@ inline String getControlJS() {
     "  if (toggle && label) {\n"
     "    label.textContent = toggle.checked ? enabledText : disabledText;\n"
     "    if (toggleId === 'bypassToggle') {\n"
-    "      label.style.color = toggle.checked ? '#f44336' : '#333';\n"
+    "      label.style.color = toggle.checked ? '#f44336' : '#ffffff';\n"
     "    }\n"
     "  }\n"
     "}\n"
@@ -518,9 +518,16 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   String statusDisplayString = statusString;
   // Add error reason in parentheses if in error state
   if (statusString == "Error" && roofErrorReason.length() > 0) {
-    String trimmedReason = roofErrorReason;
-    trimmedReason.trim();
-    statusDisplayString = statusString + " (" + trimmedReason + ")";
+    // Check for timeout with no limit switches - show brief message
+    bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+    bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+      statusDisplayString = statusString + " (Timeout - manual intervention required)";
+    } else {
+      String trimmedReason = roofErrorReason;
+      trimmedReason.trim();
+      statusDisplayString = statusString + " (" + trimmedReason + ")";
+    }
   }
 
   if (statusString == "Open") {
@@ -846,7 +853,12 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
-  html += "          statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusText.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "          } else {\n";
+  html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
   html += "        } else {\n";
   html += "          statusText.textContent = data.status;\n";
   html += "        }\n";
@@ -1563,9 +1575,16 @@ inline String getSetupPage() {
   String statusDisplayString = statusString;
   // Add error reason in parentheses if in error state
   if (statusString == "Error" && roofErrorReason.length() > 0) {
-    String trimmedReason = roofErrorReason;
-    trimmedReason.trim();
-    statusDisplayString = statusString + " (" + trimmedReason + ")";
+    // Check for timeout with no limit switches - show brief message
+    bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+    bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+      statusDisplayString = statusString + " (Timeout - manual intervention required)";
+    } else {
+      String trimmedReason = roofErrorReason;
+      trimmedReason.trim();
+      statusDisplayString = statusString + " (" + trimmedReason + ")";
+    }
   }
   String statusClass = "";
   String indicatorClass = "";
@@ -1640,7 +1659,12 @@ inline String getSetupPage() {
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
-  html += "          statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusText.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "          } else {\n";
+  html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
   html += "        } else {\n";
   html += "          statusText.textContent = data.status;\n";
   html += "        }\n";
@@ -1679,7 +1703,7 @@ inline String getSetupPage() {
   html += "  const bypassToggle = document.getElementById('bypassToggle');";
   html += "  const bypassText = document.getElementById('bypassText');";
   html += "  if (bypassToggle && bypassText) {";
-  html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#333';";
+  html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#ffffff';";
   html += "  }";
   html += "  // Start status update polling\n";
   html += "  updateStatus();\n";
@@ -1731,9 +1755,16 @@ inline String getRoofControlPage() {
   String statusDisplayString = statusString;
   // Add error reason in parentheses if in error state
   if (statusString == "Error" && roofErrorReason.length() > 0) {
-    String trimmedReason = roofErrorReason;
-    trimmedReason.trim();
-    statusDisplayString = statusString + " (" + trimmedReason + ")";
+    // Check for timeout with no limit switches - show brief message
+    bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+    bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+      statusDisplayString = statusString + " (Timeout - manual intervention required)";
+    } else {
+      String trimmedReason = roofErrorReason;
+      trimmedReason.trim();
+      statusDisplayString = statusString + " (" + trimmedReason + ")";
+    }
   }
   String statusClass = "";
   String indicatorClass = "";
@@ -1927,7 +1958,23 @@ inline String getRoofControlPage() {
   html += "}\n\n";
 
   html += "function clearRoofError() {\n";
-  html += "  fetch('/clear_error', { method: 'POST' })\n";
+  html += "  // First check limit switch states to provide helpful guidance\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      if (!data.limit_open && !data.limit_closed) {\n";
+  html += "        // Neither limit switch triggered - warn user\n";
+  html += "        alert('WARNING: Neither limit switch is currently triggered.\\n\\n' +\n";
+  html += "              'The roof appears to be stuck in an intermediate position. ' +\n";
+  html += "              'Clearing this error will not resolve the issue.\\n\\n' +\n";
+  html += "              'RECOMMENDED ACTION:\\n' +\n";
+  html += "              '1. Manually move the roof to either the fully OPEN or fully CLOSED position\\n' +\n";
+  html += "              '2. Verify the corresponding limit switch is triggered\\n' +\n";
+  html += "              '3. Then attempt to clear the error again');\n";
+  html += "      }\n";
+  html += "      // Proceed with clearing the error\n";
+  html += "      return fetch('/clear_error', { method: 'POST' });\n";
+  html += "    })\n";
   html += "    .then(response => response.text())\n";
   html += "    .then(data => { console.log('Clear error:', data); location.reload(); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
@@ -1964,7 +2011,12 @@ inline String getRoofControlPage() {
   html += "      const statusEl = document.getElementById('roofStatus');\n";
   html += "      if (statusEl) {\n";
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
-  html += "          statusEl.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusEl.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "          } else {\n";
+  html += "            statusEl.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
   html += "        } else {\n";
   html += "          statusEl.textContent = data.status;\n";
   html += "        }\n";
@@ -1995,7 +2047,7 @@ inline String getRoofControlPage() {
   html += "      const bypassLabel = document.getElementById('bypassLabelControl');\n";
   html += "      if (bypassToggle) bypassToggle.checked = data.bypass_enabled;\n";
   html += "      if (bypassLabel) {\n";
-  html += "        bypassLabel.style.color = data.bypass_enabled ? '#f44336' : '#333';\n";
+  html += "        bypassLabel.style.color = data.bypass_enabled ? '#f44336' : '#ffffff';\n";
   html += "        bypassLabel.innerHTML = 'Bypass Park Sensor <strong>' + (data.bypass_enabled ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "      }\n\n";
 
@@ -2068,7 +2120,12 @@ inline String getRoofControlPage() {
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
   html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
-  html += "          statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusText.textContent = data.status + ' (Timeout - manual intervention required)';\n";
+  html += "          } else {\n";
+  html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
   html += "        } else {\n";
   html += "          statusText.textContent = data.status;\n";
   html += "        }\n";
