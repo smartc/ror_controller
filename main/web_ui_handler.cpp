@@ -1050,6 +1050,7 @@ void handleApiStatus() {
 
   // Roof status
   doc["status"] = getRoofStatusString();
+  doc["error_reason"] = roofErrorReason;
   doc["telescope_parked"] = telescopeParked;
   doc["bypass_enabled"] = bypassParkSensor;
 

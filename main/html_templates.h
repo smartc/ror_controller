@@ -515,7 +515,14 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   String statusClass = "";
   String indicatorClass = "";
   String statusString = getRoofStatusString(status);
-  
+  String statusDisplayString = statusString;
+  // Add error reason in parentheses if in error state
+  if (statusString == "Error" && roofErrorReason.length() > 0) {
+    String trimmedReason = roofErrorReason;
+    trimmedReason.trim();
+    statusDisplayString = statusString + " (" + trimmedReason + ")";
+  }
+
   if (statusString == "Open") {
     statusClass = "open";
     indicatorClass = "blue";
@@ -532,11 +539,11 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     statusClass = "error";
     indicatorClass = "red blink";
   }
-  
+
   // Status header
   html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
   html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
   // Navigation buttons
@@ -563,8 +570,8 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<div class='status-card'>\n";
   html += "<h2>Roof Status</h2>\n";
   html += "<table class='status-table'>\n";
-  html += "<tr><th>Current Status</th><td class='" + statusClass + "'>" + statusString + "</td></tr>\n";
-  
+  html += "<tr><th>Current Status</th><td class='" + statusClass + "'>" + statusDisplayString + "</td></tr>\n";
+
   // Park sensor information based on type
   html += "<tr><th>Park Sensor Type</th><td>";
   switch (parkSensorType) {
@@ -838,7 +845,11 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
-  html += "        statusText.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "        } else {\n";
+  html += "          statusText.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusHeader.className = 'status-header ';\n";
   html += "        statusIndicator.className = 'status-indicator ';\n";
   html += "        if (data.status === 'Open') {\n";
@@ -1549,6 +1560,13 @@ inline String getSetupPage() {
 
   // Get current status for header
   String statusString = getRoofStatusString();
+  String statusDisplayString = statusString;
+  // Add error reason in parentheses if in error state
+  if (statusString == "Error" && roofErrorReason.length() > 0) {
+    String trimmedReason = roofErrorReason;
+    trimmedReason.trim();
+    statusDisplayString = statusString + " (" + trimmedReason + ")";
+  }
   String statusClass = "";
   String indicatorClass = "";
 
@@ -1572,7 +1590,7 @@ inline String getSetupPage() {
   // Status header (matching home page)
   html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
   html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
   // Navigation buttons
@@ -1621,7 +1639,11 @@ inline String getSetupPage() {
   html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
-  html += "        statusText.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "        } else {\n";
+  html += "          statusText.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusHeader.className = 'status-header ';\n";
   html += "        statusIndicator.className = 'status-indicator ';\n";
   html += "        if (data.status === 'Open') {\n";
@@ -1706,6 +1728,13 @@ inline String getRoofControlPage() {
 
   // Get current status for header
   String statusString = getRoofStatusString();
+  String statusDisplayString = statusString;
+  // Add error reason in parentheses if in error state
+  if (statusString == "Error" && roofErrorReason.length() > 0) {
+    String trimmedReason = roofErrorReason;
+    trimmedReason.trim();
+    statusDisplayString = statusString + " (" + trimmedReason + ")";
+  }
   String statusClass = "";
   String indicatorClass = "";
 
@@ -1729,7 +1758,7 @@ inline String getRoofControlPage() {
   // Status header (matching home page)
   html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
   html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
   // Navigation buttons
@@ -1758,7 +1787,7 @@ inline String getRoofControlPage() {
     tableStatusClass = "status-error";
   }
 
-  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + tableStatusClass + "'>" + statusString + "</td></tr>\n";
+  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + tableStatusClass + "'>" + statusDisplayString + "</td></tr>\n";
 
   // Park sensor status
   html += "<tr><th>Telescope Parked</th><td id='telescopeParked'>";
@@ -1934,7 +1963,11 @@ inline String getRoofControlPage() {
   html += "      // Update roof status\n";
   html += "      const statusEl = document.getElementById('roofStatus');\n";
   html += "      if (statusEl) {\n";
-  html += "        statusEl.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          statusEl.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "        } else {\n";
+  html += "          statusEl.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusEl.className = '';\n";
   html += "        if (data.status === 'Open') statusEl.className = 'status-open';\n";
   html += "        else if (data.status === 'Closed') statusEl.className = 'status-closed';\n";
@@ -2034,7 +2067,11 @@ inline String getRoofControlPage() {
   html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
-  html += "        statusText.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "        } else {\n";
+  html += "          statusText.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusHeader.className = 'status-header ';\n";
   html += "        statusIndicator.className = 'status-indicator ';\n";
   html += "        if (data.status === 'Open') {\n";
