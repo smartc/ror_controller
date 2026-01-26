@@ -309,11 +309,16 @@ void checkMovementTimeout() {
                       " seconds while trying to " + operation +
                       ". Limit switch did not trigger. Check mechanical obstruction or motor failure.";
 
-    // Stop the roof due to timeout
+    // IMPORTANT: Set error state BEFORE stopping to avoid race condition.
+    // If we call stopRoofMovement() first, it calls updateRoofStatus() which might
+    // set roofStatus to ROOF_CLOSED (based on limit switches), creating a window
+    // where ASCOM clients polling Slewing would see false instead of an exception.
+    roofStatus = ROOF_ERROR;
+
+    // Stop the roof due to timeout (don't update status - we already set ERROR)
     Debug.println("Roof movement timed out!");
     Debug.println("Error reason: " + roofErrorReason);
-    stopRoofMovement();
-    roofStatus = ROOF_ERROR;
+    stopRoofMovement(false);  // Pass false to skip status update
 
     // Publish status change due to timeout
     publishStatusToMQTT();
@@ -504,12 +509,16 @@ bool startClosingRoof() {
 }
 
 // Stop roof movement
-bool stopRoofMovement() {
+// updateStatus: if true (default), updates roof status based on limit switches
+//               if false, preserves current status (used during timeout to keep ERROR state)
+bool stopRoofMovement(bool updateStatus) {
   // Send a button press to stop the movement (K2 relay)
   sendButtonPress();
 
-  // Update status based on limit switches
-  updateRoofStatus();
+  // Update status based on limit switches (unless caller wants to preserve current state)
+  if (updateStatus) {
+    updateRoofStatus();
+  }
 
   // Turn off the inverter if relay control is enabled (K1 relay)
   if (inverterRelayEnabled) {

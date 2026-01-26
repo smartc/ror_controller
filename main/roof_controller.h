@@ -42,7 +42,7 @@ void updateRoofStatus();
 void checkMovementTimeout();
 bool startOpeningRoof();
 bool startClosingRoof();
-bool stopRoofMovement();
+bool stopRoofMovement(bool updateStatus = true);
 void sendButtonPress();
 void applyPinSettings();  // Function to apply pin settings
 void determineInitialRoofStatus();
