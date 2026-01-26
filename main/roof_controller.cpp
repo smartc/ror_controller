@@ -226,34 +226,49 @@ void updateRoofStatus() {
     statusMessage = "ERROR: Both limit switches triggered!";
   }
   else if (isOpenLimitTriggered) {
-    // If the open switch is triggered, the roof is open regardless of previous state
-    // BUT if limit switch timeout monitoring is disabled and we're currently CLOSING (trying to close from open),
-    // stay in CLOSING state to allow the movement timeout to trigger
-    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_CLOSING) {
-      if (roofStatus != ROOF_OPEN) {
-        statusMessage = "Roof fully open";
-        // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
-        if (limitSwitchTimeoutEnabled || (roofStatus == ROOF_OPENING)) {
-          digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
-          inverterRelayState = false;
-        }
-      }
+    // Open switch is triggered.
+    // If we're currently trying to CLOSE (moving away from open), don't revert to ROOF_OPEN.
+    // Let the movement timeout handle the failure case - this ensures ASCOM clients see
+    // the error via the Slewing property exception rather than a silent revert.
+    if (roofStatus == ROOF_CLOSING) {
+      // Stay in CLOSING state - movement timeout will catch the failure
+      // (open switch still triggered means roof hasn't actually moved)
+    }
+    else if (roofStatus == ROOF_OPENING) {
+      // We were opening and reached the open position - success!
+      statusMessage = "Roof fully open";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_OPEN;
+    }
+    else if (roofStatus != ROOF_OPEN) {
+      // Transitioning to OPEN from some other state (ERROR, etc.)
+      statusMessage = "Roof fully open";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
       roofStatus = ROOF_OPEN;
     }
   }
   else if (isClosedLimitTriggered) {
-    // If the closed switch is triggered, the roof is closed regardless of previous state
-    // BUT if limit switch timeout monitoring is disabled and we're currently OPENING (trying to open from closed),
-    // stay in OPENING state to allow the movement timeout to trigger
-    if (limitSwitchTimeoutEnabled || roofStatus != ROOF_OPENING) {
-      if (roofStatus != ROOF_CLOSED) {
-        statusMessage = "Roof fully closed";
-        // Only turn off inverter if limit switch timeout monitoring is enabled OR if this is a genuine state change
-        if (limitSwitchTimeoutEnabled || (roofStatus == ROOF_CLOSING)) {
-          digitalWrite(INVERTER_PIN, LOW); // Turn off inverter
-          inverterRelayState = false;
-        }
-      }
+    // Closed switch is triggered.
+    // If we're currently trying to OPEN (moving away from closed), don't revert to ROOF_CLOSED.
+    // Let the movement timeout handle the failure case.
+    if (roofStatus == ROOF_OPENING) {
+      // Stay in OPENING state - movement timeout will catch the failure
+      // (closed switch still triggered means roof hasn't actually moved)
+    }
+    else if (roofStatus == ROOF_CLOSING) {
+      // We were closing and reached the closed position - success!
+      statusMessage = "Roof fully closed";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_CLOSED;
+    }
+    else if (roofStatus != ROOF_CLOSED) {
+      // Transitioning to CLOSED from some other state (ERROR, etc.)
+      statusMessage = "Roof fully closed";
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
       roofStatus = ROOF_CLOSED;
     }
   } 
