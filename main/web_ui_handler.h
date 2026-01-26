@@ -70,4 +70,8 @@ void handleGPSEnabled();             // Enable/disable GPS module
 void handleGPSNtpEnabled();          // Enable/disable NTP server
 void handleGPSStatus();              // Get GPS status (JSON)
 
+// Timezone control handlers
+void handleTimezoneOffset();         // Set timezone offset in minutes
+void handleDSTEnabled();             // Enable/disable DST
+
 #endif // WEB_UI_HANDLER_H
