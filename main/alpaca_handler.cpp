@@ -573,16 +573,29 @@ void handleSetSlaved() {
 void handleSlewing() {
   int clientID = alpacaServer.hasArg("ClientID") ? alpacaServer.arg("ClientID").toInt() : 0;
   int clientTransactionID = alpacaServer.hasArg("ClientTransactionID") ? alpacaServer.arg("ClientTransactionID").toInt() : 0;
-  
+
   // If we're not connected, return error
   if (!isConnected) {
     sendAlpacaResponse(clientID, clientTransactionID, 1031, "Not connected", "");
     return;
   }
-  
+
   // Make sure our status is up-to-date
   updateRoofStatus();
-  
+
+  // ASCOM Compliance: If the roof is in an error state, reading Slewing must raise an exception
+  // with a descriptive error message explaining what went wrong.
+  // See: https://ascom-standards.org/newdocs/dome.html
+  // "If the shutter becomes jammed... you must raise an exception when the app tries to read Slewing"
+  if (roofStatus == ROOF_ERROR) {
+    String errorMsg = roofErrorReason.length() > 0 ?
+                      roofErrorReason :
+                      "Roof is in error state. Check limit switches and mechanical systems.";
+    // Use error code 0x500 (1280) for DriverException - shutter/roof operation failed
+    sendAlpacaResponse(clientID, clientTransactionID, 0x500, errorMsg, "");
+    return;
+  }
+
   // Check if roof is moving (opening or closing)
   bool isSlewing = (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING);
   sendAlpacaResponse(clientID, clientTransactionID, 0, "", isSlewing ? "true" : "false");

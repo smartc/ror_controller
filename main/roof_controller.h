@@ -25,6 +25,9 @@ extern bool lastTelescopeParkedState;
 extern unsigned long lastTelescopeParkedStateTime;
 extern bool telescopeParked;
 
+// Error tracking for ASCOM compliance (error reason for Slewing exception)
+extern String roofErrorReason;
+
 // Inverter power state variables (NEW in v3)
 extern bool inverterRelayState;      // State of K1 (12V power relay)
 extern bool inverterACPowerState;    // State of AC power (detected via optocoupler)
@@ -44,6 +47,7 @@ void sendButtonPress();
 void applyPinSettings();  // Function to apply pin settings
 void determineInitialRoofStatus();
 void updateTelescopeStatus();  // Function to update telescope park status
+void clearRoofError();         // Clear error state and reason (for recovery)
 
 // Inverter control functions (NEW in v3)
 void toggleInverterPower();           // Toggle K1 inverter power relay
