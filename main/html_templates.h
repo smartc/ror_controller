@@ -723,17 +723,20 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += "</td></tr>\n";
 
     // Current UTC time (with ID for real-time update)
-    html += "<tr><th>UTC Time</th><td><span id='utcTimeDisplay'>" + getTimeString() + "</span></td></tr>\n";
-    html += "<tr><th>UTC Date</th><td><span id='utcDateDisplay'>" + getDateString() + "</span></td></tr>\n";
-
     // Local time display
     int16_t totalOffset = timezoneOffset + (dstEnabled ? 60 : 0);
     int16_t offsetHours = totalOffset / 60;
     int16_t offsetMins = abs(totalOffset % 60);
     char offsetStr[16];
     snprintf(offsetStr, sizeof(offsetStr), "UTC%+d:%02d", offsetHours, offsetMins);
-    html += "<tr><th>Local Time (" + String(offsetStr) + ")</th><td><span id='localTimeDisplay'>" + getLocalTimeString() + "</span></td></tr>\n";
-    html += "<tr><th>Local Date</th><td><span id='localDateDisplay'>" + getLocalDateString() + "</span></td></tr>\n";
+
+    // Combined time row: UTC and Local side by side
+    html += "<tr><th>Time (UTC)</th><td><span id='utcTimeDisplay'>" + getTimeString() + "</span>";
+    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local (" + String(offsetStr) + "):</span> <span id='localTimeDisplay'>" + getLocalTimeString() + "</span></td></tr>\n";
+
+    // Combined date row: UTC and Local side by side
+    html += "<tr><th>Date (UTC)</th><td><span id='utcDateDisplay'>" + getDateString() + "</span>";
+    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local:</span> <span id='localDateDisplay'>" + getLocalDateString() + "</span></td></tr>\n";
 
     // RTC status
     html += "<tr><th>RTC (DS3231)</th><td>";
