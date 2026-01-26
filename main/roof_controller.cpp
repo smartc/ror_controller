@@ -227,12 +227,16 @@ void updateRoofStatus() {
   }
   else if (isOpenLimitTriggered) {
     // Open switch is triggered.
-    // If we're currently trying to CLOSE (moving away from open), don't revert to ROOF_OPEN.
-    // Let the movement timeout handle the failure case - this ensures ASCOM clients see
-    // the error via the Slewing property exception rather than a silent revert.
     if (roofStatus == ROOF_CLOSING) {
-      // Stay in CLOSING state - movement timeout will catch the failure
-      // (open switch still triggered means roof hasn't actually moved)
+      // We're trying to CLOSE but open switch is still triggered after limitSwitchTimeout.
+      // This means the roof failed to START moving - immediate error.
+      roofErrorReason = "Roof failed to start closing. Open limit switch still triggered after " +
+                        String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
+      statusMessage = "ERROR: Roof failed to start closing";
+      Debug.println("Error reason: " + roofErrorReason);
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_ERROR;
     }
     else if (roofStatus == ROOF_OPENING) {
       // We were opening and reached the open position - success!
@@ -251,11 +255,16 @@ void updateRoofStatus() {
   }
   else if (isClosedLimitTriggered) {
     // Closed switch is triggered.
-    // If we're currently trying to OPEN (moving away from closed), don't revert to ROOF_CLOSED.
-    // Let the movement timeout handle the failure case.
     if (roofStatus == ROOF_OPENING) {
-      // Stay in OPENING state - movement timeout will catch the failure
-      // (closed switch still triggered means roof hasn't actually moved)
+      // We're trying to OPEN but closed switch is still triggered after limitSwitchTimeout.
+      // This means the roof failed to START moving - immediate error.
+      roofErrorReason = "Roof failed to start opening. Closed limit switch still triggered after " +
+                        String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
+      statusMessage = "ERROR: Roof failed to start opening";
+      Debug.println("Error reason: " + roofErrorReason);
+      digitalWrite(INVERTER_PIN, LOW);
+      inverterRelayState = false;
+      roofStatus = ROOF_ERROR;
     }
     else if (roofStatus == ROOF_CLOSING) {
       // We were closing and reached the closed position - success!
