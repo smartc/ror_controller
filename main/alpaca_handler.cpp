@@ -576,6 +576,7 @@ void handleSlewing() {
 
   // If we're not connected, return error
   if (!isConnected) {
+    Debug.println("Slewing: returning NotConnected error");
     sendAlpacaResponse(clientID, clientTransactionID, 1031, "Not connected", "");
     return;
   }
@@ -592,12 +593,15 @@ void handleSlewing() {
                       roofErrorReason :
                       "Roof is in error state. Check limit switches and mechanical systems.";
     // Use error code 0x500 (1280) for DriverException - shutter/roof operation failed
+    Debug.println("Slewing: returning error (ROOF_ERROR state)");
+    Debug.println("  Error message: " + errorMsg);
     sendAlpacaResponse(clientID, clientTransactionID, 0x500, errorMsg, "");
     return;
   }
 
   // Check if roof is moving (opening or closing)
   bool isSlewing = (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING);
+  Debug.println("Slewing: returning " + String(isSlewing ? "true" : "false"));
   sendAlpacaResponse(clientID, clientTransactionID, 0, "", isSlewing ? "true" : "false");
 }
 
