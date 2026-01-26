@@ -1625,13 +1625,11 @@ inline String getRoofControlPage() {
     html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'><strong>START/STOP:</strong> Mimics physical button | <strong>OPEN/CLOSE:</strong> Intelligent control</p>\n";
   }
 
-  // Clear Error button - only show when in error state
-  if (roofStatus == ROOF_ERROR) {
-    html += "<div style='margin-top: 15px;'>\n";
-    html += "<button class='btn' onclick='clearRoofError()' style='background-color: #e74c3c; font-size: 16px; padding: 10px 20px;'>Clear Error</button>\n";
-    html += "<p style='font-size: 12px; color: #e74c3c; margin-top: 5px;'>Clear error state and re-check limit switches</p>\n";
-    html += "</div>\n";
-  }
+  // Clear Error button - always rendered, visibility controlled by JavaScript
+  html += "<div id='clearErrorDiv' style='margin-top: 15px; display: " + String(roofStatus == ROOF_ERROR ? "block" : "none") + ";'>\n";
+  html += "<button class='btn' onclick='clearRoofError()' style='background-color: #e74c3c; font-size: 16px; padding: 10px 20px;'>Clear Error</button>\n";
+  html += "<p style='font-size: 12px; color: #e74c3c; margin-top: 5px;'>Clear error state and re-check limit switches</p>\n";
+  html += "</div>\n";
 
   html += "</div>\n";
   html += "</div>\n";
@@ -1778,6 +1776,12 @@ inline String getRoofControlPage() {
   html += "          openCloseButton.style.opacity = '1';\n";
   html += "          openCloseButton.style.cursor = 'pointer';\n";
   html += "        }\n";
+  html += "      }\n\n";
+
+  html += "      // Show/hide Clear Error button based on error state\n";
+  html += "      const clearErrorDiv = document.getElementById('clearErrorDiv');\n";
+  html += "      if (clearErrorDiv) {\n";
+  html += "        clearErrorDiv.style.display = (data.status === 'Error') ? 'block' : 'none';\n";
   html += "      }\n\n";
 
   html += "      // Update open limit switch\n";

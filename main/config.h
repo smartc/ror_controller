@@ -13,7 +13,7 @@
 #define DEBUG_LEVEL 1  // 0=Off, 1=Basic, 2=Verbose
 
 // Version Information
-#define DEVICE_VERSION "3.0.1"  // v3 hardware with ESP32-S3
+#define DEVICE_VERSION "3.1.0"  // v3 hardware with ESP32-S3, GPS/NTP support
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
@@ -139,6 +139,8 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_INVERTER_DELAY2 "inverterDelay2"
 
 // GPS Configuration
+// TODO: When RTC support is added, decouple NTP server from GPS so NTP can run
+//       independently using either GPS time or RTC time as the reference source.
 #define PREF_GPS_ENABLED "gpsEnabled"
 #define PREF_GPS_NTP_ENABLED "gpsNtpEnabled"
 const int NTP_PORT = 123;                   // Standard NTP port
