@@ -596,16 +596,16 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   // Park sensor bypass state with appropriate indicator
   String bypassIndicatorClass = bypassParkSensor ? "red blink" : "green";
-  html += "<tr><th>Park Sensor Bypass</th><td>";
-  html += "<span class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
-  html += bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled";
+  html += "<tr><th>Park Sensor Bypass</th><td id='homeBypassStatus'>";
+  html += "<span id='homeBypassIndicator' class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
+  html += "<span id='homeBypassText'>" + String(bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled") + "</span>";
   html += " <small style='margin-left: 10px; color: #b0b0b0;'><a href='/setup'>Configure bypass in setup</a></small>";
   html += "</td></tr>\n";
-  
+
   // Show telescope parked status based on park sensor type
-  html += "<tr><th>Telescope Parked</th><td>";
-  html += "<span class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
-  html += telescopeParked ? "Yes" : "No";
+  html += "<tr><th>Telescope Parked</th><td id='homeTelescopeParked'>";
+  html += "<span id='homeTelescopeParkedIndicator' class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
+  html += "<span id='homeTelescopeParkedText'>" + String(telescopeParked ? "Yes" : "No") + "</span>";
   html += "</td></tr>\n";
   
   // Show park sensor details based on type
@@ -895,6 +895,20 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "      if (utcDate && data.current_date) utcDate.textContent = data.current_date;\n";
   html += "      if (localTime && data.local_time) localTime.textContent = data.local_time;\n";
   html += "      if (localDate && data.local_date) localDate.textContent = data.local_date;\n";
+  html += "      // Update telescope parked status\n";
+  html += "      const tpInd = document.getElementById('homeTelescopeParkedIndicator');\n";
+  html += "      const tpText = document.getElementById('homeTelescopeParkedText');\n";
+  html += "      if (tpInd && tpText) {\n";
+  html += "        tpInd.className = 'status-indicator ' + (data.telescope_parked ? 'green' : 'red');\n";
+  html += "        tpText.textContent = data.telescope_parked ? 'Yes' : 'No';\n";
+  html += "      }\n";
+  html += "      // Update bypass status\n";
+  html += "      const bypassInd = document.getElementById('homeBypassIndicator');\n";
+  html += "      const bypassText = document.getElementById('homeBypassText');\n";
+  html += "      if (bypassInd && bypassText) {\n";
+  html += "        bypassInd.className = 'status-indicator ' + (data.bypass_enabled ? 'red blink' : 'green');\n";
+  html += "        bypassText.innerHTML = data.bypass_enabled ? \"<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>\" : 'Disabled';\n";
+  html += "      }\n";
   html += "    })\n";
   html += "    .catch(error => console.error('Error updating status:', error));\n";
   html += "}\n\n";
