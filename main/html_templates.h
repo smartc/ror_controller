@@ -618,7 +618,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   if (parkSensorType == PARK_SENSOR_UDP || parkSensorType == PARK_SENSOR_BOTH) {
     std::vector<ParkSensor> activeSensorsList = getActiveSensors();
-    html += "<tr><th>UDP Park Sensors</th><td>";
+    html += "<tr id='udpSensorsRow'><th>UDP Park Sensors</th><td id='udpSensorsStatus'>";
     
     if (activeSensorsList.empty()) {
       html += "<span class='status-indicator red'></span> No sensors enabled";
@@ -908,6 +908,39 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "      if (bypassInd && bypassText) {\n";
   html += "        bypassInd.className = 'status-indicator ' + (data.bypass_enabled ? 'red blink' : 'green');\n";
   html += "        bypassText.innerHTML = data.bypass_enabled ? \"<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>\" : 'Disabled';\n";
+  html += "      }\n";
+  html += "      // Update UDP sensors status\n";
+  html += "      const udpSensorsCell = document.getElementById('udpSensorsStatus');\n";
+  html += "      if (udpSensorsCell && data.udp_sensors !== undefined) {\n";
+  html += "        let html = '';\n";
+  html += "        if (data.udp_sensors.length === 0) {\n";
+  html += "          html = \"<span class='status-indicator red'></span> No sensors enabled\";\n";
+  html += "        } else {\n";
+  html += "          const allParked = data.udp_all_parked;\n";
+  html += "          html = \"<span class='status-indicator \" + (allParked ? 'green' : 'red') + \"'></span> \";\n";
+  html += "          html += data.udp_sensors.length + ' sensor(s) - ';\n";
+  html += "          html += allParked ? 'All Parked' : 'Not All Parked';\n";
+  html += "          html += '<br><small>';\n";
+  html += "          for (let i = 0; i < data.udp_sensors.length; i++) {\n";
+  html += "            const sensor = data.udp_sensors[i];\n";
+  html += "            if (i > 0) html += ', ';\n";
+  html += "            let statusClass = 'red blink';\n";
+  html += "            let statusText = 'Unknown';\n";
+  html += "            if (sensor.bypassed) {\n";
+  html += "              statusClass = 'orange';\n";
+  html += "              statusText = 'Bypassed';\n";
+  html += "            } else if (sensor.status === 1) {\n";
+  html += "              statusClass = 'green';\n";
+  html += "              statusText = 'Parked';\n";
+  html += "            } else if (sensor.status === 2) {\n";
+  html += "              statusClass = 'red';\n";
+  html += "              statusText = 'Unparked';\n";
+  html += "            }\n";
+  html += "            html += sensor.name + \": <span class='status-indicator \" + statusClass + \"'></span>\" + statusText;\n";
+  html += "          }\n";
+  html += "          html += '</small>';\n";
+  html += "        }\n";
+  html += "        udpSensorsCell.innerHTML = html;\n";
   html += "      }\n";
   html += "    })\n";
   html += "    .catch(error => console.error('Error updating status:', error));\n";

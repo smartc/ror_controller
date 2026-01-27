@@ -1046,7 +1046,7 @@ void handleClearError() {
 
 // API endpoint for real-time status updates (returns JSON)
 void handleApiStatus() {
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(2048);
 
   // Roof status
   doc["status"] = getRoofStatusString();
@@ -1064,6 +1064,19 @@ void handleApiStatus() {
 
   // Park sensor type
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
+
+  // UDP Park sensor data
+  if (parkSensorType == PARK_SENSOR_UDP || parkSensorType == PARK_SENSOR_BOTH) {
+    std::vector<ParkSensor> activeSensors = getActiveSensors();
+    doc["udp_all_parked"] = isTelescopeParkedUDP();
+    JsonArray sensorsArray = doc.createNestedArray("udp_sensors");
+    for (const auto& sensor : activeSensors) {
+      JsonObject sensorObj = sensorsArray.createNestedObject();
+      sensorObj["name"] = sensor.name;
+      sensorObj["status"] = static_cast<int>(sensor.status);
+      sensorObj["bypassed"] = sensor.bypassEnabled;
+    }
+  }
 
   // Time status
   doc["time_synced"] = timeSynced;
