@@ -157,7 +157,7 @@ inline String getControlJS() {
     "  if (toggle && label) {\n"
     "    label.textContent = toggle.checked ? enabledText : disabledText;\n"
     "    if (toggleId === 'bypassToggle') {\n"
-    "      label.style.color = toggle.checked ? '#f44336' : '#333';\n"
+    "      label.style.color = toggle.checked ? '#f44336' : '#ffffff';\n"
     "    }\n"
     "  }\n"
     "}\n"
@@ -238,7 +238,7 @@ inline String getControlJS() {
     "  .then(data => {\n"
     "    console.log(data);\n"
     "    document.getElementById('bypassText').innerHTML = checked ? '(ENABLED)' : '(DISABLED)';\n"
-    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#e57373' : '#e0e0e0';\n"
+    "    document.getElementById('bypassText').parentElement.style.color = checked ? '#e57373' : '#ffffff';\n"
     "  });\n"
     "}\n"
     
@@ -515,7 +515,21 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   String statusClass = "";
   String indicatorClass = "";
   String statusString = getRoofStatusString(status);
-  
+  String statusDisplayString = statusString;
+  // Add error reason in parentheses if in error state
+  if (statusString == "Error" && roofErrorReason.length() > 0) {
+    // Check for timeout with no limit switches - show brief message
+    bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+    bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+      statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
+    } else {
+      String trimmedReason = roofErrorReason;
+      trimmedReason.trim();
+      statusDisplayString = statusString + " (" + trimmedReason + ")";
+    }
+  }
+
   if (statusString == "Open") {
     statusClass = "open";
     indicatorClass = "blue";
@@ -532,11 +546,11 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     statusClass = "error";
     indicatorClass = "red blink";
   }
-  
+
   // Status header
   html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
   html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
   // Navigation buttons
@@ -563,8 +577,8 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<div class='status-card'>\n";
   html += "<h2>Roof Status</h2>\n";
   html += "<table class='status-table'>\n";
-  html += "<tr><th>Current Status</th><td class='" + statusClass + "'>" + statusString + "</td></tr>\n";
-  
+  html += "<tr><th>Current Status</th><td class='" + statusClass + "'>" + statusDisplayString + "</td></tr>\n";
+
   // Park sensor information based on type
   html += "<tr><th>Park Sensor Type</th><td>";
   switch (parkSensorType) {
@@ -582,16 +596,16 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   // Park sensor bypass state with appropriate indicator
   String bypassIndicatorClass = bypassParkSensor ? "red blink" : "green";
-  html += "<tr><th>Park Sensor Bypass</th><td>";
-  html += "<span class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
-  html += bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled";
+  html += "<tr><th>Park Sensor Bypass</th><td id='homeBypassStatus'>";
+  html += "<span id='homeBypassIndicator' class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
+  html += "<span id='homeBypassText'>" + String(bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled") + "</span>";
   html += " <small style='margin-left: 10px; color: #b0b0b0;'><a href='/setup'>Configure bypass in setup</a></small>";
   html += "</td></tr>\n";
-  
+
   // Show telescope parked status based on park sensor type
-  html += "<tr><th>Telescope Parked</th><td>";
-  html += "<span class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
-  html += telescopeParked ? "Yes" : "No";
+  html += "<tr><th>Telescope Parked</th><td id='homeTelescopeParked'>";
+  html += "<span id='homeTelescopeParkedIndicator' class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
+  html += "<span id='homeTelescopeParkedText'>" + String(telescopeParked ? "Yes" : "No") + "</span>";
   html += "</td></tr>\n";
   
   // Show park sensor details based on type
@@ -604,7 +618,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   if (parkSensorType == PARK_SENSOR_UDP || parkSensorType == PARK_SENSOR_BOTH) {
     std::vector<ParkSensor> activeSensorsList = getActiveSensors();
-    html += "<tr><th>UDP Park Sensors</th><td>";
+    html += "<tr id='udpSensorsRow'><th>UDP Park Sensors</th><td id='udpSensorsStatus'>";
     
     if (activeSensorsList.empty()) {
       html += "<span class='status-indicator red'></span> No sensors enabled";
@@ -766,22 +780,34 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += "</td></tr>\n";
 
     if (gpsEnabled) {
-      // GPS Fix status
+      // GPS Fix status with accuracy (HDOP converted to meters)
       html += "<tr><th>GPS Fix</th><td>";
       html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
       html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
+      if (gpsStatusData.hasFix && gpsStatusData.hdop > 0) {
+        char accuracyStr[24];
+        float accuracyMeters = gpsStatusData.hdop * 2.5;  // HDOP * base accuracy (~2.5m for civilian GPS)
+        snprintf(accuracyStr, sizeof(accuracyStr), " (Accuracy: +/- %.1fm)", accuracyMeters);
+        html += accuracyStr;
+      }
       html += "</td></tr>\n";
 
-      // Satellites
-      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites) + "</td></tr>\n";
+      // Satellites (used / in view, or just used if in_view not available)
+      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites);
+      if (gpsStatusData.satellites_in_view > 0) {
+        html += " / " + String(gpsStatusData.satellites_in_view);
+      }
+      html += "</td></tr>\n";
 
       // GPS Position (if fix available)
       if (gpsStatusData.hasFix) {
-        char latStr[16], lonStr[16];
+        char latStr[16], lonStr[16], altStr[16];
         snprintf(latStr, sizeof(latStr), "%.6f", gpsStatusData.latitude);
         snprintf(lonStr, sizeof(lonStr), "%.6f", gpsStatusData.longitude);
+        snprintf(altStr, sizeof(altStr), "%.1f m", gpsStatusData.altitude);
         html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>\n";
         html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>\n";
+        html += "<tr><th>Altitude</th><td>" + String(altStr) + "</td></tr>\n";
       }
     }
 
@@ -831,7 +857,16 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
-  html += "        statusText.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusText.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
+  html += "          } else {\n";
+  html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
+  html += "        } else {\n";
+  html += "          statusText.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusHeader.className = 'status-header ';\n";
   html += "        statusIndicator.className = 'status-indicator ';\n";
   html += "        if (data.status === 'Open') {\n";
@@ -860,6 +895,53 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "      if (utcDate && data.current_date) utcDate.textContent = data.current_date;\n";
   html += "      if (localTime && data.local_time) localTime.textContent = data.local_time;\n";
   html += "      if (localDate && data.local_date) localDate.textContent = data.local_date;\n";
+  html += "      // Update telescope parked status\n";
+  html += "      const tpInd = document.getElementById('homeTelescopeParkedIndicator');\n";
+  html += "      const tpText = document.getElementById('homeTelescopeParkedText');\n";
+  html += "      if (tpInd && tpText) {\n";
+  html += "        tpInd.className = 'status-indicator ' + (data.telescope_parked ? 'green' : 'red');\n";
+  html += "        tpText.textContent = data.telescope_parked ? 'Yes' : 'No';\n";
+  html += "      }\n";
+  html += "      // Update bypass status\n";
+  html += "      const bypassInd = document.getElementById('homeBypassIndicator');\n";
+  html += "      const bypassText = document.getElementById('homeBypassText');\n";
+  html += "      if (bypassInd && bypassText) {\n";
+  html += "        bypassInd.className = 'status-indicator ' + (data.bypass_enabled ? 'red blink' : 'green');\n";
+  html += "        bypassText.innerHTML = data.bypass_enabled ? \"<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>\" : 'Disabled';\n";
+  html += "      }\n";
+  html += "      // Update UDP sensors status\n";
+  html += "      const udpSensorsCell = document.getElementById('udpSensorsStatus');\n";
+  html += "      if (udpSensorsCell && data.udp_sensors !== undefined) {\n";
+  html += "        let html = '';\n";
+  html += "        if (data.udp_sensors.length === 0) {\n";
+  html += "          html = \"<span class='status-indicator red'></span> No sensors enabled\";\n";
+  html += "        } else {\n";
+  html += "          const allParked = data.udp_all_parked;\n";
+  html += "          html = \"<span class='status-indicator \" + (allParked ? 'green' : 'red') + \"'></span> \";\n";
+  html += "          html += data.udp_sensors.length + ' sensor(s) - ';\n";
+  html += "          html += allParked ? 'All Parked' : 'Not All Parked';\n";
+  html += "          html += '<br><small>';\n";
+  html += "          for (let i = 0; i < data.udp_sensors.length; i++) {\n";
+  html += "            const sensor = data.udp_sensors[i];\n";
+  html += "            if (i > 0) html += ', ';\n";
+  html += "            let statusClass = 'red blink';\n";
+  html += "            let statusText = 'Unknown';\n";
+  html += "            if (sensor.bypassed) {\n";
+  html += "              statusClass = 'orange';\n";
+  html += "              statusText = 'Bypassed';\n";
+  html += "            } else if (sensor.status === 1) {\n";
+  html += "              statusClass = 'green';\n";
+  html += "              statusText = 'Parked';\n";
+  html += "            } else if (sensor.status === 2) {\n";
+  html += "              statusClass = 'red';\n";
+  html += "              statusText = 'Unparked';\n";
+  html += "            }\n";
+  html += "            html += sensor.name + \": <span class='status-indicator \" + statusClass + \"'></span>\" + statusText;\n";
+  html += "          }\n";
+  html += "          html += '</small>';\n";
+  html += "        }\n";
+  html += "        udpSensorsCell.innerHTML = html;\n";
+  html += "      }\n";
   html += "    })\n";
   html += "    .catch(error => console.error('Error updating status:', error));\n";
   html += "}\n\n";
@@ -1008,7 +1090,7 @@ inline String getSwitchConfigCard() {
   html += "<input type='checkbox' id='bypassToggle' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange=\"toggleBypass(this.checked)\">";
   html += "<span class='slider'></span>";
   html += "</label>";
-  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>";
+  html += "<span class='switch-label' style='color: " + String(bypassParkSensor ? "#e57373" : "#ffffff") + ";'>";
   html += "Bypass Telescope Park Sensor <strong id='bypassText'>(" + String(bypassParkSensor ? "ENABLED" : "DISABLED") + ")</strong><br>";
   html += "<small>Warning: When enabled, allows roof to move regardless of telescope position</small><br>";
   html += "<small style='color: #ffb74d;'><strong>Note:</strong> This setting is not retained between restarts. Use a physical jumper on the PARK terminals if no sensor is installed.</small>";
@@ -1323,14 +1405,24 @@ inline String getGPSConfigCard() {
   html += "</td></tr>";
 
   if (gpsEnabled) {
-    // Fix status
+    // Fix status with accuracy (HDOP converted to meters)
     html += "<tr><th>GPS Fix</th><td>";
     html += "<span class='status-indicator " + String(status.hasFix ? "green" : "red blink") + "'></span> ";
     html += status.hasFix ? "Valid Fix" : "No Fix";
+    if (status.hasFix && status.hdop > 0) {
+      char accuracyStr[24];
+      float accuracyMeters = status.hdop * 2.5;  // HDOP * base accuracy (~2.5m for civilian GPS)
+      snprintf(accuracyStr, sizeof(accuracyStr), " (Accuracy: +/- %.1fm)", accuracyMeters);
+      html += accuracyStr;
+    }
     html += "</td></tr>";
 
-    // Satellites
-    html += "<tr><th>Satellites</th><td>" + String(status.satellites) + "</td></tr>";
+    // Satellites (used / in view, or just used if in_view not available)
+    html += "<tr><th>Satellites</th><td>" + String(status.satellites);
+    if (status.satellites_in_view > 0) {
+      html += " / " + String(status.satellites_in_view);
+    }
+    html += "</td></tr>";
 
     // Position (if available)
     if (status.hasFix) {
@@ -1537,6 +1629,20 @@ inline String getSetupPage() {
 
   // Get current status for header
   String statusString = getRoofStatusString();
+  String statusDisplayString = statusString;
+  // Add error reason in parentheses if in error state
+  if (statusString == "Error" && roofErrorReason.length() > 0) {
+    // Check for timeout with no limit switches - show brief message
+    bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+    bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+      statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
+    } else {
+      String trimmedReason = roofErrorReason;
+      trimmedReason.trim();
+      statusDisplayString = statusString + " (" + trimmedReason + ")";
+    }
+  }
   String statusClass = "";
   String indicatorClass = "";
 
@@ -1560,7 +1666,7 @@ inline String getSetupPage() {
   // Status header (matching home page)
   html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
   html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
   // Navigation buttons
@@ -1609,7 +1715,16 @@ inline String getSetupPage() {
   html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
-  html += "        statusText.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusText.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
+  html += "          } else {\n";
+  html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
+  html += "        } else {\n";
+  html += "          statusText.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusHeader.className = 'status-header ';\n";
   html += "        statusIndicator.className = 'status-indicator ';\n";
   html += "        if (data.status === 'Open') {\n";
@@ -1645,7 +1760,7 @@ inline String getSetupPage() {
   html += "  const bypassToggle = document.getElementById('bypassToggle');";
   html += "  const bypassText = document.getElementById('bypassText');";
   html += "  if (bypassToggle && bypassText) {";
-  html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#333';";
+  html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#ffffff';";
   html += "  }";
   html += "  // Start status update polling\n";
   html += "  updateStatus();\n";
@@ -1694,6 +1809,20 @@ inline String getRoofControlPage() {
 
   // Get current status for header
   String statusString = getRoofStatusString();
+  String statusDisplayString = statusString;
+  // Add error reason in parentheses if in error state
+  if (statusString == "Error" && roofErrorReason.length() > 0) {
+    // Check for timeout with no limit switches - show brief message
+    bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+    bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+      statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
+    } else {
+      String trimmedReason = roofErrorReason;
+      trimmedReason.trim();
+      statusDisplayString = statusString + " (" + trimmedReason + ")";
+    }
+  }
   String statusClass = "";
   String indicatorClass = "";
 
@@ -1717,7 +1846,7 @@ inline String getRoofControlPage() {
   // Status header (matching home page)
   html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
   html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusString + "</span>";
+  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
   // Navigation buttons
@@ -1746,7 +1875,7 @@ inline String getRoofControlPage() {
     tableStatusClass = "status-error";
   }
 
-  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + tableStatusClass + "'>" + statusString + "</td></tr>\n";
+  html += "<tr><th>Roof Status</th><td id='roofStatus' class='" + tableStatusClass + "'>" + statusDisplayString + "</td></tr>\n";
 
   // Park sensor status
   html += "<tr><th>Telescope Parked</th><td id='telescopeParked'>";
@@ -1802,7 +1931,7 @@ inline String getRoofControlPage() {
   html += "<input type='checkbox' id='bypassToggleControl' class='danger'" + String(bypassParkSensor ? " checked" : "") + " onchange='toggleBypassControl(this.checked)'>\n";
   html += "<span class='slider'></span>\n";
   html += "</label>\n";
-  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#e57373" : "#e0e0e0") + ";'>\n";
+  html += "<span class='switch-label' id='bypassLabelControl' style='color: " + String(bypassParkSensor ? "#e57373" : "#ffffff") + ";'>\n";
   html += "Bypass Park Sensor <strong>" + String(bypassParkSensor ? "(ENABLED)" : "(DISABLED)") + "</strong><br>\n";
   html += "<small style='color: #e0e0e0;'>Enable to control roof regardless of telescope position</small>\n";
   html += "</span>\n";
@@ -1886,7 +2015,23 @@ inline String getRoofControlPage() {
   html += "}\n\n";
 
   html += "function clearRoofError() {\n";
-  html += "  fetch('/clear_error', { method: 'POST' })\n";
+  html += "  // First check limit switch states to provide helpful guidance\n";
+  html += "  fetch('/api/status')\n";
+  html += "    .then(response => response.json())\n";
+  html += "    .then(data => {\n";
+  html += "      if (!data.limit_open && !data.limit_closed) {\n";
+  html += "        // Neither limit switch triggered - warn user\n";
+  html += "        alert('WARNING: Neither limit switch is currently triggered.\\n\\n' +\n";
+  html += "              'The roof appears to be stuck in an intermediate position. ' +\n";
+  html += "              'Clearing this error will not resolve the issue.\\n\\n' +\n";
+  html += "              'RECOMMENDED ACTION:\\n' +\n";
+  html += "              '1. Manually move the roof to either the fully OPEN or fully CLOSED position\\n' +\n";
+  html += "              '2. Verify the corresponding limit switch is triggered\\n' +\n";
+  html += "              '3. Then attempt to clear the error again');\n";
+  html += "      }\n";
+  html += "      // Proceed with clearing the error\n";
+  html += "      return fetch('/clear_error', { method: 'POST' });\n";
+  html += "    })\n";
   html += "    .then(response => response.text())\n";
   html += "    .then(data => { console.log('Clear error:', data); location.reload(); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
@@ -1903,7 +2048,7 @@ inline String getRoofControlPage() {
   html += "    console.log(data);\n";
   html += "    const label = document.getElementById('bypassLabelControl');\n";
   html += "    if (label) {\n";
-  html += "      label.style.color = checked ? '#e57373' : '#e0e0e0';\n";
+  html += "      label.style.color = checked ? '#e57373' : '#ffffff';\n";
   html += "      label.innerHTML = 'Bypass Park Sensor <strong>' + (checked ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "    }\n";
   html += "    updateStatus(); // Refresh status\n";
@@ -1922,7 +2067,16 @@ inline String getRoofControlPage() {
   html += "      // Update roof status\n";
   html += "      const statusEl = document.getElementById('roofStatus');\n";
   html += "      if (statusEl) {\n";
-  html += "        statusEl.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusEl.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
+  html += "          } else {\n";
+  html += "            statusEl.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
+  html += "        } else {\n";
+  html += "          statusEl.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusEl.className = '';\n";
   html += "        if (data.status === 'Open') statusEl.className = 'status-open';\n";
   html += "        else if (data.status === 'Closed') statusEl.className = 'status-closed';\n";
@@ -1950,7 +2104,7 @@ inline String getRoofControlPage() {
   html += "      const bypassLabel = document.getElementById('bypassLabelControl');\n";
   html += "      if (bypassToggle) bypassToggle.checked = data.bypass_enabled;\n";
   html += "      if (bypassLabel) {\n";
-  html += "        bypassLabel.style.color = data.bypass_enabled ? '#f44336' : '#333';\n";
+  html += "        bypassLabel.style.color = data.bypass_enabled ? '#f44336' : '#ffffff';\n";
   html += "        bypassLabel.innerHTML = 'Bypass Park Sensor <strong>' + (data.bypass_enabled ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "      }\n\n";
 
@@ -2022,7 +2176,16 @@ inline String getRoofControlPage() {
   html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
   html += "      const statusText = document.getElementById('mainStatusText');\n";
   html += "      if (statusHeader && statusIndicator && statusText) {\n";
-  html += "        statusText.textContent = data.status;\n";
+  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
+  html += "          // Check for timeout with no limit switches - show brief message\n";
+  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
+  html += "            statusText.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
+  html += "          } else {\n";
+  html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
+  html += "          }\n";
+  html += "        } else {\n";
+  html += "          statusText.textContent = data.status;\n";
+  html += "        }\n";
   html += "        statusHeader.className = 'status-header ';\n";
   html += "        statusIndicator.className = 'status-indicator ';\n";
   html += "        if (data.status === 'Open') {\n";

@@ -25,9 +25,11 @@ struct GPSStatus {
   bool enabled;
   bool hasFix;
   uint8_t satellites;
+  uint8_t satellites_in_view;
   double latitude;
   double longitude;
   double altitude;
+  double hdop;
   GPSTime time;
   unsigned long lastUpdate;
 };

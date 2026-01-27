@@ -1046,10 +1046,11 @@ void handleClearError() {
 
 // API endpoint for real-time status updates (returns JSON)
 void handleApiStatus() {
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(2048);
 
   // Roof status
   doc["status"] = getRoofStatusString();
+  doc["error_reason"] = roofErrorReason;
   doc["telescope_parked"] = telescopeParked;
   doc["bypass_enabled"] = bypassParkSensor;
 
@@ -1063,6 +1064,19 @@ void handleApiStatus() {
 
   // Park sensor type
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
+
+  // UDP Park sensor data
+  if (parkSensorType == PARK_SENSOR_UDP || parkSensorType == PARK_SENSOR_BOTH) {
+    std::vector<ParkSensor> activeSensors = getActiveSensors();
+    doc["udp_all_parked"] = isTelescopeParkedUDP();
+    JsonArray sensorsArray = doc.createNestedArray("udp_sensors");
+    for (const auto& sensor : activeSensors) {
+      JsonObject sensorObj = sensorsArray.createNestedObject();
+      sensorObj["name"] = sensor.name;
+      sensorObj["status"] = static_cast<int>(sensor.status);
+      sensorObj["bypassed"] = sensor.bypassEnabled;
+    }
+  }
 
   // Time status
   doc["time_synced"] = timeSynced;
@@ -1083,9 +1097,12 @@ void handleApiStatus() {
     GPSStatus gpsStatusData = getGPSStatus();
     doc["gps_fix"] = gpsStatusData.hasFix;
     doc["gps_satellites"] = gpsStatusData.satellites;
+    doc["gps_satellites_in_view"] = gpsStatusData.satellites_in_view;
+    doc["gps_hdop"] = gpsStatusData.hdop;
     doc["gps_time"] = getGPSTimeString();
     doc["gps_latitude"] = gpsStatusData.latitude;
     doc["gps_longitude"] = gpsStatusData.longitude;
+    doc["gps_altitude"] = gpsStatusData.altitude;
   }
 
   String jsonResponse;
@@ -1155,6 +1172,8 @@ void handleGPSStatus() {
   doc["ntp_enabled"] = gpsNtpEnabled;
   doc["has_fix"] = status.hasFix;
   doc["satellites"] = status.satellites;
+  doc["satellites_in_view"] = status.satellites_in_view;
+  doc["hdop"] = status.hdop;
   doc["latitude"] = status.latitude;
   doc["longitude"] = status.longitude;
   doc["altitude"] = status.altitude;

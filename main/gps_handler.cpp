@@ -23,7 +23,7 @@ bool timeSynced = false;
 int16_t timezoneOffset = 0;     // Timezone offset in minutes from UTC
 bool dstEnabled = false;        // Daylight Saving Time enabled
 TimeSource currentTimeSource = TIME_SOURCE_NONE;
-GPSStatus gpsStatus = {false, false, 0, 0.0, 0.0, 0.0, {0, 0, 0, 0, 0, 0, false}, 0};
+GPSStatus gpsStatus = {false, false, 0, 0, 0.0, 0.0, 0.0, 0.0, {0, 0, 0, 0, 0, 0, false}, 0};
 
 // GPS Pin configuration (user-configurable via WebUI)
 int gpsTxPin = DEFAULT_GPS_TX_PIN;    // GPS TX -> ESP32 RX
@@ -53,6 +53,7 @@ static bool rtcSyncedFromGPS = false;
 static void parseNMEA(const char* sentence);
 static void parseGPRMC(const char* sentence);
 static void parseGPGGA(const char* sentence);
+static void parseGPGSV(const char* sentence);
 static double parseLatLon(const char* str, char dir);
 static uint32_t dateTimeToUnix(uint16_t year, uint8_t month, uint8_t day,
                                 uint8_t hour, uint8_t minute, uint8_t second);
@@ -224,6 +225,8 @@ void initGPS() {
   gpsStatus.enabled = true;
   gpsStatus.hasFix = false;
   gpsStatus.satellites = 0;
+  gpsStatus.satellites_in_view = 0;
+  gpsStatus.hdop = 0.0;
   gpsStatus.time.valid = false;
   gpsStatus.lastUpdate = 0;
 
@@ -648,6 +651,9 @@ static void parseNMEA(const char* sentence) {
   else if (strncmp(sentence + 3, "GGA", 3) == 0) {
     parseGPGGA(sentence);
   }
+  else if (strncmp(sentence + 3, "GSV", 3) == 0) {
+    parseGPGSV(sentence);
+  }
 }
 
 static void parseGPRMC(const char* sentence) {
@@ -734,9 +740,38 @@ static void parseGPGGA(const char* sentence) {
         case 7:
           if (fieldLen > 0) gpsStatus.satellites = atoi(field);
           break;
+        case 8:
+          if (fieldLen > 0) gpsStatus.hdop = atof(field);
+          break;
         case 9:
           if (fieldLen > 0) gpsStatus.altitude = atof(field);
           break;
+      }
+      fieldIndex++;
+      fieldLen = 0;
+    } else {
+      if (fieldLen < sizeof(field) - 1) {
+        field[fieldLen++] = *p;
+      }
+    }
+    p++;
+  }
+}
+
+// Parse GPGSV sentence to get satellites in view
+static void parseGPGSV(const char* sentence) {
+  char* p = (char*)sentence;
+  int fieldIndex = 0;
+  char field[20];
+  int fieldLen = 0;
+
+  while (*p) {
+    if (*p == ',' || *p == '*') {
+      field[fieldLen] = '\0';
+      // Field 3 contains the total number of satellites in view
+      if (fieldIndex == 3) {
+        if (fieldLen > 0) gpsStatus.satellites_in_view = atoi(field);
+        return;  // We only need this field
       }
       fieldIndex++;
       fieldLen = 0;
