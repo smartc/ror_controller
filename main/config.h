@@ -18,7 +18,7 @@
 #define DISABLE_BROWNOUT_DETECTION 0
 
 // Version Information
-#define DEVICE_VERSION "3.1.1"  // v3 hardware with ESP32-S3, GPS/NTP support
+#define DEVICE_VERSION "3.1.2"  // v3 hardware with ESP32-S3, GPS/NTP support
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
