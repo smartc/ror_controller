@@ -53,6 +53,10 @@ unsigned long lastMqttReconnectAttempt = 0;
 unsigned long lastMqttPublish = 0;
 unsigned long lastStatusUpdate = 0;
 
+// Reset diagnostics (accessible from web UI)
+String lastResetReason = "Unknown";
+uint32_t rebootCount = 0;
+
 // Get human-readable reset reason
 String getResetReasonString() {
   esp_reset_reason_t reason = esp_reset_reason();
@@ -82,10 +86,19 @@ void setup() {
   #endif
 
   // Print reset reason FIRST - critical for diagnosing reboots
-  String resetReason = getResetReasonString();
+  lastResetReason = getResetReasonString();
   Debug.println("\n\n========================================");
-  Debug.println("RESET REASON: " + resetReason);
+  Debug.println("RESET REASON: " + lastResetReason);
   Debug.println("========================================\n");
+
+  // Load and increment reboot counter from preferences
+  Preferences bootPrefs;
+  bootPrefs.begin("bootDiag", false);
+  rebootCount = bootPrefs.getULong("rebootCount", 0) + 1;
+  bootPrefs.putULong("rebootCount", rebootCount);
+  bootPrefs.putString("lastReset", lastResetReason);
+  bootPrefs.end();
+  Debug.printf("Reboot count: %lu\n", rebootCount);
 
   // If brown-out detected, log a warning
   if (esp_reset_reason() == ESP_RST_BROWNOUT) {

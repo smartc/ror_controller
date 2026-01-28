@@ -14,6 +14,10 @@
 #include "gps_handler.h"
 #include <WiFi.h>
 
+// Reset diagnostics (from main.ino)
+extern String lastResetReason;
+extern uint32_t rebootCount;
+
 // Forward declarations of template components
 String getPageHeader(String pageTitle);
 String getNavBar();
@@ -570,6 +574,19 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<tr><th>MAC Address</th><td>" + WiFi.macAddress() + "</td></tr>\n";
   html += "<tr><th>Firmware Version</th><td>" + String(DEVICE_VERSION) + "</td></tr>\n";
   html += "<tr><th>Uptime</th><td>" + String(millis() / 1000 / 60) + " minutes</td></tr>\n";
+
+  // Reset diagnostics - helpful for debugging field issues
+  String resetClass = "green";
+  if (lastResetReason.indexOf("BROWNOUT") >= 0) resetClass = "red";
+  else if (lastResetReason.indexOf("panic") >= 0 || lastResetReason.indexOf("watchdog") >= 0) resetClass = "red";
+  else if (lastResetReason.indexOf("Power-on") >= 0) resetClass = "green";
+
+  html += "<tr><th>Last Reset Reason</th><td>";
+  html += "<span class='status-indicator " + resetClass + "'></span> ";
+  html += lastResetReason;
+  html += "</td></tr>\n";
+  html += "<tr><th>Reboot Count</th><td>" + String(rebootCount) + "</td></tr>\n";
+
   html += "</table>\n";
   html += "</div>\n";
   
