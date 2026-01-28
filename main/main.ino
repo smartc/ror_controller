@@ -277,7 +277,12 @@ void startAPMode() {
   }
 }
 
-// Handle WiFi connection in main loop
+// WiFi reconnection state (non-blocking)
+bool wifiReconnecting = false;
+unsigned long wifiReconnectStartTime = 0;
+const unsigned long WIFI_RECONNECT_TIMEOUT = 30000;  // 30 seconds max
+
+// Handle WiFi connection in main loop (NON-BLOCKING)
 void handleWiFi() {
   if (apMode) {
     // Check if we should exit AP mode after timeout
@@ -291,22 +296,29 @@ void handleWiFi() {
   } else {
     // Check if WiFi connection is lost
     if (WiFi.status() != WL_CONNECTED) {
-      Debug.printf("WiFi connection lost (status: %d), attempting to reconnect...\n", WiFi.status());
-      WiFi.reconnect();
-
-      // If reconnection fails after 30 seconds, start AP mode
-      unsigned long reconnectStart = millis();
-      while (WiFi.status() != WL_CONNECTED && millis() - reconnectStart < 30000) {
-        delay(500);
-        Debug.print(".");
-      }
-
-      if (WiFi.status() != WL_CONNECTED) {
-        Debug.printf("\nFailed to reconnect (status: %d), starting AP mode\n", WiFi.status());
-        startAPMode();
+      if (!wifiReconnecting) {
+        // Start reconnection attempt
+        Debug.printf("WiFi connection lost (status: %d), attempting to reconnect...\n", WiFi.status());
+        WiFi.reconnect();
+        wifiReconnecting = true;
+        wifiReconnectStartTime = millis();
       } else {
-        Debug.println("\nWiFi reconnected successfully!");
+        // Already reconnecting - check if we've timed out
+        if (millis() - wifiReconnectStartTime > WIFI_RECONNECT_TIMEOUT) {
+          Debug.printf("\nFailed to reconnect after %lu seconds (status: %d), starting AP mode\n",
+                       WIFI_RECONNECT_TIMEOUT / 1000, WiFi.status());
+          wifiReconnecting = false;
+          startAPMode();
+        }
+        // Otherwise, just let the reconnection continue in the background
+        // WiFi.reconnect() works asynchronously - no need to block
+      }
+    } else {
+      // WiFi is connected
+      if (wifiReconnecting) {
+        Debug.println("WiFi reconnected successfully!");
         Debug.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+        wifiReconnecting = false;
       }
     }
   }
