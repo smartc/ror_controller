@@ -12,6 +12,11 @@
 // Debug level setting
 #define DEBUG_LEVEL 1  // 0=Off, 1=Basic, 2=Verbose
 
+// Brown-out detection setting
+// Set to 1 to DISABLE brown-out detection (use if motor causes resets)
+// WARNING: Disabling brown-out detection can cause data corruption if voltage drops too low
+#define DISABLE_BROWNOUT_DETECTION 0
+
 // Version Information
 #define DEVICE_VERSION "3.1.0"  // v3 hardware with ESP32-S3, GPS/NTP support
 #define DEVICE_MANUFACTURER "Corey Smart"
