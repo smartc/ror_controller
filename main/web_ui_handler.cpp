@@ -73,8 +73,11 @@ void loadConfiguration() {
       strncpy(mqttTopicPrefix, savedMqttTopicPrefix.c_str(), sizeof(mqttTopicPrefix) - 1);
       mqttTopicPrefix[sizeof(mqttTopicPrefix) - 1] = '\0';
     }
+
+    // Load MQTT keepalive setting
+    mqttKeepalive = preferences.getUShort(PREF_MQTT_KEEPALIVE, DEFAULT_MQTT_KEEPALIVE);
   }
-  
+
   // Load pin/switch configuration settings
   if (preferences.isKey(PREF_TRIGGER_STATE)) {
     TRIGGERED = preferences.getInt(PREF_TRIGGER_STATE, DEFAULT_TRIGGER_STATE);
@@ -200,6 +203,7 @@ void saveConfiguration() {
   preferences.putString(PREF_MQTT_PASSWORD, mqttPassword);
   preferences.putString(PREF_MQTT_CLIENT_ID, mqttClientId);
   preferences.putString(PREF_MQTT_TOPIC_PREFIX, mqttTopicPrefix);
+  preferences.putUShort(PREF_MQTT_KEEPALIVE, mqttKeepalive);
 
   // Save movement timeout
   preferences.putULong(PREF_MOVEMENT_TIMEOUT, movementTimeout);
@@ -674,8 +678,18 @@ void handleSetupPost() {
       settingsChanged = true;
       Debug.println("MQTT topic prefix changed");
     }
+
+    // Handle keepalive setting
+    if (webUiServer.hasArg("mqttKeepalive")) {
+      uint16_t newKeepalive = webUiServer.arg("mqttKeepalive").toInt();
+      if (newKeepalive >= 15 && newKeepalive <= 300 && newKeepalive != mqttKeepalive) {
+        mqttKeepalive = newKeepalive;
+        settingsChanged = true;
+        Debug.printf("MQTT keepalive changed to %d seconds\n", mqttKeepalive);
+      }
+    }
   }
-  
+
   // Save settings if changed
   if (settingsChanged) {
     saveConfiguration();

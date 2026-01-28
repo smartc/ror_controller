@@ -8,6 +8,34 @@
 
 #include "config.h"
 
+// Non-blocking state machine for roof operations
+// This allows the main loop to continue running WiFi/MQTT while relay sequences execute
+enum RoofOperationState {
+  OP_IDLE,                    // No operation in progress
+  OP_INVERTER_POWER_ON,       // K1 turned on, waiting for delay
+  OP_INVERTER_BUTTON_PRESS,   // K3 pressed, waiting 500ms
+  OP_INVERTER_BUTTON_RELEASE, // K3 released, waiting 100ms
+  OP_INVERTER_DELAY2,         // Waiting delay2 after soft-power
+  OP_ROOF_BUTTON_PRESS,       // K2 pressed, waiting 500ms
+  OP_ROOF_BUTTON_RELEASE,     // K2 released, operation complete
+  OP_STOP_BUTTON_PRESS,       // K2 pressed for stop, waiting 500ms
+  OP_STOP_BUTTON_RELEASE      // K2 released for stop, then turn off K1
+};
+
+// Target direction for current operation
+enum RoofOperationTarget {
+  TARGET_NONE,
+  TARGET_OPEN,
+  TARGET_CLOSE,
+  TARGET_STOP
+};
+
+// State machine variables (extern declarations)
+extern RoofOperationState roofOpState;
+extern RoofOperationTarget roofOpTarget;
+extern unsigned long roofOpStepStartTime;
+extern bool roofOpNeedsInverterButton;  // Whether K3 press is needed (AC power not detected)
+
 // Global state variables
 extern RoofStatus roofStatus;
 extern RoofStatus lastPublishedStatus; // Track last published status
@@ -48,6 +76,7 @@ void applyPinSettings();  // Function to apply pin settings
 void determineInitialRoofStatus();
 void updateTelescopeStatus();  // Function to update telescope park status
 void clearRoofError();         // Clear error state and reason (for recovery)
+void processRoofOperation();   // Non-blocking state machine - call from main loop
 
 // Inverter control functions (NEW in v3)
 void toggleInverterPower();           // Toggle K1 inverter power relay

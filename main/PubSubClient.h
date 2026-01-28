@@ -32,8 +32,10 @@
 #endif
 
 // MQTT_SOCKET_TIMEOUT: socket timeout interval in Seconds. Override with setSocketTimeout()
+// Reduced from 15 to 3 seconds to prevent ESP32 task watchdog resets
+// (ESP32 watchdog timeout is ~5 seconds, so socket operations must complete faster)
 #ifndef MQTT_SOCKET_TIMEOUT
-#define MQTT_SOCKET_TIMEOUT 15
+#define MQTT_SOCKET_TIMEOUT 3
 #endif
 
 // MQTT_MAX_TRANSFER_SIZE : limit how much data is passed to the network client
