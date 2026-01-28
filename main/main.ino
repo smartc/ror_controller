@@ -108,7 +108,11 @@ void loop() {
   
   // Handle UDP park sensor messages
   handleParkSensorUDP();
-  
+
+  // Process non-blocking roof operations (state machine)
+  // This handles relay timing without blocking WiFi/MQTT
+  processRoofOperation();
+
   // Update roof status
   updateRoofStatus();
 
