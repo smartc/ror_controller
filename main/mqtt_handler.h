@@ -19,6 +19,7 @@ extern char mqttUser[MQTT_USER_SIZE];
 extern char mqttPassword[MQTT_PASSWORD_SIZE];
 extern char mqttClientId[MQTT_CLIENTID_SIZE];
 extern char mqttTopicPrefix[MQTT_TOPIC_SIZE];
+extern uint16_t mqttKeepalive;  // MQTT keepalive interval in seconds
 extern char mqttTopicStatus[MQTT_TOPIC_SIZE];
 extern char mqttTopicCommand[MQTT_TOPIC_SIZE];
 extern char mqttTopicAvailability[MQTT_TOPIC_SIZE];

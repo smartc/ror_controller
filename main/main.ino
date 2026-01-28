@@ -38,6 +38,10 @@
 #include "park_sensor_udp.h"
 #include "gps_handler.h"
 
+// For reset reason detection
+#include "esp_system.h"
+#include "soc/rtc_cntl_reg.h"
+
 // WiFi credentials and configuration
 char ssid[SSID_SIZE] = DEFAULT_WIFI_SSID;
 char password[PASSWORD_SIZE] = DEFAULT_WIFI_PASSWORD;
@@ -49,9 +53,60 @@ unsigned long lastMqttReconnectAttempt = 0;
 unsigned long lastMqttPublish = 0;
 unsigned long lastStatusUpdate = 0;
 
+// Reset diagnostics (accessible from web UI)
+String lastResetReason = "Unknown";
+uint32_t rebootCount = 0;
+
+// Get human-readable reset reason
+String getResetReasonString() {
+  esp_reset_reason_t reason = esp_reset_reason();
+  switch (reason) {
+    case ESP_RST_POWERON:   return "Power-on reset";
+    case ESP_RST_EXT:       return "External reset (pin)";
+    case ESP_RST_SW:        return "Software reset";
+    case ESP_RST_PANIC:     return "Exception/panic reset";
+    case ESP_RST_INT_WDT:   return "Interrupt watchdog reset";
+    case ESP_RST_TASK_WDT:  return "Task watchdog reset";
+    case ESP_RST_WDT:       return "Other watchdog reset";
+    case ESP_RST_DEEPSLEEP: return "Deep sleep wake";
+    case ESP_RST_BROWNOUT:  return "BROWNOUT RESET";  // <-- This is what we're looking for
+    case ESP_RST_SDIO:      return "SDIO reset";
+    default:                return "Unknown reset (" + String(reason) + ")";
+  }
+}
+
 void setup() {
   // Initialize debug output
   Debug.begin(115200);
+
+  // Optionally disable brown-out detection (if motor causes voltage drops)
+  #if DISABLE_BROWNOUT_DETECTION
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+    Debug.println("WARNING: Brown-out detection DISABLED");
+  #endif
+
+  // Print reset reason FIRST - critical for diagnosing reboots
+  lastResetReason = getResetReasonString();
+  Debug.println("\n\n========================================");
+  Debug.println("RESET REASON: " + lastResetReason);
+  Debug.println("========================================\n");
+
+  // Load and increment reboot counter from preferences
+  Preferences bootPrefs;
+  bootPrefs.begin("bootDiag", false);
+  rebootCount = bootPrefs.getULong("rebootCount", 0) + 1;
+  bootPrefs.putULong("rebootCount", rebootCount);
+  bootPrefs.putString("lastReset", lastResetReason);
+  bootPrefs.end();
+  Debug.printf("Reboot count: %lu\n", rebootCount);
+
+  // If brown-out detected, log a warning
+  if (esp_reset_reason() == ESP_RST_BROWNOUT) {
+    Debug.println("WARNING: Brown-out detected! Check power supply.");
+    Debug.println("The motor may be causing voltage drops.");
+    Debug.println("Consider setting DISABLE_BROWNOUT_DETECTION=1 in config.h");
+  }
+
   Debug.println("ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)");
   Debug.println("Version: " + String(DEVICE_VERSION));
   Debug.println("Manufacturer: " + String(DEVICE_MANUFACTURER));
@@ -108,7 +163,11 @@ void loop() {
   
   // Handle UDP park sensor messages
   handleParkSensorUDP();
-  
+
+  // Process non-blocking roof operations (state machine)
+  // This handles relay timing without blocking WiFi/MQTT
+  processRoofOperation();
+
   // Update roof status
   updateRoofStatus();
 
@@ -273,7 +332,12 @@ void startAPMode() {
   }
 }
 
-// Handle WiFi connection in main loop
+// WiFi reconnection state (non-blocking)
+bool wifiReconnecting = false;
+unsigned long wifiReconnectStartTime = 0;
+const unsigned long WIFI_RECONNECT_TIMEOUT = 30000;  // 30 seconds max
+
+// Handle WiFi connection in main loop (NON-BLOCKING)
 void handleWiFi() {
   if (apMode) {
     // Check if we should exit AP mode after timeout
@@ -287,22 +351,29 @@ void handleWiFi() {
   } else {
     // Check if WiFi connection is lost
     if (WiFi.status() != WL_CONNECTED) {
-      Debug.printf("WiFi connection lost (status: %d), attempting to reconnect...\n", WiFi.status());
-      WiFi.reconnect();
-
-      // If reconnection fails after 30 seconds, start AP mode
-      unsigned long reconnectStart = millis();
-      while (WiFi.status() != WL_CONNECTED && millis() - reconnectStart < 30000) {
-        delay(500);
-        Debug.print(".");
-      }
-
-      if (WiFi.status() != WL_CONNECTED) {
-        Debug.printf("\nFailed to reconnect (status: %d), starting AP mode\n", WiFi.status());
-        startAPMode();
+      if (!wifiReconnecting) {
+        // Start reconnection attempt
+        Debug.printf("WiFi connection lost (status: %d), attempting to reconnect...\n", WiFi.status());
+        WiFi.reconnect();
+        wifiReconnecting = true;
+        wifiReconnectStartTime = millis();
       } else {
-        Debug.println("\nWiFi reconnected successfully!");
+        // Already reconnecting - check if we've timed out
+        if (millis() - wifiReconnectStartTime > WIFI_RECONNECT_TIMEOUT) {
+          Debug.printf("\nFailed to reconnect after %lu seconds (status: %d), starting AP mode\n",
+                       WIFI_RECONNECT_TIMEOUT / 1000, WiFi.status());
+          wifiReconnecting = false;
+          startAPMode();
+        }
+        // Otherwise, just let the reconnection continue in the background
+        // WiFi.reconnect() works asynchronously - no need to block
+      }
+    } else {
+      // WiFi is connected
+      if (wifiReconnecting) {
+        Debug.println("WiFi reconnected successfully!");
         Debug.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+        wifiReconnecting = false;
       }
     }
   }

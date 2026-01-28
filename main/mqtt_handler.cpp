@@ -17,6 +17,7 @@ char mqttUser[MQTT_USER_SIZE] = DEFAULT_MQTT_USER;
 char mqttPassword[MQTT_PASSWORD_SIZE] = DEFAULT_MQTT_PASSWORD;
 char mqttClientId[MQTT_CLIENTID_SIZE] = DEFAULT_MQTT_CLIENT_ID;
 char mqttTopicPrefix[MQTT_TOPIC_SIZE] = DEFAULT_MQTT_TOPIC_PREFIX;
+uint16_t mqttKeepalive = DEFAULT_MQTT_KEEPALIVE;  // Keepalive in seconds (broker waits ~1.5x before LWT)
 
 // Derived topic paths - will be constructed in setupMQTT based on prefix
 char mqttTopicStatus[MQTT_TOPIC_SIZE];
@@ -96,8 +97,12 @@ void setupMQTT() {
   Serial.printf("  Availability: %s\n", mqttTopicAvailability);
   
   mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setKeepAlive(mqttKeepalive);  // Set keepalive interval
   mqttClient.setCallback(mqttCallback);
-  
+
+  Serial.printf("MQTT keepalive: %d seconds (unavailable after ~%d seconds)\n",
+                mqttKeepalive, (int)(mqttKeepalive * 1.5));
+
   // Try to connect
   reconnectMQTT();
 }
