@@ -113,6 +113,7 @@ extern bool dstEnabled;                 // Daylight Saving Time enabled
 #define DEFAULT_MQTT_PASSWORD "MQTT_P@55w0rd"
 #define DEFAULT_MQTT_CLIENT_ID "RollOffRoof"
 #define DEFAULT_MQTT_TOPIC_PREFIX "observatory/roof"
+#define DEFAULT_MQTT_KEEPALIVE 60       // 60 seconds - broker waits ~1.5x before triggering LWT
 #define MQTT_PUBLISH_INTERVAL 30000     // 30 seconds
 
 // ASCOM Alpaca Configuration
@@ -148,6 +149,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_MQTT_PASSWORD "mqttPassword"
 #define PREF_MQTT_CLIENT_ID "mqttClientId"
 #define PREF_MQTT_TOPIC_PREFIX "mqttTopicPrefix"
+#define PREF_MQTT_KEEPALIVE "mqttKeepalive"
 #define PREF_INVERTER_RELAY_ENABLED "inverterRelayEn"
 #define PREF_INVERTER_SOFTPWR_ENABLED "inverterSoftEn"
 #define PREF_INVERTER_DELAY1 "inverterDelay1"

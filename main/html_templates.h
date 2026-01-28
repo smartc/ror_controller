@@ -1041,6 +1041,9 @@ inline String getMqttSettingsCard() {
   html += "<label for='mqttTopicPrefix'>MQTT Topic Prefix:</label>";
   html += "<input type='text' id='mqttTopicPrefix' name='mqttTopicPrefix' value='" + String(mqttTopicPrefix) + "'>";
   html += "<p style='font-size: 0.8em; color: #b0b0b0;'>Status and command topics will be created as [prefix]/status and [prefix]/command</p>";
+  html += "<label for='mqttKeepalive'>MQTT Keepalive (seconds):</label>";
+  html += "<input type='number' id='mqttKeepalive' name='mqttKeepalive' min='15' max='300' value='" + String(mqttKeepalive) + "'>";
+  html += "<p style='font-size: 0.8em; color: #b0b0b0;'>How often to send heartbeats. Home Assistant marks device unavailable after ~1.5x this time. Higher values = more tolerance for brief WiFi drops.</p>";
   html += "<input type='submit' value='Save MQTT Settings'>";
   html += "</form>";
   html += "</div>";
