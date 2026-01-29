@@ -195,8 +195,8 @@ void sendAlpacaResponse(int clientID, int clientTransactionID, int errorNumber, 
       doc["Value"] = true;
     } else if (value == "false") {
       doc["Value"] = false;
-    } else if (value.toInt() != 0 || value == "0") {
-      // Check if value is an integer
+    } else if (value.length() > 0 && (value == "0" || (value.toInt() != 0 && value == String(value.toInt())))) {
+      // Check if value is strictly an integer (not a version string like "3.1.2")
       doc["Value"] = value.toInt();
     } else {
       // Otherwise, treat as string
