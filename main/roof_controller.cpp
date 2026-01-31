@@ -98,7 +98,7 @@ void initializeRoofController() {
 
   // Configure AC power detection input - NEW in v3
   pinMode(INVERTER_AC_POWER_PIN, INPUT);
-  inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
+  inverterACPowerState = (digitalRead(INVERTER_AC_POWER_PIN) == LOW);
   lastInverterACPowerState = inverterACPowerState;
   lastInverterACPowerChangeTime = millis() - SWITCH_STABLE_TIME - 1;
 
@@ -404,7 +404,7 @@ bool startOpeningRoof() {
 
   // Determine if we need the soft-power button press
   if (inverterSoftPwrEnabled) {
-    inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
+    inverterACPowerState = (digitalRead(INVERTER_AC_POWER_PIN) == LOW);
     roofOpNeedsInverterButton = !inverterACPowerState;
     Debug.printf("AC power detected: %s, will %spress K3\n",
                  inverterACPowerState ? "YES" : "NO",
@@ -429,8 +429,15 @@ bool startOpeningRoof() {
     }
     roofOpState = OP_INVERTER_POWER_ON;
     roofOpStepStartTime = millis();
+  } else if (inverterSoftPwrEnabled && roofOpNeedsInverterButton) {
+    // No inverter relay, but need soft-power button press (K3) before roof button
+    Debug.println("Inverter relay disabled - pressing K3 soft-power button first");
+    digitalWrite(INVERTER_BUTTON_PIN, HIGH);
+    Debug.println("Inverter button PRESSED (K3 relay energized)");
+    roofOpState = OP_INVERTER_BUTTON_PRESS;
+    roofOpStepStartTime = millis();
   } else {
-    // No inverter relay, go directly to roof button
+    // No inverter relay, no K3 needed - go directly to roof button
     Debug.println("Inverter relay disabled - pressing roof button directly");
     digitalWrite(ROOF_CONTROL_PIN, HIGH);
     Debug.println("Button PRESSED (K2 relay energized)");
@@ -481,7 +488,7 @@ bool startClosingRoof() {
 
   // Determine if we need the soft-power button press
   if (inverterSoftPwrEnabled) {
-    inverterACPowerState = digitalRead(INVERTER_AC_POWER_PIN);
+    inverterACPowerState = (digitalRead(INVERTER_AC_POWER_PIN) == LOW);
     roofOpNeedsInverterButton = !inverterACPowerState;
     Debug.printf("AC power detected: %s, will %spress K3\n",
                  inverterACPowerState ? "YES" : "NO",
@@ -506,8 +513,15 @@ bool startClosingRoof() {
     }
     roofOpState = OP_INVERTER_POWER_ON;
     roofOpStepStartTime = millis();
+  } else if (inverterSoftPwrEnabled && roofOpNeedsInverterButton) {
+    // No inverter relay, but need soft-power button press (K3) before roof button
+    Debug.println("Inverter relay disabled - pressing K3 soft-power button first");
+    digitalWrite(INVERTER_BUTTON_PIN, HIGH);
+    Debug.println("Inverter button PRESSED (K3 relay energized)");
+    roofOpState = OP_INVERTER_BUTTON_PRESS;
+    roofOpStepStartTime = millis();
   } else {
-    // No inverter relay, go directly to roof button
+    // No inverter relay, no K3 needed - go directly to roof button
     Debug.println("Inverter relay disabled - pressing roof button directly");
     digitalWrite(ROOF_CONTROL_PIN, HIGH);
     Debug.println("Button PRESSED (K2 relay energized)");
