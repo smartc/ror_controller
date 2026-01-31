@@ -19,7 +19,10 @@ enum RoofOperationState {
   OP_ROOF_BUTTON_PRESS,       // K2 pressed, waiting 500ms
   OP_ROOF_BUTTON_RELEASE,     // K2 released, operation complete
   OP_STOP_BUTTON_PRESS,       // K2 pressed for stop, waiting 500ms
-  OP_STOP_BUTTON_RELEASE      // K2 released for stop, then turn off K1
+  OP_STOP_BUTTON_RELEASE,     // K2 released for stop, then shutdown inverter
+  OP_SHUTDOWN_K1_WAIT,        // K1 turned off, waiting ~1s before checking AC power
+  OP_SHUTDOWN_K3_PRESS,       // AC still on after K1 off, K3 pressed to toggle soft-power off
+  OP_SHUTDOWN_K3_RELEASE      // K3 released, shutdown complete
 };
 
 // Target direction for current operation
@@ -84,5 +87,6 @@ void sendInverterButtonPress();       // Send K3 soft-power button press
 bool getInverterRelayState();         // Get state of K1 relay
 bool getInverterACPowerState();       // Get state of AC power (via optocoupler)
 void updateInverterPowerStatus();     // Update and monitor inverter AC power state
+void shutdownInverterPower();         // Non-blocking inverter shutdown: K1 off, check AC, toggle K3 if needed
 
 #endif // ROOF_CONTROLLER_H
