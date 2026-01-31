@@ -18,7 +18,7 @@
 #define DISABLE_BROWNOUT_DETECTION 0
 
 // Version Information
-#define DEVICE_VERSION "3.1.3"  // v3 hardware with ESP32-S3, GPS/NTP support, Bug fix - K3 logic
+#define DEVICE_VERSION "3.2.0"  // v3 hardware with ESP32-S3, GPS/NTP support, PPS signal for sub-second NTP accuracy
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
@@ -172,7 +172,7 @@ const int NTP_PORT = 123;                   // Standard NTP port
 const int16_t DEFAULT_TIMEZONE_OFFSET = 0;  // Default: UTC (0 minutes)
 const bool DEFAULT_DST_ENABLED = false;     // Default: DST disabled
 // NTP server runs independently once time is synced from GPS or RTC
-// TODO: Add PPS (Pulse Per Second) sync support for sub-second GPS accuracy
+// PPS (Pulse Per Second) provides sub-second accuracy when GPS PPS pin is configured
 
 // Enum for roof status - matches ASCOM ShutterStatus values
 enum RoofStatus {
