@@ -227,8 +227,7 @@ void updateRoofStatus() {
     roofErrorReason = "Both open and closed limit switches are triggered simultaneously. "
                       "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
     roofStatus = ROOF_ERROR;
-    digitalWrite(INVERTER_PIN, LOW); // Turn off inverter for safety
-    inverterRelayState = false;
+    shutdownInverterPower();
     statusMessage = "ERROR: Both limit switches triggered!";
   }
   else if (isOpenLimitTriggered) {
@@ -240,16 +239,14 @@ void updateRoofStatus() {
                         String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
       statusMessage = "ERROR: Roof failed to start closing";
       Debug.println("Error reason: " + roofErrorReason);
-      digitalWrite(INVERTER_PIN, LOW);
-      inverterRelayState = false;
       roofStatus = ROOF_ERROR;
+      shutdownInverterPower();
     }
     else if (roofStatus == ROOF_OPENING) {
       // We were opening and reached the open position - success!
       statusMessage = "Roof fully open";
-      digitalWrite(INVERTER_PIN, LOW);
-      inverterRelayState = false;
       roofStatus = ROOF_OPEN;
+      shutdownInverterPower();
     }
     else if (roofStatus == ROOF_ERROR) {
       // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
@@ -258,9 +255,8 @@ void updateRoofStatus() {
     else if (roofStatus != ROOF_OPEN) {
       // Transitioning to OPEN from CLOSED state (manual movement detected)
       statusMessage = "Roof fully open";
-      digitalWrite(INVERTER_PIN, LOW);
-      inverterRelayState = false;
       roofStatus = ROOF_OPEN;
+      shutdownInverterPower();
     }
   }
   else if (isClosedLimitTriggered) {
@@ -272,16 +268,14 @@ void updateRoofStatus() {
                         String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
       statusMessage = "ERROR: Roof failed to start opening";
       Debug.println("Error reason: " + roofErrorReason);
-      digitalWrite(INVERTER_PIN, LOW);
-      inverterRelayState = false;
       roofStatus = ROOF_ERROR;
+      shutdownInverterPower();
     }
     else if (roofStatus == ROOF_CLOSING) {
       // We were closing and reached the closed position - success!
       statusMessage = "Roof fully closed";
-      digitalWrite(INVERTER_PIN, LOW);
-      inverterRelayState = false;
       roofStatus = ROOF_CLOSED;
+      shutdownInverterPower();
     }
     else if (roofStatus == ROOF_ERROR) {
       // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
@@ -290,9 +284,8 @@ void updateRoofStatus() {
     else if (roofStatus != ROOF_CLOSED) {
       // Transitioning to CLOSED from OPEN state (manual movement detected)
       statusMessage = "Roof fully closed";
-      digitalWrite(INVERTER_PIN, LOW);
-      inverterRelayState = false;
       roofStatus = ROOF_CLOSED;
+      shutdownInverterPower();
     }
   } 
   else {
@@ -544,15 +537,10 @@ bool stopRoofMovement(bool updateStatus) {
     digitalWrite(INVERTER_BUTTON_PIN, LOW);
   }
 
-  // If not currently moving, just turn off inverter and return
+  // If not currently moving, just shutdown inverter and return
   if (roofStatus != ROOF_OPENING && roofStatus != ROOF_CLOSING) {
-    if (inverterRelayEnabled) {
-      digitalWrite(INVERTER_PIN, LOW);
-      inverterRelayState = false;
-      Debug.println("Inverter turned OFF (K1 relay de-energized)");
-    }
-    roofOpState = OP_IDLE;
     roofOpTarget = TARGET_NONE;
+    shutdownInverterPower();
     return true;
   }
 
@@ -858,15 +846,8 @@ void processRoofOperation() {
       break;
 
     case OP_STOP_BUTTON_RELEASE:
-      // K2 released for stop, turn off K1 and finish
+      // K2 released for stop, shutdown inverter and finish
       {
-        // Turn off inverter if relay control is enabled
-        if (inverterRelayEnabled) {
-          digitalWrite(INVERTER_PIN, LOW);
-          inverterRelayState = false;
-          Debug.println("Inverter turned OFF (K1 relay de-energized)");
-        }
-
         // Update status based on limit switches
         updateRoofStatus();
 
@@ -876,7 +857,52 @@ void processRoofOperation() {
 
         Debug.println("Roof movement stopped");
 
-        // Return to idle
+        // Shutdown inverter (handles K1 off, AC check, K3 toggle if needed)
+        roofOpTarget = TARGET_NONE;
+        shutdownInverterPower();
+        // Note: roofOpState is now OP_SHUTDOWN_K1_WAIT (or OP_IDLE if soft-power disabled)
+        if (roofOpState == OP_IDLE) {
+          // shutdownInverterPower didn't start a sequence, we're done
+          roofOpTarget = TARGET_NONE;
+        }
+      }
+      break;
+
+    case OP_SHUTDOWN_K1_WAIT:
+      // K1 was turned off, wait ~1 second then check if AC power is still present
+      if (elapsed >= 1000) {
+        bool acStillOn = getInverterACPowerState();
+        Debug.printf("Shutdown: AC power check after K1 off: %s\n", acStillOn ? "STILL ON" : "OFF");
+        if (acStillOn) {
+          // AC power still present - need to toggle K3 to kill soft-power
+          Debug.println("Shutdown: AC power still on, pressing K3 to toggle soft-power off");
+          digitalWrite(INVERTER_BUTTON_PIN, HIGH);
+          Debug.println("Shutdown: K3 relay energized");
+          roofOpState = OP_SHUTDOWN_K3_PRESS;
+          roofOpStepStartTime = currentTime;
+        } else {
+          // AC power is off, shutdown complete
+          Debug.println("Shutdown: AC power off, inverter shutdown complete");
+          roofOpState = OP_IDLE;
+          roofOpTarget = TARGET_NONE;
+        }
+      }
+      break;
+
+    case OP_SHUTDOWN_K3_PRESS:
+      // K3 pressed to toggle soft-power off, hold for 500ms then release
+      if (elapsed >= 500) {
+        digitalWrite(INVERTER_BUTTON_PIN, LOW);
+        Debug.println("Shutdown: K3 relay de-energized");
+        roofOpState = OP_SHUTDOWN_K3_RELEASE;
+        roofOpStepStartTime = currentTime;
+      }
+      break;
+
+    case OP_SHUTDOWN_K3_RELEASE:
+      // K3 released, wait 100ms settling time then done
+      if (elapsed >= 100) {
+        Debug.println("Shutdown: Inverter shutdown complete (K3 toggled)");
         roofOpState = OP_IDLE;
         roofOpTarget = TARGET_NONE;
       }
@@ -929,5 +955,32 @@ void updateInverterPowerStatus() {
                  inverterRelayState ? "ON" : "OFF",
                  inverterACPowerState ? "ON" : "OFF");
     lastDebugTime = currentTime;
+  }
+}
+
+// Non-blocking inverter shutdown sequence
+// Turns off K1, waits ~1s, checks if AC power is still present on GPIO7,
+// and if so toggles K3 to kill the soft-power.
+// Safe to call even if inverter is already off or K1/K3 are disabled.
+void shutdownInverterPower() {
+  // Turn off K1 immediately (always safe to do)
+  digitalWrite(INVERTER_PIN, LOW);
+  inverterRelayState = false;
+
+  // If a shutdown sequence is already running, don't restart it
+  if (roofOpState == OP_SHUTDOWN_K1_WAIT || roofOpState == OP_SHUTDOWN_K3_PRESS ||
+      roofOpState == OP_SHUTDOWN_K3_RELEASE) {
+    Debug.println("Shutdown: K1 OFF (shutdown sequence already in progress)");
+    return;
+  }
+
+  // If soft-power control is enabled, start the non-blocking check sequence
+  if (inverterSoftPwrEnabled) {
+    Debug.println("Shutdown: K1 OFF, waiting to check AC power state");
+    roofOpState = OP_SHUTDOWN_K1_WAIT;
+    roofOpStepStartTime = millis();
+  } else {
+    Debug.println("Shutdown: K1 OFF (soft-power control disabled, skipping AC check)");
+    // No K3 control, we're done
   }
 }
