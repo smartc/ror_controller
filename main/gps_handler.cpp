@@ -42,6 +42,7 @@ static uint8_t nmeaIndex = 0;
 // Last valid GPS time (for interpolation between GPS updates)
 static unsigned long lastGPSSecondMillis = 0;
 static uint32_t lastGPSUnixTime = 0;
+static unsigned long lastGPSUpdateMicros = 0;  // micros() when lastGPSUnixTime was set (for PPS correlation)
 
 // PPS (Pulse Per Second) timing variables
 static volatile unsigned long ppsLastMicros = 0;     // Microsecond timestamp of last PPS rising edge
@@ -305,16 +306,20 @@ void handleGPS() {
                        (period <= PPS_PERIOD_MAX_US);
 
     if (periodValid && gpsStatus.hasFix && gpsStatus.time.valid) {
-      // PPS fires at the exact start of the NEXT second after the last NMEA time.
-      // NMEA sentences are transmitted AFTER the PPS edge, describing the time OF the edge.
-      // So the PPS edge corresponds to lastGPSUnixTime (the second reported by NMEA).
-      // On the very next PPS edge, it's lastGPSUnixTime + 1 second.
-      ppsUnixTimeAtEdge = lastGPSUnixTime + 1;
+      // Determine PPS-to-NMEA timing relationship.
+      // handleGPS() reads serial BEFORE checking ppsTriggered, so:
+      //   - If NMEA was parsed in this call (after PPS edge): lastGPSUpdateMicros > ppsLastMicros
+      //     → NMEA describes THIS PPS second → ppsUnixTimeAtEdge = lastGPSUnixTime
+      //   - If NMEA was parsed in a previous call (before PPS edge): lastGPSUpdateMicros < ppsLastMicros
+      //     → NMEA describes the PREVIOUS second → ppsUnixTimeAtEdge = lastGPSUnixTime + 1
+      bool nmeaIsCurrentSecond = ((long)(lastGPSUpdateMicros - lastMicros) > 0);
+      ppsUnixTimeAtEdge = nmeaIsCurrentSecond ? lastGPSUnixTime : (lastGPSUnixTime + 1);
       ppsActive = true;
       ppsLastValidMillis = millis();
 
-      Debug.printf(2, "PPS #%lu: period=%lu us, time=%lu\n",
-                   (unsigned long)ppsCount, period, ppsUnixTimeAtEdge);
+      Debug.printf(2, "PPS #%lu: period=%lu us, time=%lu, nmea=%s\n",
+                   (unsigned long)ppsCount, period, ppsUnixTimeAtEdge,
+                   nmeaIsCurrentSecond ? "current" : "previous");
     } else if (periodValid) {
       // PPS pulses are coming but no GPS fix yet - track but don't activate
       ppsLastValidMillis = millis();
@@ -837,6 +842,7 @@ static void parseGPRMC(const char* sentence) {
     lastGPSUnixTime = dateTimeToUnix(gpsStatus.time.year, gpsStatus.time.month,
                                       gpsStatus.time.day, gpsStatus.time.hour,
                                       gpsStatus.time.minute, gpsStatus.time.second);
+    lastGPSUpdateMicros = micros();
     lastGPSSecondMillis = millis();
     gpsStatus.lastUpdate = millis();
 
