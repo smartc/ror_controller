@@ -834,9 +834,6 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
       html += "<tr><th>PPS Signal</th><td>";
       html += "<span class='status-indicator " + String(ppsOk ? "green" : "red blink") + "'></span> ";
       html += ppsOk ? "Active" : "No Signal";
-      if (ppsOk) {
-        html += " (pulses: " + String(getPPSCount()) + ")";
-      }
       html += "</td></tr>\n";
     }
 
