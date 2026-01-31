@@ -828,11 +828,24 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
       }
     }
 
+    // PPS status (show when GPS is enabled and PPS pin is configured)
+    if (gpsEnabled && gpsPpsPin >= 0) {
+      bool ppsOk = isPPSActive();
+      html += "<tr><th>PPS Signal</th><td>";
+      html += "<span class='status-indicator " + String(ppsOk ? "green" : "red blink") + "'></span> ";
+      html += ppsOk ? "Active" : "No Signal";
+      if (ppsOk) {
+        html += " (pulses: " + String(getPPSCount()) + ")";
+      }
+      html += "</td></tr>\n";
+    }
+
     // NTP Server status
     html += "<tr><th>NTP Server</th><td>";
     html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
     if (gpsNtpEnabled && timeSynced) {
-      html += "Active (port 123)";
+      bool ppsOk = isPPSActive();
+      html += ppsOk ? "Active (port 123, PPS-disciplined)" : "Active (port 123)";
     } else if (gpsNtpEnabled) {
       html += "Waiting for time sync";
     } else {

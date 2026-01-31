@@ -80,6 +80,8 @@ bool isGPSEnabled();                      // Check if GPS is enabled
 bool isGPSNtpEnabled();                   // Check if NTP server is enabled
 bool hasGPSFix();                         // Check if GPS has valid fix
 bool isTimeSynced();                      // Check if time is synced (GPS or RTC)
+bool isPPSActive();                       // Check if PPS signal is active and healthy
+uint32_t getPPSCount();                   // Get total PPS pulse count
 TimeSource getTimeSource();               // Get current time source
 GPSStatus getGPSStatus();                 // Get current GPS status
 String getTimeString();                   // Get formatted UTC time string (from best source)

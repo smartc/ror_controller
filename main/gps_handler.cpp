@@ -43,11 +43,33 @@ static uint8_t nmeaIndex = 0;
 static unsigned long lastGPSSecondMillis = 0;
 static uint32_t lastGPSUnixTime = 0;
 
+// PPS (Pulse Per Second) timing variables
+static volatile unsigned long ppsLastMicros = 0;     // Microsecond timestamp of last PPS rising edge
+static volatile unsigned long ppsPrevMicros = 0;     // Previous PPS edge (for period measurement)
+static volatile uint32_t ppsCount = 0;               // Total PPS pulses received
+static volatile bool ppsTriggered = false;            // Flag: new PPS edge received
+static bool ppsActive = false;                        // PPS signal is healthy and active
+static uint32_t ppsUnixTimeAtEdge = 0;               // Unix time corresponding to last PPS edge
+static unsigned long ppsLastValidMillis = 0;          // millis() of last validated PPS edge
+
+// PPS interrupt handler - called on rising edge of PPS signal
+static void IRAM_ATTR ppsInterruptHandler() {
+  ppsPrevMicros = ppsLastMicros;
+  ppsLastMicros = micros();
+  ppsCount++;
+  ppsTriggered = true;
+}
+
 // Track if we've synced RTC from GPS
 static bool rtcSyncedFromGPS = false;
 
 // NTP timestamp epoch offset (1900 to 1970 = 70 years)
 #define NTP_TIMESTAMP_DELTA 2208988800UL
+
+// PPS timing constants
+#define PPS_TIMEOUT_MS 3000            // PPS considered lost if no pulse for 3 seconds
+#define PPS_PERIOD_MIN_US 950000       // Minimum valid PPS period (950ms)
+#define PPS_PERIOD_MAX_US 1050000      // Maximum valid PPS period (1050ms)
 
 // Forward declarations for internal functions
 static void parseNMEA(const char* sentence);
@@ -230,10 +252,11 @@ void initGPS() {
   gpsStatus.time.valid = false;
   gpsStatus.lastUpdate = 0;
 
-  // PPS pin setup (for future use)
+  // PPS pin setup with interrupt for sub-second timing
   if (gpsPpsPin >= 0) {
-    pinMode(gpsPpsPin, INPUT);
-    Debug.printf("GPS PPS pin configured: GPIO%d\n", gpsPpsPin);
+    pinMode(gpsPpsPin, INPUT_PULLDOWN);
+    attachInterrupt(digitalPinToInterrupt(gpsPpsPin), ppsInterruptHandler, RISING);
+    Debug.printf("GPS PPS interrupt attached: GPIO%d\n", gpsPpsPin);
   }
 
   Debug.println("GPS initialized");
@@ -266,6 +289,42 @@ void handleGPS() {
     else if (nmeaIndex < sizeof(nmeaBuffer) - 1) {
       nmeaBuffer[nmeaIndex++] = c;
     }
+  }
+
+  // Process PPS edge: correlate with latest NMEA time
+  if (ppsTriggered && gpsPpsPin >= 0) {
+    ppsTriggered = false;
+
+    // Validate PPS period (should be ~1 second between pulses)
+    unsigned long lastMicros = ppsLastMicros;
+    unsigned long prevMicros = ppsPrevMicros;
+    unsigned long period = lastMicros - prevMicros;
+
+    bool periodValid = (prevMicros != 0) &&
+                       (period >= PPS_PERIOD_MIN_US) &&
+                       (period <= PPS_PERIOD_MAX_US);
+
+    if (periodValid && gpsStatus.hasFix && gpsStatus.time.valid) {
+      // PPS fires at the exact start of the NEXT second after the last NMEA time.
+      // NMEA sentences are transmitted AFTER the PPS edge, describing the time OF the edge.
+      // So the PPS edge corresponds to lastGPSUnixTime (the second reported by NMEA).
+      // On the very next PPS edge, it's lastGPSUnixTime + 1 second.
+      ppsUnixTimeAtEdge = lastGPSUnixTime + 1;
+      ppsActive = true;
+      ppsLastValidMillis = millis();
+
+      Debug.printf(2, "PPS #%lu: period=%lu us, time=%lu\n",
+                   (unsigned long)ppsCount, period, ppsUnixTimeAtEdge);
+    } else if (periodValid) {
+      // PPS pulses are coming but no GPS fix yet - track but don't activate
+      ppsLastValidMillis = millis();
+    }
+  }
+
+  // Mark PPS as inactive if no valid pulse recently
+  if (ppsActive && (millis() - ppsLastValidMillis > PPS_TIMEOUT_MS)) {
+    ppsActive = false;
+    Debug.println("PPS signal lost");
   }
 
   // Update time source and sync RTC if GPS has fix
@@ -313,18 +372,63 @@ void handleNTP() {
   }
 }
 
+// Calculate NTP fractional second (32-bit) from microseconds elapsed since PPS edge
+static uint32_t microsToNTPFraction(unsigned long elapsedMicros) {
+  // NTP fraction is 2^32 per second, so 1 microsecond = 2^32 / 1000000 ≈ 4295
+  // Use 64-bit arithmetic to avoid overflow
+  return (uint32_t)(((uint64_t)elapsedMicros * 4294967296ULL) / 1000000ULL);
+}
+
+// Get high-resolution NTP timestamp using PPS if available
+// Sets ntpSeconds and ntpFraction; returns true if PPS-disciplined
+static bool getPPSNTPTimestamp(uint32_t* ntpSeconds, uint32_t* ntpFraction) {
+  if (!ppsActive || ppsUnixTimeAtEdge == 0) {
+    // No PPS - fall back to second-level accuracy
+    uint32_t currentTime = getCurrentUnixTime();
+    if (currentTime == 0) return false;
+    *ntpSeconds = currentTime + NTP_TIMESTAMP_DELTA;
+    *ntpFraction = 0;
+    return false;
+  }
+
+  // Calculate elapsed microseconds since last PPS edge
+  unsigned long nowMicros = micros();
+  unsigned long edgeMicros = ppsLastMicros;  // Read volatile once
+  unsigned long elapsedMicros = nowMicros - edgeMicros;
+
+  // If more than 1 second since PPS edge, the second has rolled over
+  uint32_t extraSeconds = elapsedMicros / 1000000UL;
+  unsigned long fracMicros = elapsedMicros % 1000000UL;
+
+  uint32_t unixTime = ppsUnixTimeAtEdge + extraSeconds;
+  *ntpSeconds = unixTime + NTP_TIMESTAMP_DELTA;
+  *ntpFraction = microsToNTPFraction(fracMicros);
+
+  return true;
+}
+
+// Write a 64-bit NTP timestamp (seconds + fraction) into a buffer at offset
+static void writeNTPTimestamp(uint8_t* buf, int offset, uint32_t seconds, uint32_t fraction) {
+  buf[offset]     = (seconds >> 24) & 0xFF;
+  buf[offset + 1] = (seconds >> 16) & 0xFF;
+  buf[offset + 2] = (seconds >> 8) & 0xFF;
+  buf[offset + 3] = seconds & 0xFF;
+  buf[offset + 4] = (fraction >> 24) & 0xFF;
+  buf[offset + 5] = (fraction >> 16) & 0xFF;
+  buf[offset + 6] = (fraction >> 8) & 0xFF;
+  buf[offset + 7] = fraction & 0xFF;
+}
+
 // Send NTP response
 void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remotePort) {
-  // Get current time from best available source
-  uint32_t currentTime = getCurrentUnixTime();
+  // Get receive timestamp as early as possible for best accuracy
+  uint32_t rxSeconds, rxFraction;
+  bool hasPPS = getPPSNTPTimestamp(&rxSeconds, &rxFraction);
 
-  if (currentTime == 0) {
+  if (rxSeconds == 0) {
     Debug.println("No time available for NTP response");
     return;
   }
-
-  // Convert to NTP timestamp (seconds since 1900)
-  uint32_t ntpTime = currentTime + NTP_TIMESTAMP_DELTA;
 
   // Prepare response packet
   uint8_t response[48];
@@ -339,54 +443,53 @@ void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remo
   // Poll interval = 6 (64 seconds)
   response[2] = 6;
 
-  // Precision = -20 (about 1 microsecond)
-  response[3] = 0xEC;  // -20 in signed 8-bit
+  // Precision: with PPS = -20 (~1μs), without PPS = -6 (~15ms NMEA jitter)
+  response[3] = hasPPS ? 0xEC : 0xFA;  // -20 or -6 in signed 8-bit
 
-  // Root delay = 0
+  // Root delay = 0 (we are the reference clock)
   response[4] = 0; response[5] = 0; response[6] = 0; response[7] = 0;
 
-  // Root dispersion = 0
-  response[8] = 0; response[9] = 0; response[10] = 0; response[11] = 0;
+  // Root dispersion: with PPS ~15μs (0x0001), without PPS ~500ms (0x8000)
+  if (hasPPS) {
+    response[8] = 0; response[9] = 0; response[10] = 0x00; response[11] = 0x01;
+  } else {
+    response[8] = 0; response[9] = 0; response[10] = 0x80; response[11] = 0x00;
+  }
 
-  // Reference ID based on time source
+  // Reference ID based on time source and PPS
   if (currentTimeSource == TIME_SOURCE_GPS) {
-    response[12] = 'G'; response[13] = 'P'; response[14] = 'S'; response[15] = ' ';
+    if (hasPPS) {
+      response[12] = 'P'; response[13] = 'P'; response[14] = 'S'; response[15] = '\0';
+    } else {
+      response[12] = 'G'; response[13] = 'P'; response[14] = 'S'; response[15] = '\0';
+    }
   } else {
     response[12] = 'L'; response[13] = 'O'; response[14] = 'C'; response[15] = 'L';
   }
 
-  // Reference timestamp
-  response[16] = (ntpTime >> 24) & 0xFF;
-  response[17] = (ntpTime >> 16) & 0xFF;
-  response[18] = (ntpTime >> 8) & 0xFF;
-  response[19] = ntpTime & 0xFF;
-  response[20] = 0; response[21] = 0; response[22] = 0; response[23] = 0;
+  // Reference timestamp (last PPS edge or last GPS update)
+  writeNTPTimestamp(response, 16, rxSeconds, 0);
 
-  // Origin timestamp (copy from request - transmit timestamp)
+  // Origin timestamp (copy from request's transmit timestamp)
   memcpy(&response[24], &buffer[40], 8);
 
-  // Receive timestamp
-  response[32] = (ntpTime >> 24) & 0xFF;
-  response[33] = (ntpTime >> 16) & 0xFF;
-  response[34] = (ntpTime >> 8) & 0xFF;
-  response[35] = ntpTime & 0xFF;
-  response[36] = 0; response[37] = 0; response[38] = 0; response[39] = 0;
+  // Receive timestamp (captured at top of function)
+  writeNTPTimestamp(response, 32, rxSeconds, rxFraction);
 
-  // Transmit timestamp
-  response[40] = (ntpTime >> 24) & 0xFF;
-  response[41] = (ntpTime >> 16) & 0xFF;
-  response[42] = (ntpTime >> 8) & 0xFF;
-  response[43] = ntpTime & 0xFF;
-  response[44] = 0; response[45] = 0; response[46] = 0; response[47] = 0;
+  // Transmit timestamp (capture now, just before sending)
+  uint32_t txSeconds, txFraction;
+  getPPSNTPTimestamp(&txSeconds, &txFraction);
+  writeNTPTimestamp(response, 40, txSeconds, txFraction);
 
   // Send response
   ntpUdp.beginPacket(remoteIP, remotePort);
   ntpUdp.write(response, 48);
   ntpUdp.endPacket();
 
-  Debug.printf(2, "NTP response sent to %s:%d (time: %lu, source: %s)\n",
-               remoteIP.toString().c_str(), remotePort, ntpTime,
-               currentTimeSource == TIME_SOURCE_GPS ? "GPS" : "RTC");
+  Debug.printf(2, "NTP response sent to %s:%d (source: %s, PPS: %s)\n",
+               remoteIP.toString().c_str(), remotePort,
+               currentTimeSource == TIME_SOURCE_GPS ? "GPS" : "RTC",
+               hasPPS ? "Yes" : "No");
 }
 
 // ============== Control Functions ==============
@@ -407,6 +510,14 @@ void setGPSEnabled(bool enabled) {
   if (enabled) {
     initGPS();
   } else {
+    // Detach PPS interrupt when disabling GPS
+    if (gpsPpsPin >= 0) {
+      detachInterrupt(digitalPinToInterrupt(gpsPpsPin));
+      ppsActive = false;
+      ppsCount = 0;
+      ppsUnixTimeAtEdge = 0;
+    }
+
     gpsStatus.enabled = false;
     gpsStatus.hasFix = false;
     gpsStatus.time.valid = false;
@@ -460,6 +571,14 @@ bool hasGPSFix() {
 
 bool isTimeSynced() {
   return timeSynced;
+}
+
+bool isPPSActive() {
+  return ppsActive;
+}
+
+uint32_t getPPSCount() {
+  return ppsCount;
 }
 
 TimeSource getTimeSource() {

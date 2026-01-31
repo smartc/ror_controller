@@ -1194,6 +1194,11 @@ void handleGPSStatus() {
   doc["gps_time"] = getGPSTimeString();
   doc["gps_date"] = getGPSDateString();
 
+  // PPS status
+  doc["pps_active"] = isPPSActive();
+  doc["pps_count"] = getPPSCount();
+  doc["pps_pin"] = gpsPpsPin;
+
   String jsonResponse;
   serializeJson(doc, jsonResponse);
 
