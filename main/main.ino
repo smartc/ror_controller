@@ -269,7 +269,10 @@ void initWiFi() {
   // Check if we have credentials to connect with
   if (strlen(ssid) > 0 && strcmp(ssid, "YOUR_SSID") != 0) {
     Debug.printf("Connecting to WiFi network: %s\n", ssid);
-
+    
+    // Disable Power Saving Mode -- Troubleshooting device disconnects
+    WiFi.setSleep(WIFI_PS_NONE);
+    
     // Set WiFi mode to station
     WiFi.mode(WIFI_STA);
     delay(100);
@@ -354,7 +357,12 @@ void handleWiFi() {
       if (!wifiReconnecting) {
         // Start reconnection attempt
         Debug.printf("WiFi connection lost (status: %d), attempting to reconnect...\n", WiFi.status());
-        WiFi.reconnect();
+        
+        // Use disconnect/begin instead of just reconnect()
+        WiFi.disconnect(); 
+        delay(100);
+        WiFi.begin(ssid, password);
+        
         wifiReconnecting = true;
         wifiReconnectStartTime = millis();
       } else {
