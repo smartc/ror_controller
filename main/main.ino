@@ -30,13 +30,13 @@
 
 // Project includes
 #include "config.h"
-#include "Debug.h"
-#include "roof_controller.h"
-#include "alpaca_handler.h"
-#include "mqtt_handler.h"
-#include "web_ui_handler.h"
-#include "park_sensor_udp.h"
-#include "gps_handler.h"
+#include "src/debug/Debug.h"
+#include "src/roof/roof_controller.h"
+#include "src/alpaca/alpaca_handler.h"
+#include "src/mqtt/mqtt_handler.h"
+#include "src/webserver/web_ui_handler.h"
+#include "src/sensors/park_sensor_udp.h"
+#include "src/sensors/gps_handler.h"
 
 // For reset reason detection
 #include "esp_system.h"
