@@ -88,6 +88,8 @@ const unsigned long DEFAULT_INVERTER_DELAY2 = 1500;  // Default: 1500ms
 
 // Safety Settings
 extern bool bypassParkSensor;           // Software bypass state for telescope park sensors
+extern bool bypassSafetySensor;         // Global override for all weather/sky safety sensors
+extern bool weatherAutoClose;           // Auto-close roof when weather is unsafe
 
 // GPS and RTC Settings
 extern bool gpsEnabled;                 // Enable/disable GPS module

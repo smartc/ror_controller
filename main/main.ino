@@ -36,6 +36,7 @@
 #include "src/mqtt/mqtt_handler.h"
 #include "src/webserver/web_ui_handler.h"
 #include "src/sensors/park_sensor_udp.h"
+#include "src/safety/safety_sensor.h"
 #include "src/sensors/gps_handler.h"
 
 // For reset reason detection
@@ -125,6 +126,9 @@ void setup() {
   
   // Initialize UDP park sensor listener
   initParkSensorUDP();
+
+  // Load safety sensor configuration (per-sensor enable/bypass, global bypass, auto-close)
+  loadSafetySensorConfiguration();
   
   // Initialize MQTT if enabled
   if (mqttEnabled) {
@@ -179,6 +183,9 @@ void loop() {
 
   // Check for movement timeout
   checkMovementTimeout();
+
+  // Auto-close roof if weather becomes unsafe (no-op unless weatherAutoClose is enabled)
+  checkWeatherAutoClose();
   
   // Handle Alpaca discovery
   handleAlpacaDiscovery();

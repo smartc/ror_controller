@@ -4,9 +4,10 @@
  */
 
 #include "roof_controller.h"
-#include "mqtt_handler.h"
-#include "park_sensor_udp.h"
-#include "Debug.h"
+#include "../mqtt/mqtt_handler.h"
+#include "../sensors/park_sensor_udp.h"
+#include "../safety/safety_sensor.h"
+#include "../debug/Debug.h"
 #include <Arduino.h>
 
 // Define the global variables declared as extern in config.h
@@ -388,6 +389,13 @@ bool startOpeningRoof() {
     Debug.println("SAFETY CHECK FAILED: Telescope not parked and bypass not enabled");
     Debug.println("=== ROOF OPENING BLOCKED ===");
     return false; // Telescope not parked and bypass not enabled
+  }
+
+  // Weather safety interlock — never open into unsafe conditions
+  if (!isWeatherSafe()) {
+    Debug.println("SAFETY CHECK FAILED: Weather unsafe (safety sensor reporting unsafe)");
+    Debug.println("=== ROOF OPENING BLOCKED ===");
+    return false;
   }
 
   Debug.println("SAFETY CHECK PASSED: Opening roof (non-blocking)");
@@ -982,5 +990,31 @@ void shutdownInverterPower() {
   } else {
     Debug.println("Shutdown: K1 OFF (soft-power control disabled, skipping AC check)");
     // No K3 control, we're done
+  }
+}
+
+// Auto-close the roof when weather becomes unsafe.
+// Called from the main loop. Only acts when:
+//   - weatherAutoClose is enabled
+//   - roof is currently open
+//   - isWeatherSafe() returns false
+//   - telescope is confirmed parked (or park sensor is bypassed)
+// Has a 30-second retry cooldown to avoid hammering the close command.
+void checkWeatherAutoClose() {
+  if (!weatherAutoClose)         return;
+  if (roofStatus != ROOF_OPEN)   return;
+  if (isWeatherSafe())           return;
+
+  // Rate-limit retries in case the close attempt fails
+  static unsigned long lastAttempt = 0;
+  unsigned long now = millis();
+  if (now - lastAttempt < 30000) return;
+  lastAttempt = now;
+
+  if (bypassParkSensor || telescopeParked) {
+    Debug.println("Auto-close: weather unsafe — triggering close");
+    startClosingRoof();
+  } else {
+    Debug.println("Auto-close SUPPRESSED: weather unsafe but telescope not confirmed parked");
   }
 }

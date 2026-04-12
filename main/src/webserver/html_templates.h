@@ -8,10 +8,11 @@
 
 #include <Arduino.h>
 #include "config.h"
-#include "mqtt_handler.h"
-#include "roof_controller.h"
-#include "park_sensor_udp.h"
-#include "gps_handler.h"
+#include "../mqtt/mqtt_handler.h"
+#include "../roof/roof_controller.h"
+#include "../sensors/park_sensor_udp.h"
+#include "../safety/safety_sensor.h"
+#include "../sensors/gps_handler.h"
 #include <WiFi.h>
 
 // Reset diagnostics (from main.ino)
@@ -618,6 +619,43 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<span id='homeBypassText'>" + String(bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled") + "</span>";
   html += " <small style='margin-left: 10px; color: #b0b0b0;'><a href='/setup'>Configure bypass in setup</a></small>";
   html += "</td></tr>\n";
+
+  // Weather safety badge
+  {
+    bool weatherSafe = isWeatherSafe();
+    std::vector<SafetySensor> safetySensors = getDiscoveredSafetySensors();
+    bool hasEnabledSensor = false;
+    for (const auto& s : safetySensors) { if (s.enabled && !s.bypassEnabled) hasEnabledSensor = true; }
+
+    String weatherColor, weatherLabel;
+    if (bypassSafetySensor) {
+      weatherColor = "orange"; weatherLabel = "BYPASSED";
+    } else if (!hasEnabledSensor) {
+      weatherColor = "gray";   weatherLabel = "No Sensor";
+    } else if (weatherSafe) {
+      weatherColor = "green";  weatherLabel = "Safe";
+    } else {
+      weatherColor = "red";    weatherLabel = "UNSAFE";
+    }
+
+    html += "<tr><th>Weather Safety</th><td>";
+    html += "<span class='status-indicator " + weatherColor + "'></span> ";
+    if (!weatherSafe && !bypassSafetySensor && hasEnabledSensor) {
+      html += "<span style='color: #e74c3c; font-weight: bold;'>" + weatherLabel + "</span>";
+    } else {
+      html += weatherLabel;
+    }
+    html += " <small style='margin-left: 10px; color: #b0b0b0;'><a href='/setup'>Configure in setup</a></small>";
+    html += "</td></tr>\n";
+
+    // Auto-close suppression alert
+    if (weatherAutoClose && !weatherSafe && !bypassSafetySensor && hasEnabledSensor
+        && roofStatus == ROOF_OPEN && !telescopeParked && !bypassParkSensor) {
+      html += "<tr><td colspan='2' style='background:#7f2b00; color:#fff; font-weight:bold; padding:8px; text-align:center;'>";
+      html += "&#9888; AUTO-CLOSE SUPPRESSED: Unsafe weather detected but telescope not confirmed parked";
+      html += "</td></tr>\n";
+    }
+  }
 
   // Show telescope parked status based on park sensor type
   html += "<tr><th>Telescope Parked</th><td id='homeTelescopeParked'>";
@@ -1395,6 +1433,110 @@ inline String getParkSensorConfigCard() {
   return html;
 }
 
+// Safety Sensor configuration card for the setup page
+inline String getSafetySensorConfigCard() {
+  std::vector<SafetySensor> sensors = getDiscoveredSafetySensors();
+
+  String html = "<div class='card'>";
+  html += "<h2>Safety Sensor Configuration</h2>";
+  html += "<p>Safety sensors broadcast weather/sky conditions on UDP port 23435. "
+          "Any device reporting <code>deviceType: \"SafetySensor\"</code> is automatically discovered. "
+          "Newly discovered sensors are <strong>disabled by default</strong> — enable a sensor to include it in the safety interlock.</p>";
+
+  // Global bypass toggle
+  html += "<div class='toggle-group'><h3>Global Safety Bypass</h3>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='safetySensorBypass' class='danger'"
+          + String(bypassSafetySensor ? " checked" : "")
+          + " onchange=\"toggleSafetyBypass(this.checked)\">";
+  html += "<span class='slider'></span></label>";
+  html += "<span class='switch-label' style='color: "
+          + String(bypassSafetySensor ? "#e57373" : "#ffffff") + ";'>";
+  html += "Bypass All Safety Sensors <strong id='safetyBypassText'>("
+          + String(bypassSafetySensor ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small>Warning: When enabled, unsafe weather will NOT block roof opening or trigger auto-close.</small>";
+  html += "</span></div></div>";
+
+  // Auto-close toggle
+  html += "<div class='toggle-group'><h3>Auto-Close on Unsafe Weather</h3>";
+  html += "<div class='switch-container'>";
+  html += "<label class='switch'>";
+  html += "<input type='checkbox' id='weatherAutoCloseToggle'"
+          + String(weatherAutoClose ? " checked" : "")
+          + " onchange=\"toggleWeatherAutoClose(this.checked)\">";
+  html += "<span class='slider'></span></label>";
+  html += "<span class='switch-label'>";
+  html += "Auto-close roof when weather is unsafe <strong id='autoCloseText'>("
+          + String(weatherAutoClose ? "ENABLED" : "DISABLED") + ")</strong><br>";
+  html += "<small style='color: #ffb74d;'><strong>Note:</strong> Auto-close only triggers if the telescope is confirmed parked. "
+          "If the park sensor is offline or unparked, the close is suppressed and a warning is shown on the home page.</small>";
+  html += "</span></div></div>";
+
+  // Discovered sensors table
+  html += "<div class='toggle-group'><h3>Discovered Safety Sensors</h3>";
+  if (sensors.empty()) {
+    html += "<p><em>No safety sensors discovered yet. Sensors broadcast every 30 seconds on UDP port 23435.</em></p>";
+  } else {
+    html += "<table style='width:100%; margin-bottom:15px;'>";
+    html += "<tr><th>Name</th><th>Status</th><th>IP</th><th>Temp</th><th>Last Seen</th><th>Enabled</th><th>Bypass</th></tr>";
+    for (const auto& sensor : sensors) {
+      String statusColor = sensor.bypassEnabled ? "orange"
+                         : (!sensor.online)      ? "red blink"
+                         : sensor.isSafe         ? "green"
+                                                 : "red";
+      String statusLabel = sensor.bypassEnabled ? "Bypassed"
+                         : (!sensor.online)      ? "Offline"
+                         : sensor.isSafe         ? "Safe"
+                                                 : "UNSAFE";
+      String lastSeen = (sensor.lastSeen == 0) ? "Never"
+                       : String((millis() - sensor.lastSeen) / 1000) + "s ago";
+      String tempStr  = isnan(sensor.ambTemp) ? "—" : String(sensor.ambTemp, 1) + " °C";
+
+      html += "<tr>";
+      html += "<td>" + sensor.name + "<br><small style='color:#888;'>" + sensor.serialNumber + "</small></td>";
+      html += "<td><span class='status-indicator " + statusColor + "'></span> " + statusLabel + "</td>";
+      html += "<td><small>" + sensor.ipAddress + "</small></td>";
+      html += "<td>" + tempStr + "</td>";
+      html += "<td><small>" + lastSeen + "</small></td>";
+      // Enable checkbox
+      html += "<td style='text-align:center;'><input type='checkbox'"
+              + String(sensor.enabled ? " checked" : "")
+              + " onchange=\"setSafetySensorEnabled('" + sensor.serialNumber + "', this.checked)\"></td>";
+      // Bypass checkbox
+      html += "<td style='text-align:center;'><input type='checkbox'"
+              + String(sensor.bypassEnabled ? " checked" : "")
+              + " onchange=\"setSafetySensorBypass('" + sensor.serialNumber + "', this.checked)\"></td>";
+      html += "</tr>";
+    }
+    html += "</table>";
+  }
+  html += "</div>"; // End toggle-group
+
+  // JavaScript for this card
+  html += "<script>\n";
+  html += "function toggleSafetyBypass(val) {\n"
+          "  fetch('/toggle_safety_bypass', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'bypass='+val})\n"
+          "  .then(r=>r.text()).then(t=>{ document.getElementById('safetyBypassText').textContent='('+(val?'ENABLED':'DISABLED')+')'; });\n"
+          "}\n";
+  html += "function toggleWeatherAutoClose(val) {\n"
+          "  fetch('/weather_autoclose', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'enabled='+val})\n"
+          "  .then(r=>r.text()).then(t=>{ document.getElementById('autoCloseText').textContent='('+(val?'ENABLED':'DISABLED')+')'; });\n"
+          "}\n";
+  html += "function setSafetySensorEnabled(serial, val) {\n"
+          "  fetch('/safety_sensor_enabled', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'serial='+serial+'&enabled='+val})\n"
+          "  .then(r=>r.text());\n"
+          "}\n";
+  html += "function setSafetySensorBypass(serial, val) {\n"
+          "  fetch('/safety_sensor_bypass', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'serial='+serial+'&bypass='+val})\n"
+          "  .then(r=>r.text());\n"
+          "}\n";
+  html += "</script>\n";
+
+  html += "</div>"; // End card
+  return html;
+}
+
 // GPS and RTC Configuration card for the setup page
 inline String getGPSConfigCard() {
   GPSStatus status = getGPSStatus();
@@ -1716,6 +1858,9 @@ inline String getSetupPage() {
   
   // Park Sensor Configuration Card
   html += getParkSensorConfigCard();
+
+  // Safety Sensor Configuration Card
+  html += getSafetySensorConfigCard();
 
   // GPS Configuration Card
   html += getGPSConfigCard();

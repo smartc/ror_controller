@@ -80,6 +80,7 @@ void determineInitialRoofStatus();
 void updateTelescopeStatus();  // Function to update telescope park status
 void clearRoofError();         // Clear error state and reason (for recovery)
 void processRoofOperation();   // Non-blocking state machine - call from main loop
+void checkWeatherAutoClose();  // Auto-close roof on unsafe weather (call from main loop)
 
 // Inverter control functions (NEW in v3)
 void toggleInverterPower();           // Toggle K1 inverter power relay

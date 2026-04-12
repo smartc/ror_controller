@@ -4,9 +4,10 @@
  */
 
 #include "mqtt_handler.h"
-#include "roof_controller.h"
-#include "park_sensor_udp.h"
-#include "Debug.h"
+#include "../roof/roof_controller.h"
+#include "../sensors/park_sensor_udp.h"
+#include "../safety/safety_sensor.h"
+#include "../debug/Debug.h"
 #include <Arduino.h>
 
 // Global MQTT configuration variables
@@ -196,6 +197,8 @@ void publishStatusToMQTT() {
   doc["limit_open"] = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
   doc["limit_closed"] = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
   doc["bypass_enabled"] = bypassParkSensor;
+  doc["weather_safe"]   = isWeatherSafe();
+  doc["safety_bypass"]  = bypassSafetySensor;
 
   // Add device identification information
   doc["device_id"] = uniqueID;
