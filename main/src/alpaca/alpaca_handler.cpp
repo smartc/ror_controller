@@ -4,9 +4,9 @@
  */
 
 #include "alpaca_handler.h"
-#include "mqtt_handler.h"
-#include "roof_controller.h"
-#include "Debug.h"
+#include "../mqtt/mqtt_handler.h"
+#include "../roof/roof_controller.h"
+#include "../debug/Debug.h"
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 

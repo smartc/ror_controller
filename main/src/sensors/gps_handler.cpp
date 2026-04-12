@@ -4,7 +4,7 @@
  */
 
 #include "gps_handler.h"
-#include "Debug.h"
+#include "../debug/Debug.h"
 #include <WiFiUdp.h>
 #include <Wire.h>
 #include <Preferences.h>
