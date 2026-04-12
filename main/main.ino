@@ -30,13 +30,14 @@
 
 // Project includes
 #include "config.h"
-#include "Debug.h"
-#include "roof_controller.h"
-#include "alpaca_handler.h"
-#include "mqtt_handler.h"
-#include "web_ui_handler.h"
-#include "park_sensor_udp.h"
-#include "gps_handler.h"
+#include "src/debug/Debug.h"
+#include "src/roof/roof_controller.h"
+#include "src/alpaca/alpaca_handler.h"
+#include "src/mqtt/mqtt_handler.h"
+#include "src/webserver/web_ui_handler.h"
+#include "src/sensors/park_sensor_udp.h"
+#include "src/safety/safety_sensor.h"
+#include "src/sensors/gps_handler.h"
 
 // For reset reason detection
 #include "esp_system.h"
@@ -125,6 +126,9 @@ void setup() {
   
   // Initialize UDP park sensor listener
   initParkSensorUDP();
+
+  // Load safety sensor configuration (per-sensor enable/bypass, global bypass, auto-close)
+  loadSafetySensorConfiguration();
   
   // Initialize MQTT if enabled
   if (mqttEnabled) {
@@ -179,6 +183,9 @@ void loop() {
 
   // Check for movement timeout
   checkMovementTimeout();
+
+  // Auto-close roof if weather becomes unsafe (no-op unless weatherAutoClose is enabled)
+  checkWeatherAutoClose();
   
   // Handle Alpaca discovery
   handleAlpacaDiscovery();
@@ -206,6 +213,9 @@ void loop() {
   
   // Handle web UI requests
   handleWebUI();
+
+  // Required by ElegantOTA v3 to trigger reboot after successful upload
+  ElegantOTA.loop();
 
   // Handle GPS data
   if (gpsEnabled) {

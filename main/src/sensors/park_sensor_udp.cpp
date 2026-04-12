@@ -4,8 +4,9 @@
  */
 
 #include "park_sensor_udp.h"
-#include "Debug.h"
-#include "web_ui_handler.h"
+#include "../debug/Debug.h"
+#include "../webserver/web_ui_handler.h"
+#include "../safety/safety_sensor.h"
 #include <Preferences.h>
 
 // Global variables
@@ -62,6 +63,7 @@ void handleParkSensorUDP() {
   
   // Update sensor status (check for timeouts)
   updateParkSensorStatus();
+  updateSafetySensorStatus();
 }
 
 // Process a park sensor message - FIXED VERSION
@@ -74,6 +76,12 @@ void processParkSensorMessage(const String& message, IPAddress remoteIP) {
     return;
   }
   
+  // Dispatch SafetySensor packets (deviceType == "SafetySensor") to the safety handler
+  if (doc.containsKey("deviceType") && doc["deviceType"].as<String>() == "SafetySensor") {
+    processSafetySensorMessage(message, remoteIP);
+    return;
+  }
+
   // Extract required fields
   if (!doc.containsKey("serialNumber") || !doc.containsKey("deviceType") || !doc.containsKey("isSafeToMove")) {
     Debug.println("Park sensor message missing required fields");

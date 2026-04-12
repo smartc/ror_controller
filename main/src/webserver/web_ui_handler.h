@@ -9,8 +9,9 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include "config.h"
-#include "park_sensor_udp.h"
-#include "gps_handler.h"
+#include "../debug/Debug.h"
+#include "../sensors/park_sensor_udp.h"
+#include "../sensors/gps_handler.h"
 #include <ElegantOTA.h>
 
 // External references
@@ -35,6 +36,8 @@ void saveConfiguration();
 void initWebUI();
 void handleWebUI();
 void handleRoot();
+void handleConsole();
+void handleConsoleJSON();
 void handleControl();  // Roof control page
 void handleSetup();
 void handleSetupPost();
@@ -50,6 +53,14 @@ void handleParkSensorBypass();
 void handleParkSensorRemove();
 void handleParkSensorRemoveAll();
 void handleParkSensorType();
+
+// Safety sensor handlers
+void handleSafetyBypassToggle();
+void handleSafetySensorEnabled();
+void handleSafetySensorBypass();
+void handleWeatherAutoClose();
+void handleSafetySensorRemove();
+void handleSafetySensorRemoveAll();
 
 // Inverter control handlers (NEW in v3)
 void handleInverterToggle();         // Toggle K1 inverter power relay

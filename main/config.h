@@ -18,7 +18,7 @@
 #define DISABLE_BROWNOUT_DETECTION 0
 
 // Version Information
-#define DEVICE_VERSION "3.2.0"  // v3 hardware with ESP32-S3, GPS/NTP support, PPS signal for sub-second NTP accuracy
+#define DEVICE_VERSION "3.3.0"  // v3.3: Safety sensor integration, weather interlock, unified web UI navigation
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
@@ -88,6 +88,8 @@ const unsigned long DEFAULT_INVERTER_DELAY2 = 1500;  // Default: 1500ms
 
 // Safety Settings
 extern bool bypassParkSensor;           // Software bypass state for telescope park sensors
+extern bool bypassSafetySensor;         // Global override for all weather/sky safety sensors
+extern bool weatherAutoClose;           // Auto-close roof when weather is unsafe
 
 // GPS and RTC Settings
 extern bool gpsEnabled;                 // Enable/disable GPS module

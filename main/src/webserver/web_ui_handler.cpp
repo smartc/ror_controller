@@ -5,11 +5,12 @@
 
 #include "web_ui_handler.h"
 #include "html_templates.h"
-#include "mqtt_handler.h"
-#include "roof_controller.h"
-#include "park_sensor_udp.h"
-#include "gps_handler.h"
-#include "Debug.h"
+#include "../mqtt/mqtt_handler.h"
+#include "../roof/roof_controller.h"
+#include "../sensors/park_sensor_udp.h"
+#include "../safety/safety_sensor.h"
+#include "../sensors/gps_handler.h"
+#include "../debug/Debug.h"
 #include <HTTPClient.h>
 
 // Standard Web Server
@@ -112,6 +113,9 @@ void loadConfiguration() {
   if (preferences.isKey(PREF_BYPASS_SENSOR)) {
     bypassParkSensor = preferences.getBool(PREF_BYPASS_SENSOR, false);
   }
+
+  // Safety sensor global settings are loaded by loadSafetySensorConfiguration()
+  // called separately from main.ino setup() after this function returns.
 
   // Load movement timeout setting
   if (preferences.isKey(PREF_MOVEMENT_TIMEOUT)) {
@@ -502,6 +506,8 @@ void handleSetPins() {
 void initWebUI() {
   // Handle root page
   webUiServer.on("/", HTTP_GET, handleRoot);
+  webUiServer.on("/console",      HTTP_GET, handleConsole);
+  webUiServer.on("/console.json", HTTP_GET, handleConsoleJSON);
   
   // Handle setup page
   webUiServer.on("/setup", HTTP_GET, handleSetup);
@@ -550,6 +556,14 @@ void initWebUI() {
   webUiServer.on("/park_sensor_remove_all", HTTP_POST, handleParkSensorRemoveAll);
   webUiServer.on("/park_sensor_type", HTTP_POST, handleParkSensorType);
 
+  // Safety sensor endpoints
+  webUiServer.on("/toggle_safety_bypass",    HTTP_POST, handleSafetyBypassToggle);
+  webUiServer.on("/safety_sensor_enabled",   HTTP_POST, handleSafetySensorEnabled);
+  webUiServer.on("/safety_sensor_bypass",    HTTP_POST, handleSafetySensorBypass);
+  webUiServer.on("/weather_autoclose",       HTTP_POST, handleWeatherAutoClose);
+  webUiServer.on("/safety_sensor_remove",    HTTP_POST, handleSafetySensorRemove);
+  webUiServer.on("/safety_sensor_remove_all",HTTP_POST, handleSafetySensorRemoveAll);
+
   // Inverter control endpoints (NEW in v3)
   webUiServer.on("/inverter_toggle", HTTP_POST, handleInverterToggle);
   webUiServer.on("/inverter_button", HTTP_POST, handleInverterButton);
@@ -591,15 +605,29 @@ void handleWebUI() {
   webUiServer.handleClient();
 }
 
+// Console handlers
+void handleConsole() {
+  webUiServer.send(200, "text/html", getConsolePage());
+}
+
+void handleConsoleJSON() {
+  String json;
+  logGetJSON(json);
+  webUiServer.send(200, "application/json", json);
+}
+
 // Handle the root page - shows a simple status page
 void handleRoot() {
   String html = getHomePage(roofStatus, apMode);
+  Debug.printf("Home page size: %d bytes, free heap: %d bytes\n", html.length(), ESP.getFreeHeap());
   webUiServer.send(200, "text/html", html);
 }
 
 // Handle setup page
 void handleSetup() {
-  webUiServer.send(200, "text/html", getSetupPage());
+  String page = getSetupPage();
+  Debug.printf("Setup page size: %d bytes, free heap: %d bytes\n", page.length(), ESP.getFreeHeap());
+  webUiServer.send(200, "text/html", page);
 }
 
 // Handle setup form submission
@@ -868,6 +896,75 @@ void handleParkSensorRemoveAll() {
   webUiServer.send(200, "text/plain", "All park sensors removed successfully");
 }
 
+// ---------------------------------------------------------------------------
+// Safety sensor handlers
+// ---------------------------------------------------------------------------
+
+// Handler for global safety sensor bypass toggle
+void handleSafetyBypassToggle() {
+  if (webUiServer.hasArg("bypass")) {
+    bypassSafetySensor = (webUiServer.arg("bypass") == "true");
+    saveSafetySensorConfiguration();
+    Debug.printf("Safety sensor bypass %s\n", bypassSafetySensor ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "Safety bypass " + String(bypassSafetySensor ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing bypass parameter");
+  }
+}
+
+// Handler for per-sensor enable toggle
+void handleSafetySensorEnabled() {
+  if (webUiServer.hasArg("serial") && webUiServer.hasArg("enabled")) {
+    String serial = webUiServer.arg("serial");
+    bool enabled  = (webUiServer.arg("enabled") == "true");
+    setSafetySensorEnabled(serial, enabled);
+    webUiServer.send(200, "text/plain", "Safety sensor " + String(enabled ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing required parameters");
+  }
+}
+
+// Handler for per-sensor bypass toggle
+void handleSafetySensorBypass() {
+  if (webUiServer.hasArg("serial") && webUiServer.hasArg("bypass")) {
+    String serial = webUiServer.arg("serial");
+    bool bypassed = (webUiServer.arg("bypass") == "true");
+    setSafetySensorBypass(serial, bypassed);
+    webUiServer.send(200, "text/plain", "Safety sensor bypass " + String(bypassed ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing required parameters");
+  }
+}
+
+// Handler for weather auto-close toggle
+void handleWeatherAutoClose() {
+  if (webUiServer.hasArg("enabled")) {
+    weatherAutoClose = (webUiServer.arg("enabled") == "true");
+    saveSafetySensorConfiguration();
+    Debug.printf("Weather auto-close %s\n", weatherAutoClose ? "enabled" : "disabled");
+    webUiServer.send(200, "text/plain", "Weather auto-close " + String(weatherAutoClose ? "enabled" : "disabled"));
+  } else {
+    webUiServer.send(400, "text/plain", "Missing enabled parameter");
+  }
+}
+
+// Handler for removing a single safety sensor
+void handleSafetySensorRemove() {
+  if (webUiServer.hasArg("serial")) {
+    String serial = webUiServer.arg("serial");
+    removeSafetySensor(serial);
+    webUiServer.send(200, "text/plain", "Safety sensor removed successfully");
+  } else {
+    webUiServer.send(400, "text/plain", "Missing serial parameter");
+  }
+}
+
+// Handler for removing all safety sensors
+void handleSafetySensorRemoveAll() {
+  removeAllSafetySensors();
+  webUiServer.send(200, "text/plain", "All safety sensors removed successfully");
+}
+
 // Handler for park sensor type change
 void handleParkSensorType() {
   if (webUiServer.hasArg("type")) {
@@ -1075,6 +1172,10 @@ void handleApiStatus() {
   // Inverter states
   doc["inverter_relay"] = getInverterRelayState();
   doc["inverter_ac_power"] = getInverterACPowerState();
+
+  // Safety sensor states
+  doc["weather_safe"]   = isWeatherSafe();
+  doc["safety_bypass"]  = bypassSafetySensor;
 
   // Park sensor type
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
