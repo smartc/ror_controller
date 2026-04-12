@@ -145,6 +145,7 @@ inline String getNavBar() {
     "<a href='/control' style='margin-right: 10px; padding: 8px 12px; background-color: #2ecc71; color: white; border-radius: 4px; text-decoration: none;'>Roof Control</a>\n"
     "<a href='/setup' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Setup</a>\n"
     "<a href='/wificonfig' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>WiFi Config</a>\n"
+    "<a href='/console' style='margin-right: 10px; padding: 8px 12px; background-color: #8e44ad; color: white; border-radius: 4px; text-decoration: none;'>Console</a>\n"
     "<a href='/update' style='padding: 8px 12px; background-color: #f39c12; color: white; border-radius: 4px; text-decoration: none;'>Update</a>\n"
     "</div>\n";
 
@@ -2394,6 +2395,97 @@ inline String getRoofControlPage() {
   html += "</script>\n";
 
   html += "</body></html>";
+
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Console page — live debug log viewer (polls /console.json every 2 s)
+// ---------------------------------------------------------------------------
+inline String getConsolePage() {
+  String html = getPageHeader("Debug Console - ROR Controller");
+  html += getNavBar();
+
+  html +=
+    "<div class='card'>\n"
+    "<h2 style='margin-top:0'>Debug Console</h2>\n"
+    "<div style='margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;'>\n"
+    "  <button id='btn-pause' onclick='togglePause()'>Pause</button>\n"
+    "  <button id='btn-clear' onclick='clearLog()'>Clear</button>\n"
+    "  <button id='btn-copy'  onclick='copyLog()'>Copy</button>\n"
+    "  <span id='con-status' style='font-size:0.85em;color:#b0b0b0;margin-left:8px;'>Connecting...</span>\n"
+    "</div>\n"
+    "<div id='log' style='"
+      "height:560px;overflow-y:auto;background:#0d1117;border-radius:4px;"
+      "padding:10px;font-family:monospace;font-size:0.82em;line-height:1.6;"
+      "white-space:pre-wrap;word-break:break-all;"
+    "'></div>\n"
+    "</div>\n";
+
+  html += R"rawjs(
+<style>
+.le  { margin:0; }
+.ts  { color:#636e72; user-select:none; }
+.rep { color:#fd79a8; font-style:italic; }
+</style>
+<script>
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtMs(ms){
+  var h=Math.floor(ms/3600000),
+      m=Math.floor((ms%3600000)/60000),
+      s=Math.floor((ms%60000)/1000);
+  return [h,m,s].map(function(x){return String(x).padStart(2,'0');}).join(':');
+}
+
+var lastSeq=-1, paused=false;
+
+function render(entries){
+  var el=document.getElementById('log');
+  var atBottom=(el.scrollHeight-el.scrollTop-el.clientHeight)<40;
+  el.innerHTML='';
+  for(var i=0;i<entries.length;i++){
+    var e=entries[i];
+    var rep=e.n>1?' <span class="rep">(\xd7'+e.n+')</span>':'';
+    var d=document.createElement('div');
+    d.className='le';
+    d.innerHTML='<span class="ts">['+fmtMs(e.ms)+']</span> '+esc(e.msg)+rep;
+    el.appendChild(d);
+  }
+  if(atBottom) el.scrollTop=el.scrollHeight;
+}
+
+function poll(){
+  if(paused) return;
+  fetch('/console.json').then(function(r){return r.json();}).then(function(d){
+    if(d.seq!==lastSeq){lastSeq=d.seq;render(d.entries);}
+    document.getElementById('con-status').textContent=
+      'Updated '+new Date().toLocaleTimeString()+' \u2022 '+d.entries.length+' lines';
+  }).catch(function(e){
+    document.getElementById('con-status').textContent='Error: '+e;
+  });
+}
+
+function togglePause(){
+  paused=!paused;
+  var btn=document.getElementById('btn-pause');
+  btn.textContent=paused?'Resume':'Pause';
+  btn.style.background=paused?'#c0392b':'';
+}
+function clearLog(){ document.getElementById('log').innerHTML=''; lastSeq=-1; }
+function copyLog(){
+  var lines=document.querySelectorAll('#log .le');
+  var text=Array.from(lines).map(function(el){return el.innerText;}).join('\n');
+  navigator.clipboard.writeText(text).then(function(){
+    var btn=document.getElementById('btn-copy');
+    btn.textContent='Copied!';
+    setTimeout(function(){btn.textContent='Copy';},1500);
+  });
+}
+
+poll();
+setInterval(poll, 2000);
+</script>
+)rawjs";
 
   return html;
 }

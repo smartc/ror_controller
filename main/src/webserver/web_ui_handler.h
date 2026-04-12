@@ -9,6 +9,7 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include "config.h"
+#include "../debug/Debug.h"
 #include "../sensors/park_sensor_udp.h"
 #include "../sensors/gps_handler.h"
 #include <ElegantOTA.h>
@@ -35,6 +36,8 @@ void saveConfiguration();
 void initWebUI();
 void handleWebUI();
 void handleRoot();
+void handleConsole();
+void handleConsoleJSON();
 void handleControl();  // Roof control page
 void handleSetup();
 void handleSetupPost();

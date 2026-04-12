@@ -506,6 +506,8 @@ void handleSetPins() {
 void initWebUI() {
   // Handle root page
   webUiServer.on("/", HTTP_GET, handleRoot);
+  webUiServer.on("/console",      HTTP_GET, handleConsole);
+  webUiServer.on("/console.json", HTTP_GET, handleConsoleJSON);
   
   // Handle setup page
   webUiServer.on("/setup", HTTP_GET, handleSetup);
@@ -601,15 +603,29 @@ void handleWebUI() {
   webUiServer.handleClient();
 }
 
+// Console handlers
+void handleConsole() {
+  webUiServer.send(200, "text/html", getConsolePage());
+}
+
+void handleConsoleJSON() {
+  String json;
+  logGetJSON(json);
+  webUiServer.send(200, "application/json", json);
+}
+
 // Handle the root page - shows a simple status page
 void handleRoot() {
   String html = getHomePage(roofStatus, apMode);
+  Debug.printf("Home page size: %d bytes, free heap: %d bytes\n", html.length(), ESP.getFreeHeap());
   webUiServer.send(200, "text/html", html);
 }
 
 // Handle setup page
 void handleSetup() {
-  webUiServer.send(200, "text/html", getSetupPage());
+  String page = getSetupPage();
+  Debug.printf("Setup page size: %d bytes, free heap: %d bytes\n", page.length(), ESP.getFreeHeap());
+  webUiServer.send(200, "text/html", page);
 }
 
 // Handle setup form submission
