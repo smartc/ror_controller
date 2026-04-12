@@ -214,6 +214,9 @@ void loop() {
   // Handle web UI requests
   handleWebUI();
 
+  // Required by ElegantOTA v3 to trigger reboot after successful upload
+  ElegantOTA.loop();
+
   // Handle GPS data
   if (gpsEnabled) {
     handleGPS();
