@@ -557,10 +557,12 @@ void initWebUI() {
   webUiServer.on("/park_sensor_type", HTTP_POST, handleParkSensorType);
 
   // Safety sensor endpoints
-  webUiServer.on("/toggle_safety_bypass",   HTTP_POST, handleSafetyBypassToggle);
-  webUiServer.on("/safety_sensor_enabled",  HTTP_POST, handleSafetySensorEnabled);
-  webUiServer.on("/safety_sensor_bypass",   HTTP_POST, handleSafetySensorBypass);
-  webUiServer.on("/weather_autoclose",      HTTP_POST, handleWeatherAutoClose);
+  webUiServer.on("/toggle_safety_bypass",    HTTP_POST, handleSafetyBypassToggle);
+  webUiServer.on("/safety_sensor_enabled",   HTTP_POST, handleSafetySensorEnabled);
+  webUiServer.on("/safety_sensor_bypass",    HTTP_POST, handleSafetySensorBypass);
+  webUiServer.on("/weather_autoclose",       HTTP_POST, handleWeatherAutoClose);
+  webUiServer.on("/safety_sensor_remove",    HTTP_POST, handleSafetySensorRemove);
+  webUiServer.on("/safety_sensor_remove_all",HTTP_POST, handleSafetySensorRemoveAll);
 
   // Inverter control endpoints (NEW in v3)
   webUiServer.on("/inverter_toggle", HTTP_POST, handleInverterToggle);
@@ -946,6 +948,23 @@ void handleWeatherAutoClose() {
   }
 }
 
+// Handler for removing a single safety sensor
+void handleSafetySensorRemove() {
+  if (webUiServer.hasArg("serial")) {
+    String serial = webUiServer.arg("serial");
+    removeSafetySensor(serial);
+    webUiServer.send(200, "text/plain", "Safety sensor removed successfully");
+  } else {
+    webUiServer.send(400, "text/plain", "Missing serial parameter");
+  }
+}
+
+// Handler for removing all safety sensors
+void handleSafetySensorRemoveAll() {
+  removeAllSafetySensors();
+  webUiServer.send(200, "text/plain", "All safety sensors removed successfully");
+}
+
 // Handler for park sensor type change
 void handleParkSensorType() {
   if (webUiServer.hasArg("type")) {
@@ -1153,6 +1172,10 @@ void handleApiStatus() {
   // Inverter states
   doc["inverter_relay"] = getInverterRelayState();
   doc["inverter_ac_power"] = getInverterACPowerState();
+
+  // Safety sensor states
+  doc["weather_safe"]   = isWeatherSafe();
+  doc["safety_bypass"]  = bypassSafetySensor;
 
   // Park sensor type
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);

@@ -323,25 +323,14 @@ inline String getControlJS() {
     "  }\n"
     "}\n"
     
-    "function applyParkSensorType() {\n"
-    "  const physicalRadio = document.getElementById('parkTypePhysical');\n"
-    "  const udpRadio = document.getElementById('parkTypeUDP');\n"
-    "  const bothRadio = document.getElementById('parkTypeBoth');\n"
-    "  \n"
-    "  let sensorType = 0;\n"
-    "  if (udpRadio && udpRadio.checked) sensorType = 1;\n"
-    "  else if (bothRadio && bothRadio.checked) sensorType = 2;\n"
-    "  \n"
+    "function saveParkSensorType(value) {\n"
     "  fetch('/park_sensor_type', {\n"
     "    method: 'POST',\n"
     "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n"
-    "    body: 'type=' + sensorType\n"
+    "    body: 'type=' + value\n"
     "  })\n"
     "  .then(response => response.text())\n"
-    "  .then(data => {\n"
-    "    alert(data);\n"
-    "    location.reload();\n"
-    "  })\n"
+    "  .then(data => { console.log('Park sensor type saved:', data); })\n"
     "  .catch(err => {\n"
     "    console.error('Error:', err);\n"
     "    alert('Error setting park sensor type: ' + err);\n"
@@ -488,8 +477,6 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
           ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
           ".error { background-color: #3a1e1e; color: #e57373; }\n"
           ".ap-mode-banner { background-color: #3a3a1e; color: #ffd54f; padding: 10px; border-radius: 5px; margin: 10px 0; font-weight: bold; border: 1px solid #555; }\n"
-          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
-          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
           ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
           ".status-indicator.green { background-color: #81c784; }\n"
           ".status-indicator.red { background-color: #e57373; }\n"
@@ -559,14 +546,9 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
-  // Navigation buttons
-  html += "<div style='margin: 20px 0;'>\n";
-  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
-  html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
-  html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
-  html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
-  html += "</div>\n";
-  
+  // Navigation bar
+  html += getNavBar();
+
   // Device Information Card
   html += "<div class='status-card'>\n";
   html += "<h2>Device Information</h2>\n";
@@ -1322,19 +1304,19 @@ inline String getParkSensorConfigCard() {
 
   html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
   html += "<input type='radio' id='parkTypePhysical' name='parkType' value='0'" +
-          String(parkSensorType == PARK_SENSOR_PHYSICAL ? " checked" : "") + ">";
+          String(parkSensorType == PARK_SENSOR_PHYSICAL ? " checked" : "") + " onchange='saveParkSensorType(this.value)'>";
   html += "<label for='parkTypePhysical' style='margin-left: 8px; cursor: pointer;'>Physical Sensor Only</label>";
   html += "</div>";
 
   html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
   html += "<input type='radio' id='parkTypeUDP' name='parkType' value='1'" +
-          String(parkSensorType == PARK_SENSOR_UDP ? " checked" : "") + ">";
+          String(parkSensorType == PARK_SENSOR_UDP ? " checked" : "") + " onchange='saveParkSensorType(this.value)'>";
   html += "<label for='parkTypeUDP' style='margin-left: 8px; cursor: pointer;'>UDP Sensors Only</label>";
   html += "</div>";
 
   html += "<div style='margin-bottom: 10px; display: flex; align-items: center;'>";
   html += "<input type='radio' id='parkTypeBoth' name='parkType' value='2'" +
-          String(parkSensorType == PARK_SENSOR_BOTH ? " checked" : "") + ">";
+          String(parkSensorType == PARK_SENSOR_BOTH ? " checked" : "") + " onchange='saveParkSensorType(this.value)'>";
   html += "<label for='parkTypeBoth' style='margin-left: 8px; cursor: pointer;'>Both (AND Logic)</label>";
   html += "</div>";
 
@@ -1424,7 +1406,6 @@ inline String getParkSensorConfigCard() {
     html += "<div class='button-row'>";
     html += "<button onclick='refreshSensors()' class='button-primary'>Refresh</button>";
     html += "<button onclick='removeAllSensors()' class='button-danger'>Remove All Sensors</button>";
-    html += "<button onclick='applyParkSensorType()' class='button-primary'>Apply Sensor Type</button>";
     html += "</div>";
   }
   
@@ -1442,7 +1423,7 @@ inline String getSafetySensorConfigCard() {
   html += "<h2>Safety Sensor Configuration</h2>";
   html += "<p>Safety sensors broadcast weather/sky conditions on UDP port 23435. "
           "Any device reporting <code>deviceType: \"SafetySensor\"</code> is automatically discovered. "
-          "Newly discovered sensors are <strong>disabled by default</strong> — enable a sensor to include it in the safety interlock.</p>";
+          "Newly discovered sensors are <strong>disabled by default</strong> &mdash; enable a sensor to include it in the safety interlock.</p>";
 
   // Global bypass toggle
   html += "<div class='toggle-group'><h3>Global Safety Bypass</h3>";
@@ -1480,7 +1461,7 @@ inline String getSafetySensorConfigCard() {
     html += "<p><em>No safety sensors discovered yet. Sensors broadcast every 30 seconds on UDP port 23435.</em></p>";
   } else {
     html += "<table style='width:100%; margin-bottom:15px;'>";
-    html += "<tr><th>Name</th><th>Status</th><th>IP</th><th>Temp</th><th>Last Seen</th><th>Enabled</th><th>Bypass</th></tr>";
+    html += "<tr><th>Name</th><th>Status</th><th>IP</th><th>Temp</th><th>Last Seen</th><th>Enabled</th><th>Bypass</th><th>Actions</th></tr>";
     for (const auto& sensor : sensors) {
       String statusColor = sensor.bypassEnabled ? "orange"
                          : (!sensor.online)      ? "red blink"
@@ -1492,7 +1473,7 @@ inline String getSafetySensorConfigCard() {
                                                  : "UNSAFE";
       String lastSeen = (sensor.lastSeen == 0) ? "Never"
                        : String((millis() - sensor.lastSeen) / 1000) + "s ago";
-      String tempStr  = isnan(sensor.ambTemp) ? "—" : String(sensor.ambTemp, 1) + " °C";
+      String tempStr  = isnan(sensor.ambTemp) ? "&mdash;" : String(sensor.ambTemp, 1) + " &deg;C";
 
       html += "<tr>";
       html += "<td>" + sensor.name + "<br><small style='color:#888;'>" + sensor.serialNumber + "</small></td>";
@@ -1500,17 +1481,30 @@ inline String getSafetySensorConfigCard() {
       html += "<td><small>" + sensor.ipAddress + "</small></td>";
       html += "<td>" + tempStr + "</td>";
       html += "<td><small>" + lastSeen + "</small></td>";
-      // Enable checkbox
-      html += "<td style='text-align:center;'><input type='checkbox'"
-              + String(sensor.enabled ? " checked" : "")
-              + " onchange=\"setSafetySensorEnabled('" + sensor.serialNumber + "', this.checked)\"></td>";
-      // Bypass checkbox
-      html += "<td style='text-align:center;'><input type='checkbox'"
-              + String(sensor.bypassEnabled ? " checked" : "")
-              + " onchange=\"setSafetySensorBypass('" + sensor.serialNumber + "', this.checked)\"></td>";
+      // Enable toggle
+      html += "<td style='text-align:center;'>";
+      html += "<label class='switch' style='transform: scale(0.7);'>";
+      html += "<input type='checkbox'" + String(sensor.enabled ? " checked" : "")
+              + " onchange=\"setSafetySensorEnabled('" + sensor.serialNumber + "', this.checked)\">";
+      html += "<span class='slider'></span></label></td>";
+      // Bypass toggle
+      html += "<td style='text-align:center;'>";
+      html += "<label class='switch' style='transform: scale(0.7);'>";
+      html += "<input type='checkbox' class='danger'" + String(sensor.bypassEnabled ? " checked" : "")
+              + " onchange=\"setSafetySensorBypass('" + sensor.serialNumber + "', this.checked)\">";
+      html += "<span class='slider'></span></label></td>";
+      // Remove button
+      html += "<td>";
+      html += "<button onclick=\"removeSafetySensor('" + sensor.serialNumber + "')\" "
+              "style='background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:3px; font-size:12px;'>Remove</button>";
+      html += "</td>";
       html += "</tr>";
     }
     html += "</table>";
+    html += "<div class='button-row'>";
+    html += "<button onclick='location.reload()' class='button-primary'>Refresh</button>";
+    html += "<button onclick='removeAllSafetySensors()' class='button-danger'>Remove All Sensors</button>";
+    html += "</div>";
   }
   html += "</div>"; // End toggle-group
 
@@ -1531,6 +1525,20 @@ inline String getSafetySensorConfigCard() {
   html += "function setSafetySensorBypass(serial, val) {\n"
           "  fetch('/safety_sensor_bypass', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'serial='+serial+'&bypass='+val})\n"
           "  .then(r=>r.text());\n"
+          "}\n";
+  html += "function removeSafetySensor(serial) {\n"
+          "  if (confirm('Remove this safety sensor?')) {\n"
+          "    fetch('/safety_sensor_remove', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'serial='+encodeURIComponent(serial)})\n"
+          "    .then(r=>r.text()).then(t=>{ alert(t); location.reload(); })\n"
+          "    .catch(err=>alert('Error: '+err));\n"
+          "  }\n"
+          "}\n";
+  html += "function removeAllSafetySensors() {\n"
+          "  if (confirm('Remove ALL safety sensors? This cannot be undone.')) {\n"
+          "    fetch('/safety_sensor_remove_all', {method:'POST'})\n"
+          "    .then(r=>r.text()).then(t=>{ alert(t); location.reload(); })\n"
+          "    .catch(err=>alert('Error: '+err));\n"
+          "  }\n"
           "}\n";
   html += "</script>\n";
 
@@ -1779,8 +1787,6 @@ inline String getSetupPage() {
           ".closed { background-color: #1e3a2f; color: #81c784; }\n"
           ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
           ".error { background-color: #3a1e1e; color: #e57373; }\n"
-          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
-          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
           ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
           ".status-indicator.green { background-color: #81c784; }\n"
           ".status-indicator.red { background-color: #e57373; }\n"
@@ -1842,15 +1848,9 @@ inline String getSetupPage() {
   html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
-  // Navigation buttons
-  html += "<div style='margin: 20px 0;'>\n";
-  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
-  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
-  html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
-  html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
-  html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
-  html += "</div>\n";
-  
+  // Navigation bar
+  html += getNavBar();
+
   // Status Card
   html += getStatusCard();
   
@@ -1962,8 +1962,6 @@ inline String getRoofControlPage() {
           ".closed { background-color: #1e3a2f; color: #81c784; }\n"
           ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
           ".error { background-color: #3a1e1e; color: #e57373; }\n"
-          ".nav-button { display: inline-block; margin: 5px; padding: 10px 20px; background-color: #4fc3f7; color: #000; border-radius: 4px; text-decoration: none; font-weight: bold; }\n"
-          ".nav-button:hover { background-color: #81d4fa; text-decoration: none; color: #000; }\n"
           ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
           ".status-indicator.green { background-color: #81c784; }\n"
           ".status-indicator.red { background-color: #e57373; }\n"
@@ -2025,14 +2023,8 @@ inline String getRoofControlPage() {
   html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
-  // Navigation buttons
-  html += "<div style='margin: 20px 0;'>\n";
-  html += "<a href='/' class='nav-button' style='background-color: #3498db;'>Home</a>\n";
-  html += "<a href='/control' class='nav-button' style='background-color: #2ecc71;'>Roof Control</a>\n";
-  html += "<a href='/setup' class='nav-button' style='background-color: #3498db;'>Device Setup</a>\n";
-  html += "<a href='/wificonfig' class='nav-button' style='background-color: #3498db;'>WiFi Config</a>\n";
-  html += "<a href='/update' class='nav-button' style='background-color: #f39c12;'>Update</a>\n";
-  html += "</div>\n";
+  // Navigation bar
+  html += getNavBar();
 
   // Current Status Card
   html += "<div class='status-card'>\n";
@@ -2059,10 +2051,22 @@ inline String getRoofControlPage() {
   html += "<span id='telescopeParkedText'>" + String(telescopeParked ? "Yes" : "No") + "</span>";
   html += "</td></tr>\n";
 
-  // Bypass state
+  // Park sensor bypass state
   html += "<tr><th>Park Sensor Bypass</th><td id='bypassEnabled'>";
   html += "<span id='bypassIndicator' class='status-indicator " + String(bypassParkSensor ? "red blink" : "green") + "'></span> ";
   html += "<span id='bypassText'>" + String(bypassParkSensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled") + "</span>";
+  html += "</td></tr>\n";
+
+  // Safety sensor / weather state
+  bool weatherSafe = isWeatherSafe();
+  html += "<tr><th>Weather Safe</th><td id='weatherSafeCell'>";
+  html += "<span id='weatherSafeIndicator' class='status-indicator " + String(weatherSafe ? "green" : "red blink") + "'></span> ";
+  html += "<span id='weatherSafeText'>" + String(weatherSafe ? "Safe" : "<span style='color: #e74c3c; font-weight: bold;'>UNSAFE</span>") + "</span>";
+  html += "</td></tr>\n";
+
+  html += "<tr><th>Safety Sensor Bypass</th><td id='safetyBypassCell'>";
+  html += "<span id='safetyBypassIndicator' class='status-indicator " + String(bypassSafetySensor ? "red blink" : "green") + "'></span> ";
+  html += "<span id='safetyBypassStatusText'>" + String(bypassSafetySensor ? "<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>" : "Disabled") + "</span>";
   html += "</td></tr>\n";
 
   // Limit switch states
@@ -2100,7 +2104,7 @@ inline String getRoofControlPage() {
   html += "<div class='status-card'>\n";
   html += "<h2>Roof Movement</h2>\n";
 
-  // Add bypass toggle
+  // Park sensor bypass toggle
   html += "<div style='margin: 15px 0; padding: 15px; background-color: #2d2d2d; border-radius: 4px;'>\n";
   html += "<div class='switch-container' style='display: flex; align-items: center; justify-content: center;'>\n";
   html += "<label class='switch'>\n";
@@ -2114,10 +2118,26 @@ inline String getRoofControlPage() {
   html += "</div>\n";
   html += "</div>\n";
 
+  // Safety sensor bypass toggle
+  html += "<div style='margin: 15px 0; padding: 15px; background-color: #2d2d2d; border-radius: 4px;'>\n";
+  html += "<div class='switch-container' style='display: flex; align-items: center; justify-content: center;'>\n";
+  html += "<label class='switch'>\n";
+  html += "<input type='checkbox' id='safetyBypassToggleControl' class='danger'" + String(bypassSafetySensor ? " checked" : "") + " onchange='toggleSafetyBypassControl(this.checked)'>\n";
+  html += "<span class='slider'></span>\n";
+  html += "</label>\n";
+  html += "<span class='switch-label' id='safetyBypassLabelControl' style='color: " + String(bypassSafetySensor ? "#e57373" : "#ffffff") + ";'>\n";
+  html += "Bypass Safety Sensors <strong>" + String(bypassSafetySensor ? "(ENABLED)" : "(DISABLED)") + "</strong><br>\n";
+  html += "<small style='color: #e0e0e0;'>Enable to control roof regardless of weather conditions</small>\n";
+  html += "</span>\n";
+  html += "</div>\n";
+  html += "</div>\n";
+
   html += "<div style='text-align: center; margin: 20px 0;'>\n";
 
   // Determine if buttons should be disabled
-  bool buttonDisabled = !bypassParkSensor && !telescopeParked;
+  bool parkBlocked    = !bypassParkSensor && !telescopeParked;
+  bool weatherBlocked = !bypassSafetySensor && !isWeatherSafe();
+  bool buttonDisabled = parkBlocked || weatherBlocked;
 
   // Intelligent button - uses ASCOM/MQTT logic
   html += "<button id='roofOpenCloseButton' class='btn' onclick='roofOpenClose()' style='background-color: #2ecc71; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">OPEN / CLOSE</button>\n";
@@ -2125,9 +2145,13 @@ inline String getRoofControlPage() {
   // Manual button - mimics physical button press
   html += "<button id='roofControlButton' class='btn' onclick='roofButtonPress()' style='background-color: #3498db; font-size: 20px; padding: 15px 30px; margin: 5px;'" + String(buttonDisabled ? " disabled" : "") + ">START / STOP</button>\n";
 
-  if (buttonDisabled) {
-    html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>⚠ Telescope not parked - Enable bypass to control roof</p>\n";
-  } else {
+  if (parkBlocked) {
+    html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>&#9888; Telescope not parked - Enable bypass to control roof</p>\n";
+  }
+  if (weatherBlocked) {
+    html += "<p style='font-size: 14px; color: #e74c3c; margin-top: 10px; font-weight: bold;'>&#9888; Weather unsafe - Enable safety bypass to control roof</p>\n";
+  }
+  if (!buttonDisabled) {
     html += "<p style='font-size: 14px; color: #b0b0b0; margin-top: 10px;'><strong>START/STOP:</strong> Mimics physical button | <strong>OPEN/CLOSE:</strong> Intelligent control</p>\n";
   }
 
@@ -2227,11 +2251,33 @@ inline String getRoofControlPage() {
   html += "      label.style.color = checked ? '#e57373' : '#ffffff';\n";
   html += "      label.innerHTML = 'Bypass Park Sensor <strong>' + (checked ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "    }\n";
-  html += "    updateStatus(); // Refresh status\n";
+  html += "    updateStatus();\n";
   html += "  })\n";
   html += "  .catch(error => {\n";
   html += "    console.error('Error:', error);\n";
   html += "    alert('Error toggling bypass: ' + error);\n";
+  html += "  });\n";
+  html += "}\n\n";
+
+  html += "function toggleSafetyBypassControl(checked) {\n";
+  html += "  fetch('/toggle_safety_bypass', {\n";
+  html += "    method: 'POST',\n";
+  html += "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+  html += "    body: 'bypass=' + checked\n";
+  html += "  })\n";
+  html += "  .then(response => response.text())\n";
+  html += "  .then(data => {\n";
+  html += "    console.log(data);\n";
+  html += "    const label = document.getElementById('safetyBypassLabelControl');\n";
+  html += "    if (label) {\n";
+  html += "      label.style.color = checked ? '#e57373' : '#ffffff';\n";
+  html += "      label.innerHTML = 'Bypass Safety Sensors <strong>' + (checked ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of weather conditions</small>';\n";
+  html += "    }\n";
+  html += "    updateStatus();\n";
+  html += "  })\n";
+  html += "  .catch(error => {\n";
+  html += "    console.error('Error:', error);\n";
+  html += "    alert('Error toggling safety bypass: ' + error);\n";
   html += "  });\n";
   html += "}\n\n";
 
@@ -2284,8 +2330,34 @@ inline String getRoofControlPage() {
   html += "        bypassLabel.innerHTML = 'Bypass Park Sensor <strong>' + (data.bypass_enabled ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of telescope position</small>';\n";
   html += "      }\n\n";
 
+  html += "      // Update weather safe status\n";
+  html += "      const weatherInd = document.getElementById('weatherSafeIndicator');\n";
+  html += "      const weatherText = document.getElementById('weatherSafeText');\n";
+  html += "      if (weatherInd && weatherText) {\n";
+  html += "        weatherInd.className = 'status-indicator ' + (data.weather_safe ? 'green' : 'red blink');\n";
+  html += "        weatherText.innerHTML = data.weather_safe ? 'Safe' : \"<span style='color: #e74c3c; font-weight: bold;'>UNSAFE</span>\";\n";
+  html += "      }\n\n";
+
+  html += "      // Update safety bypass status row\n";
+  html += "      const safetyBypassInd = document.getElementById('safetyBypassIndicator');\n";
+  html += "      const safetyBypassStatusText = document.getElementById('safetyBypassStatusText');\n";
+  html += "      if (safetyBypassInd && safetyBypassStatusText) {\n";
+  html += "        safetyBypassInd.className = 'status-indicator ' + (data.safety_bypass ? 'red blink' : 'green');\n";
+  html += "        safetyBypassStatusText.innerHTML = data.safety_bypass ? \"<span style='color: #e74c3c; font-weight: bold;'>ENABLED</span>\" : 'Disabled';\n";
+  html += "      }\n";
+  html += "      // Update safety bypass toggle control\n";
+  html += "      const safetyBypassToggle = document.getElementById('safetyBypassToggleControl');\n";
+  html += "      const safetyBypassLabel = document.getElementById('safetyBypassLabelControl');\n";
+  html += "      if (safetyBypassToggle) safetyBypassToggle.checked = data.safety_bypass;\n";
+  html += "      if (safetyBypassLabel) {\n";
+  html += "        safetyBypassLabel.style.color = data.safety_bypass ? '#f44336' : '#ffffff';\n";
+  html += "        safetyBypassLabel.innerHTML = 'Bypass Safety Sensors <strong>' + (data.safety_bypass ? '(ENABLED)' : '(DISABLED)') + '</strong><br><small>Enable to control roof regardless of weather conditions</small>';\n";
+  html += "      }\n\n";
+
   html += "      // Update roof control buttons disabled state\n";
-  html += "      const shouldDisable = !data.bypass_enabled && !data.telescope_parked;\n";
+  html += "      const parkBlocked = !data.bypass_enabled && !data.telescope_parked;\n";
+  html += "      const weatherBlocked = !data.safety_bypass && !data.weather_safe;\n";
+  html += "      const shouldDisable = parkBlocked || weatherBlocked;\n";
   html += "      const roofButton = document.getElementById('roofControlButton');\n";
   html += "      if (roofButton) {\n";
   html += "        roofButton.disabled = shouldDisable;\n";

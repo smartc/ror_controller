@@ -59,6 +59,8 @@ void handleSafetyBypassToggle();
 void handleSafetySensorEnabled();
 void handleSafetySensorBypass();
 void handleWeatherAutoClose();
+void handleSafetySensorRemove();
+void handleSafetySensorRemoveAll();
 
 // Inverter control handlers (NEW in v3)
 void handleInverterToggle();         // Toggle K1 inverter power relay

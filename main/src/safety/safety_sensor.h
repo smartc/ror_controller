@@ -55,6 +55,8 @@ bool isWeatherSafe();
 // Per-sensor management (called from web UI handlers)
 void setSafetySensorEnabled(const String& serialNumber, bool enabled);
 void setSafetySensorBypass(const String& serialNumber, bool bypassed);
+void removeSafetySensor(const String& serialNumber);
+void removeAllSafetySensors();
 
 // Persistent storage
 void saveSafetySensorConfiguration();

@@ -134,6 +134,22 @@ void setSafetySensorBypass(const String& serial, bool bypassed) {
   }
 }
 
+void removeSafetySensor(const String& serial) {
+  auto it = discoveredSafetySensors.find(serial);
+  if (it != discoveredSafetySensors.end()) {
+    Debug.printf("Safety sensor %s (%s) removed\n",
+                 it->second.name.c_str(), serial.c_str());
+    discoveredSafetySensors.erase(it);
+    saveSafetySensorConfiguration();
+  }
+}
+
+void removeAllSafetySensors() {
+  discoveredSafetySensors.clear();
+  saveSafetySensorConfiguration();
+  Debug.println("All safety sensors removed");
+}
+
 // ---------------------------------------------------------------------------
 // Persistent storage
 // ---------------------------------------------------------------------------
