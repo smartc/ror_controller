@@ -38,33 +38,38 @@ String getStatusCard();
 String getParkSensorConfigCard();  // New function for park sensor configuration
 String getGPSConfigCard();         // GPS and NTP server configuration
 
-// Common CSS styles used across pages - Dark Theme
+// Common CSS styles used across pages - Dark Navy Theme (matches SkyConditions_90640)
 inline String getCommonStyles() {
   String styles =
-    "body { font-family: Arial, sans-serif; margin: 20px; background-color: #1a1a1a; color: #e0e0e0; }\n"
-    "h1, h2 { color: #4fc3f7; margin-top: 0; }\n"
+    "* { box-sizing: border-box; }\n"
+    "body { font-family: Arial, sans-serif; margin: 20px; background-color: #1a1a2e; color: #e0e0e0; }\n"
+    "h1, h2 { color: #a0c4ff; margin-top: 0; }\n"
     "h3 { color: #81c784; }\n"
-    "a { color: #4fc3f7; text-decoration: none; }\n"
-    "a:hover { text-decoration: underline; color: #81d4fa; }\n"
-    ".card { background: #2d2d2d; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #404040; }\n"
+    "a { color: #74b9ff; text-decoration: none; }\n"
+    "a:hover { text-decoration: underline; }\n"
+    ".card { background: #16213e; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }\n"
+    ".nav { margin-bottom: 16px; }\n"
+    ".nav a { display: inline-block; background: #0f3460; color: #e0e0e0; padding: 8px 14px; border-radius: 4px; margin-right: 8px; text-decoration: none; }\n"
+    ".nav a:hover { background: #1a4a8a; text-decoration: none; }\n"
+    ".nav a.warn { background: #7f4f00; }\n"
+    ".nav a.warn:hover { background: #a06200; }\n"
     "label { display: block; margin-bottom: 5px; font-weight: bold; color: #b0b0b0; }\n"
-    "input[type=text], input[type=password], input[type=number] { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #555; border-radius: 4px; background-color: #333; color: #e0e0e0; }\n"
-    "input[type=submit] { background: #4fc3f7; color: #000; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
-    "input[type=submit]:hover { background: #81d4fa; }\n"
-    "button { background-color: #4fc3f7; color: #000; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
-    "button:hover { background-color: #81d4fa; }\n"
-    "button:disabled { background-color: #555; color: #888; cursor: not-allowed; opacity: 0.5; }\n"
+    "input[type=text], input[type=password], input[type=number] { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #2d3561; border-radius: 4px; background-color: #0f3460; color: #e0e0e0; }\n"
+    "input[type=submit] { background: #74b9ff; color: #000; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
+    "input[type=submit]:hover { background: #a0c4ff; }\n"
+    "button { background-color: #74b9ff; color: #000; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
+    "button:hover { background-color: #a0c4ff; }\n"
+    "button:disabled { background-color: #2d3561; color: #636e72; cursor: not-allowed; opacity: 0.5; }\n"
     "table { border-collapse: collapse; width: 100%; }\n"
-    "table, th, td { border: 1px solid #555; }\n"
+    "table, th, td { border: 1px solid #2d3561; }\n"
     "th, td { padding: 8px; text-align: left; }\n"
-    "th { background-color: #333; color: #4fc3f7; font-weight: bold; }\n"
-    "td { background-color: #2d2d2d; }\n"
+    "th { background-color: #0f3460; color: #e0e0e0; font-weight: bold; }\n"
     ".status-open { color: #64b5f6; font-weight: bold; }\n"
     ".status-closed { color: #81c784; font-weight: bold; }\n"
     ".status-moving { color: #ffb74d; font-weight: bold; }\n"
     ".status-error { color: #e57373; font-weight: bold; }\n"
     ".button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }\n"
-    ".button-primary { background-color: #4fc3f7; color: #000; }\n"
+    ".button-primary { background-color: #74b9ff; color: #000; }\n"
     ".button-warning { background-color: #ffb74d; color: #000; }\n"
     ".button-danger { background-color: #e57373; color: #000; }\n"
     ".telescope-status { display: inline-block; margin: 20px auto; text-align: center; }\n"
@@ -109,8 +114,8 @@ inline String getToggleSwitchStyles() {
     ".switch input {opacity: 0; width: 0; height: 0;}\n"
     ".slider {position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .4s; border-radius: 34px;}\n"
     ".slider:before {position: absolute; content: \"\"; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: #e0e0e0; transition: .4s; border-radius: 50%;}\n"
-    "input:checked + .slider {background-color: #4fc3f7;}\n"
-    "input:focus + .slider {box-shadow: 0 0 1px #4fc3f7;}\n"
+    "input:checked + .slider {background-color: #74b9ff;}\n"
+    "input:focus + .slider {box-shadow: 0 0 1px #74b9ff;}\n"
     "input:checked + .slider:before {transform: translateX(26px);}\n"
     "input.danger:checked + .slider {background-color: #e57373;}\n"
     ".switch-label {display: inline-block; vertical-align: middle; margin-left: 10px; font-weight: bold; color: #e0e0e0;}\n"
@@ -137,16 +142,16 @@ inline String getPageHeader(String pageTitle) {
   return header;
 }
 
-// Navigation links
+// Navigation bar
 inline String getNavBar() {
   String navbar =
-    "<div style='margin-bottom: 20px; padding: 10px; background-color: #2d2d2d; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'>\n"
-    "<a href='/' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Home</a>\n"
-    "<a href='/control' style='margin-right: 10px; padding: 8px 12px; background-color: #2ecc71; color: white; border-radius: 4px; text-decoration: none;'>Roof Control</a>\n"
-    "<a href='/setup' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>Setup</a>\n"
-    "<a href='/wificonfig' style='margin-right: 10px; padding: 8px 12px; background-color: #3498db; color: white; border-radius: 4px; text-decoration: none;'>WiFi Config</a>\n"
-    "<a href='/console' style='margin-right: 10px; padding: 8px 12px; background-color: #8e44ad; color: white; border-radius: 4px; text-decoration: none;'>Console</a>\n"
-    "<a href='/update' style='padding: 8px 12px; background-color: #f39c12; color: white; border-radius: 4px; text-decoration: none;'>Update</a>\n"
+    "<div class='nav'>\n"
+    "<a href='/'>Home</a>\n"
+    "<a href='/control'>Roof Control</a>\n"
+    "<a href='/setup'>Setup</a>\n"
+    "<a href='/wificonfig'>WiFi Config</a>\n"
+    "<a href='/console'>Console</a>\n"
+    "<a href='/update' class='warn'>Update</a>\n"
     "</div>\n";
 
   return navbar;
@@ -1010,53 +1015,50 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
 
 // Status card for the setup page
 inline String getStatusCard() {
+  String statusString = getRoofStatusString();
+  String statusClass;
+  if      (statusString == "Open")                             statusClass = "status-open";
+  else if (statusString == "Closed")                           statusClass = "status-closed";
+  else if (statusString == "Opening" || statusString == "Closing") statusClass = "status-moving";
+  else                                                         statusClass = "status-error";
+
   String html = "<div class='card'>";
   html += "<h2>Device Status</h2>";
-  html += "<table>";
-  html += "<tr><td>Manufacturer</td><td>" + String(DEVICE_MANUFACTURER) + "</td></tr>";
-  html += "<tr><td>Version</td><td>" + String(DEVICE_VERSION) + "</td></tr>";
-  html += "<tr><td>Unique ID</td><td>" + uniqueID + "</td></tr>";
-  html += "<tr><td>IP Address</td><td>" + WiFi.localIP().toString() + "</td></tr>";
-  
-  // Status with color coding
-  String statusClass = "";
-  String statusString = getRoofStatusString();
-  if (statusString == "Open") {
-    statusClass = "status-open";
-  } else if (statusString == "Closed") {
-    statusClass = "status-closed";
-  } else if (statusString == "Opening" || statusString == "Closing") {
-    statusClass = "status-moving";
-  } else {
-    statusClass = "status-error";
-  }
-  
-  html += "<tr><td>Roof Status</td><td class='" + statusClass + "'>" + statusString + "</td></tr>";
-  html += "<tr><td>Telescope Parked</td><td>" + String(telescopeParked ? "Yes" : "No") + "</td></tr>";
-  html += "<tr><td>Slaved</td><td>" + String(slaved ? "Yes" : "No") + "</td></tr>";
-  html += "<tr><td>Open Limit Switch</td><td>" + String(digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED ? "Triggered" : "Not Triggered") + "</td></tr>";
-  html += "<tr><td>Closed Limit Switch</td><td>" + String(digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED ? "Triggered" : "Not Triggered") + "</td></tr>";
-  html += "<tr><td>MQTT Connected</td><td>" + String(mqttClient.connected() ? "Yes" : "No") + "</td></tr>";
+  html += "<table><tr><th>Property</th><th>Value</th></tr>";
+  html += "<tr><th>Manufacturer</th><td>" + String(DEVICE_MANUFACTURER) + "</td></tr>";
+  html += "<tr><th>Version</th><td>" + String(DEVICE_VERSION) + "</td></tr>";
+  html += "<tr><th>Unique ID</th><td>" + uniqueID + "</td></tr>";
+  html += "<tr><th>IP Address</th><td>" + WiFi.localIP().toString() + "</td></tr>";
+  html += "<tr><th>Roof Status</th><td class='" + statusClass + "'>" + statusString + "</td></tr>";
+  html += "<tr><th>Telescope Parked</th><td>" + String(telescopeParked ? "Yes" : "No") + "</td></tr>";
+  html += "<tr><th>Slaved</th><td>" + String(slaved ? "Yes" : "No") + "</td></tr>";
+  html += "<tr><th>Open Limit Switch</th><td>" + String(digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED ? "Triggered" : "Not Triggered") + "</td></tr>";
+  html += "<tr><th>Closed Limit Switch</th><td>" + String(digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED ? "Triggered" : "Not Triggered") + "</td></tr>";
+  html += "<tr><th>MQTT Connected</th><td>" + String(mqttClient.connected() ? "Yes" : "No") + "</td></tr>";
   html += "</table>";
   html += "</div>";
-  
+
   return html;
 }
 
 // WiFi settings card for the setup page
 inline String getWifiSettingsCard() {
   String html = "<div class='card'>";
-  html += "<h2>WiFi Settings</h2>";
+  html += "<h2>WiFi</h2>";
+  html += "<p>SSID: <strong>" + WiFi.SSID() + "</strong> &nbsp; "
+          "IP: <strong>" + WiFi.localIP().toString() + "</strong> &nbsp; "
+          "Signal: <strong>" + String(WiFi.RSSI()) + " dBm</strong></p>";
   html += "<form method='post' action='/setup'>";
-  html += "<label for='ssid'>WiFi SSID:</label>";
-  html += "<input type='text' id='ssid' name='ssid' value='" + String(ssid) + "'>";
-  html += "<label for='password'>WiFi Password:</label>";
-  html += "<input type='password' id='password' name='password' value='" + String(password) + "'>";
+  html += "<label for='ssid'>SSID</label>";
+  html += "<input type='text' id='ssid' name='ssid' value='" + String(ssid) + "' placeholder='Network name'>";
+  html += "<label for='password'>Password</label>";
+  html += "<input type='password' id='password' name='password' value='" + String(password) + "' placeholder='Leave blank if open'>";
   html += "<input type='submit' value='Save WiFi Settings'>";
   html += "</form>";
-  html += "<p><a href='/wificonfig'>Advanced WiFi Configuration</a></p>";
+  html += "<hr style='margin:16px 0;border-color:#2d3561'>";
+  html += "<p><a href='/wificonfig'>Advanced WiFi Configuration &rarr;</a></p>";
   html += "</div>";
-  
+
   return html;
 }
 
@@ -1776,156 +1778,25 @@ inline String getSystemManagementCard() {
 
 // Complete setup page
 inline String getSetupPage() {
-  String html = getPageHeader("ESP32 Roll-Off Roof Controller Setup");
+  String html = getPageHeader("Roll-Off Roof Controller Setup");
 
-  // Add custom styles matching home page
-  html += "<style>\n"
-          "body { text-align: center; }\n"
-          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
-          ".page-header { margin: 20px 0; }\n"
-          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
-          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
-          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
-          ".error { background-color: #3a1e1e; color: #e57373; }\n"
-          ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
-          ".status-indicator.green { background-color: #81c784; }\n"
-          ".status-indicator.red { background-color: #e57373; }\n"
-          ".status-indicator.blue { background-color: #64b5f6; }\n"
-          ".status-indicator.orange { background-color: #ffb74d; }\n"
-          ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
-          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
-          ".status-table { width: 100%; margin-bottom: 15px; }\n"
-          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
-          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
-          "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
-          "</style>\n";
-
-  // Page header with title
-  html += "<div class='page-header'>\n";
-  html += "<h1>Device Setup</h1>\n";
-  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
-  html += "</div>\n";
-
-  // Get current status for header
-  String statusString = getRoofStatusString();
-  String statusDisplayString = statusString;
-  // Add error reason in parentheses if in error state
-  if (statusString == "Error" && roofErrorReason.length() > 0) {
-    // Check for timeout with no limit switches - show brief message
-    bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
-    bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
-    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
-      statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
-    } else {
-      String trimmedReason = roofErrorReason;
-      trimmedReason.trim();
-      statusDisplayString = statusString + " (" + trimmedReason + ")";
-    }
-  }
-  String statusClass = "";
-  String indicatorClass = "";
-
-  if (statusString == "Open") {
-    statusClass = "open";
-    indicatorClass = "blue";
-  } else if (statusString == "Closed") {
-    statusClass = "closed";
-    indicatorClass = "green";
-  } else if (statusString == "Opening") {
-    statusClass = "moving";
-    indicatorClass = "blue blink";
-  } else if (statusString == "Closing") {
-    statusClass = "moving";
-    indicatorClass = "green blink";
-  } else {
-    statusClass = "error";
-    indicatorClass = "red blink";
-  }
-
-  // Status header (matching home page)
-  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
-  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
-  html += "</div>\n";
-
-  // Navigation bar
+  html += "<h1>Roll-Off Roof Controller Setup</h1>\n";
+  html += "<p style='font-size:0.85em;color:#8899aa'>Version: " + String(DEVICE_VERSION) + "</p>\n";
   html += getNavBar();
 
-  // Status Card
   html += getStatusCard();
-  
-  // Device Configuration Card (with all toggle switches)
   html += getSwitchConfigCard();
-  
-  // Park Sensor Configuration Card
   html += getParkSensorConfigCard();
-
-  // Safety Sensor Configuration Card
   html += getSafetySensorConfigCard();
-
-  // GPS Configuration Card
   html += getGPSConfigCard();
-
-  // WiFi Settings Card
   html += getWifiSettingsCard();
-  
-  // MQTT Settings Card
   html += getMqttSettingsCard();
-  
-  // System Management Card
   html += getSystemManagementCard();
-  
-  // Add JavaScript for interactivity
+
   html += getControlJS();
 
-  // Initialize all toggle labels on page load
   html += "<script>";
-
-  // Add status update function for header
-  html += "function updateStatus() {\n";
-  html += "  fetch('/api/status')\n";
-  html += "    .then(response => response.json())\n";
-  html += "    .then(data => {\n";
-  html += "      // Update main status header\n";
-  html += "      const statusHeader = document.getElementById('mainStatusHeader');\n";
-  html += "      const statusIndicator = document.getElementById('mainStatusIndicator');\n";
-  html += "      const statusText = document.getElementById('mainStatusText');\n";
-  html += "      if (statusHeader && statusIndicator && statusText) {\n";
-  html += "        if (data.status === 'Error' && data.error_reason && data.error_reason.length > 0) {\n";
-  html += "          // Check for timeout with no limit switches - show brief message\n";
-  html += "          if (data.error_reason.includes('timed out') && !data.limit_open && !data.limit_closed) {\n";
-  html += "            statusText.textContent = data.status + ' (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)';\n";
-  html += "          } else {\n";
-  html += "            statusText.textContent = data.status + ' (' + data.error_reason.trim() + ')';\n";
-  html += "          }\n";
-  html += "        } else {\n";
-  html += "          statusText.textContent = data.status;\n";
-  html += "        }\n";
-  html += "        statusHeader.className = 'status-header ';\n";
-  html += "        statusIndicator.className = 'status-indicator ';\n";
-  html += "        if (data.status === 'Open') {\n";
-  html += "          statusHeader.className += 'open';\n";
-  html += "          statusIndicator.className += 'blue';\n";
-  html += "        } else if (data.status === 'Closed') {\n";
-  html += "          statusHeader.className += 'closed';\n";
-  html += "          statusIndicator.className += 'green';\n";
-  html += "        } else if (data.status === 'Opening') {\n";
-  html += "          statusHeader.className += 'moving';\n";
-  html += "          statusIndicator.className += 'blue blink';\n";
-  html += "        } else if (data.status === 'Closing') {\n";
-  html += "          statusHeader.className += 'moving';\n";
-  html += "          statusIndicator.className += 'green blink';\n";
-  html += "        } else {\n";
-  html += "          statusHeader.className += 'error';\n";
-  html += "          statusIndicator.className += 'red blink';\n";
-  html += "        }\n";
-  html += "      }\n";
-  html += "    })\n";
-  html += "    .catch(error => console.error('Error updating status:', error));\n";
-  html += "}\n\n";
-
   html += "document.addEventListener('DOMContentLoaded', function() {";
-  html += "  // Initialize all toggle labels";
   html += "  updateToggleLabel('triggerState', 'triggerStateText', 'HIGH', 'LOW');";
   html += "  updateToggleLabel('swapSwitches', 'swapSwitchesText', 'Swapped', 'Default');";
   html += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
@@ -1938,14 +1809,10 @@ inline String getSetupPage() {
   html += "  if (bypassToggle && bypassText) {";
   html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#ffffff';";
   html += "  }";
-  html += "  // Start status update polling\n";
-  html += "  updateStatus();\n";
-  html += "  setInterval(updateStatus, 2000);\n";
   html += "});";
   html += "</script>";
-  
-  html += "</body></html>";
 
+  html += "</body></html>";
   return html;
 }
 
