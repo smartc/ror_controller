@@ -18,7 +18,7 @@
 #define DISABLE_BROWNOUT_DETECTION 0
 
 // Version Information
-#define DEVICE_VERSION "3.4.0"  // v3.4: UI styling consistency with SkyConditions_90640 (navy theme, nav, setup page layout)
+#define DEVICE_VERSION "3.4.1"  // v3.4.1: runtime park sensor interlock (emergency stop on unpark during movement)
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 

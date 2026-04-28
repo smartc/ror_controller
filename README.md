@@ -2,7 +2,7 @@
 
 ASCOM Alpaca compatible roll-off roof controller for remote observatory automation, built on ESP32-S3 with MQTT integration, weather safety interlock, and a browser-based control interface.
 
-![Version](https://img.shields.io/badge/version-3.4.0-blue)
+![Version](https://img.shields.io/badge/version-3.4.1-blue)
 ![Hardware](https://img.shields.io/badge/hardware-ESP32--S3-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
@@ -233,7 +233,7 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 
 ## Changelog
 
-### v3.4.0 (2026-04-28)
+### v3.4.1 (2026-04-28)
 - **Runtime park sensor interlock**: if the telescope becomes unparked while the roof is actively moving (or in the inverter startup sequence), the controller immediately kills K1 inverter power, sets `ROOF_ERROR`, and publishes an MQTT alert. Requires operator acknowledgement before further movement.
 - K2 (stop button) is intentionally not pressed during this interlock — single-toggle openers would restart movement if K2 were sent to an already-stopped opener. K1 kill is the definitive action for inverter-based installs.
 - Added `roofMotorCommandedRunning` flag to track controller-commanded movement, preventing false-positive interlock triggers when the roof is stopped mid-travel but `roofStatus` still shows `OPENING`/`CLOSING`.
