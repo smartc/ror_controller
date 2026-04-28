@@ -30,8 +30,7 @@ enum RoofOperationTarget {
   TARGET_NONE,
   TARGET_OPEN,
   TARGET_CLOSE,
-  TARGET_STOP,
-  TARGET_EMERGENCY_STOP  // Park sensor tripped during movement - skip updateRoofStatus() on completion
+  TARGET_STOP
 };
 
 // State machine variables (extern declarations)
@@ -67,6 +66,7 @@ extern bool lastInverterACPowerState; // Last AC power state for change detectio
 extern unsigned long lastInverterACPowerChangeTime;
 extern bool inverterRelayEnabled;    // Enable K1 power relay control for roof movement
 extern bool inverterSoftPwrEnabled;  // Enable K3 soft-power button control for roof movement
+extern bool roofMotorCommandedRunning; // True from K2 press (movement start) until stop, limit switch, or timeout
 
 // Function prototypes
 void initializeRoofController();

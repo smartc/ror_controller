@@ -2,7 +2,7 @@
 
 ASCOM Alpaca compatible roll-off roof controller for remote observatory automation, built on ESP32-S3 with MQTT integration, weather safety interlock, and a browser-based control interface.
 
-![Version](https://img.shields.io/badge/version-3.3.0-blue)
+![Version](https://img.shields.io/badge/version-3.4.0-blue)
 ![Hardware](https://img.shields.io/badge/hardware-ESP32--S3-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
@@ -23,10 +23,18 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 - Two independent configurable timeouts: limit switch response (default 5s) and total movement (default 90s)
 
 ### Safety Interlocks
-- **Park sensor**: blocks roof movement when telescope is unparked. Supports physical GPIO, UDP network sensors, or both (AND logic)
+- **Park sensor (pre-movement)**: blocks roof movement when telescope is unparked. Supports physical GPIO, UDP network sensors, or both (AND logic)
+- **Park sensor (runtime)**: if the telescope transitions from parked to unparked while the roof is actively moving, the controller immediately kills inverter power (K1), sets `ROOF_ERROR`, and publishes an alert. The operator must acknowledge the error before the roof can move again. See caution below regarding shore-power installs.
 - **Weather/sky safety**: receives UDP broadcasts from safety sensor devices; blocks roof opening when any enabled sensor reports unsafe conditions. Fail-safe: an enabled sensor that goes offline is treated as unsafe
 - **Auto-close**: optionally closes the roof automatically when weather becomes unsafe (requires telescope parked)
 - All safety interlocks have bypass toggles accessible from both the Setup and Roof Control pages
+
+> **CAUTION — Shore-power openers with no relay on K1:**
+> The runtime park sensor interlock kills K1 (inverter power relay) as its primary stop action. If your roof opener runs directly on shore power and K1 is not wired into its supply, the controller **cannot electrically stop the opener** when this interlock fires. The system will still set `ROOF_ERROR`, kill K1 (no-op in this wiring), and publish an immediate MQTT alert — but the opener will continue running until it reaches a limit switch or is stopped manually.
+>
+> The stop button (K2) is intentionally **not** pressed during this interlock. Most openers use a single toggle button (press to start, press to stop, press to start again). Pressing K2 on an opener that is already stationary would restart movement, which is the opposite of the intent. The controller cannot reliably distinguish a running opener from a stopped one mid-travel, so K2 is left untouched.
+>
+> **Recommendation for shore-power installs**: wire K1 as a power interruptor in the opener's supply circuit so the controller has a reliable, non-ambiguous means of cutting power. Alternatively, ensure the park sensor bypass is never enabled when the telescope may be unparked during a session.
 
 ### Inverter Control (v3 hardware)
 - K1: 12V power relay (triggers external contactor)
@@ -224,6 +232,12 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 ---
 
 ## Changelog
+
+### v3.4.0 (2026-04-28)
+- **Runtime park sensor interlock**: if the telescope becomes unparked while the roof is actively moving (or in the inverter startup sequence), the controller immediately kills K1 inverter power, sets `ROOF_ERROR`, and publishes an MQTT alert. Requires operator acknowledgement before further movement.
+- K2 (stop button) is intentionally not pressed during this interlock — single-toggle openers would restart movement if K2 were sent to an already-stopped opener. K1 kill is the definitive action for inverter-based installs.
+- Added `roofMotorCommandedRunning` flag to track controller-commanded movement, preventing false-positive interlock triggers when the roof is stopped mid-travel but `roofStatus` still shows `OPENING`/`CLOSING`.
+- Added shore-power caution to documentation: installs where K1 is not wired into the opener's power supply cannot be stopped electrically by this interlock.
 
 ### v3.3.0 (2026-04-12)
 - Safety sensor integration: weather/sky condition interlock via UDP broadcasts

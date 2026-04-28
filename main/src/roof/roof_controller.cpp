@@ -59,6 +59,7 @@ bool lastInverterACPowerState = false;          // Last AC power state for chang
 unsigned long lastInverterACPowerChangeTime = 0;
 bool inverterRelayEnabled = true;               // Enable K1 power relay control for roof movement (default: enabled)
 bool inverterSoftPwrEnabled = true;             // Enable K3 soft-power button control for roof movement (default: enabled)
+bool roofMotorCommandedRunning = false;         // True from K2 press (movement start) until stop, limit switch, or timeout
 
 // Apply pin settings - useful after changing pin assignments or trigger state
 void applyPinSettings() {
@@ -832,6 +833,7 @@ void processRoofOperation() {
         }
         movementStartTime = currentTime;
         lastSwitchTime = currentTime;  // Debounce after button press
+        roofMotorCommandedRunning = true;  // Movement confirmed commanded
 
         // Publish status change immediately
         publishStatusToMQTT();
@@ -856,25 +858,21 @@ void processRoofOperation() {
     case OP_STOP_BUTTON_RELEASE:
       // K2 released for stop, shutdown inverter and finish
       {
-        if (roofOpTarget == TARGET_EMERGENCY_STOP) {
-          // Park-sensor emergency: roofStatus is already ROOF_ERROR — don't overwrite it
-          // with a limit-switch read that would set OPENING/CLOSING again.
-          Debug.println("Emergency stop: K2 released, initiating inverter shutdown");
-        } else {
-          // Normal stop: determine position from limit switches
-          updateRoofStatus();
-          Debug.println("Roof movement stopped");
-        }
+        // Update status based on limit switches
+        updateRoofStatus();
 
         // Publish status change
         publishStatusToMQTT();
         lastPublishedStatus = roofStatus;
+
+        Debug.println("Roof movement stopped");
 
         // Shutdown inverter (handles K1 off, AC check, K3 toggle if needed)
         roofOpTarget = TARGET_NONE;
         shutdownInverterPower();
         // Note: roofOpState is now OP_SHUTDOWN_K1_WAIT (or OP_IDLE if soft-power disabled)
         if (roofOpState == OP_IDLE) {
+          // shutdownInverterPower didn't start a sequence, we're done
           roofOpTarget = TARGET_NONE;
         }
       }
@@ -975,6 +973,9 @@ void updateInverterPowerStatus() {
 // and if so toggles K3 to kill the soft-power.
 // Safe to call even if inverter is already off or K1/K3 are disabled.
 void shutdownInverterPower() {
+  // Movement is ending — clear the flag regardless of how we got here
+  roofMotorCommandedRunning = false;
+
   // Turn off K1 immediately (always safe to do)
   digitalWrite(INVERTER_PIN, LOW);
   inverterRelayState = false;
@@ -1023,23 +1024,37 @@ void checkWeatherAutoClose() {
   }
 }
 
-// Emergency interlock: if the telescope becomes unparked while the roof is in motion
-// (or is in the startup relay sequence), immediately stop the roof.
+// Emergency interlock: if the telescope becomes unparked while the roof is moving
+// (or is in the inverter/button startup sequence), immediately halt and raise an error.
 //
-// Sequence:
-//   1. Kill K1 power immediately (inverter off).
-//   2. Press K2 stop button (handles openers on shore power with inverter control disabled).
-//   3. After K2 is released (~500 ms), run the normal inverter shutdown (AC check + K3 if needed).
-//   4. Set ROOF_ERROR so the operator must acknowledge before the roof can move again.
+// Trigger condition uses roofMotorCommandedRunning rather than roofStatus so that a
+// roof which the controller has already stopped mid-travel (status still shows CLOSING/
+// OPENING until a limit switch clears it) does not produce a false positive.  The
+// roofOpTarget check additionally covers the K1→K3 startup window before roofStatus
+// transitions to OPENING/CLOSING.
 //
-// Not active when bypassParkSensor is true — the user has explicitly acknowledged the risk.
+// Action:
+//   1. Kill K1 (inverter power) immediately.
+//   2. Release any in-progress relay and reset the state machine.
+//   3. Run the normal inverter shutdown sequence (AC check + K3 if AC still present).
+//   4. Set ROOF_ERROR so the operator must acknowledge before movement is re-enabled.
+//
+// K2 (stop button) is intentionally NOT pressed.  Most openers use a single toggle
+// button: press to start, press to stop, press to start again.  Pressing K2 on an
+// opener that is already stopped would restart movement — the opposite of the intent.
+// For shore-power installs where K1 has no effect, the controller cannot safely
+// intervene electrically; ROOF_ERROR and the MQTT/web alert are the notification path.
+//
+// Not active when bypassParkSensor is true.
 void checkParkSensorInterlock() {
-  if (bypassParkSensor)  return;
-  if (telescopeParked)   return;
+  if (bypassParkSensor) return;
+  if (telescopeParked)  return;
 
-  // Trigger only when the roof is moving or is in the startup relay sequence
+  // roofMotorCommandedRunning: set true when K2 open/close press completes,
+  // cleared by shutdownInverterPower() (called on stop, limit switch, or timeout).
+  // roofOpTarget covers the startup relay sequence before K2 is pressed.
   bool roofMovingOrStarting =
-    (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) ||
+    roofMotorCommandedRunning ||
     (roofOpTarget == TARGET_OPEN || roofOpTarget == TARGET_CLOSE);
 
   if (!roofMovingOrStarting) return;
@@ -1057,26 +1072,19 @@ void checkParkSensorInterlock() {
   Debug.println("!!! EMERGENCY STOP: Telescope unparked during roof movement !!!");
   Debug.println(roofErrorReason);
 
-  // Set error state immediately so all callers see it right away
   roofStatus = ROOF_ERROR;
+  roofOpTarget = TARGET_NONE;
 
-  // Kill K1 (inverter 12 V supply) right now — don't wait for the state machine
-  digitalWrite(INVERTER_PIN, LOW);
-  inverterRelayState = false;
-
-  // Abort any in-progress relay sequence and release all relays cleanly
+  // Abort any in-progress relay sequence and release all relays
   if (roofOpState != OP_IDLE) {
     digitalWrite(ROOF_CONTROL_PIN, LOW);
     digitalWrite(INVERTER_BUTTON_PIN, LOW);
+    roofOpState = OP_IDLE;
   }
 
-  // Press K2 stop button — necessary for openers on shore power where
-  // inverter control is disabled (K1 off alone won't stop them)
-  roofOpTarget = TARGET_EMERGENCY_STOP;
-  roofOpState  = OP_STOP_BUTTON_PRESS;
-  roofOpStepStartTime = millis();
-  digitalWrite(ROOF_CONTROL_PIN, HIGH);
-  Debug.println("Emergency stop: K1 killed, K2 stop button pressed");
+  // Kill K1 and run AC/K3 shutdown sequence.
+  // shutdownInverterPower() also clears roofMotorCommandedRunning.
+  shutdownInverterPower();
 
   publishStatusToMQTT();
   lastPublishedStatus = roofStatus;
