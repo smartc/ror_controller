@@ -856,21 +856,25 @@ void processRoofOperation() {
     case OP_STOP_BUTTON_RELEASE:
       // K2 released for stop, shutdown inverter and finish
       {
-        // Update status based on limit switches
-        updateRoofStatus();
+        if (roofOpTarget == TARGET_EMERGENCY_STOP) {
+          // Park-sensor emergency: roofStatus is already ROOF_ERROR — don't overwrite it
+          // with a limit-switch read that would set OPENING/CLOSING again.
+          Debug.println("Emergency stop: K2 released, initiating inverter shutdown");
+        } else {
+          // Normal stop: determine position from limit switches
+          updateRoofStatus();
+          Debug.println("Roof movement stopped");
+        }
 
         // Publish status change
         publishStatusToMQTT();
         lastPublishedStatus = roofStatus;
-
-        Debug.println("Roof movement stopped");
 
         // Shutdown inverter (handles K1 off, AC check, K3 toggle if needed)
         roofOpTarget = TARGET_NONE;
         shutdownInverterPower();
         // Note: roofOpState is now OP_SHUTDOWN_K1_WAIT (or OP_IDLE if soft-power disabled)
         if (roofOpState == OP_IDLE) {
-          // shutdownInverterPower didn't start a sequence, we're done
           roofOpTarget = TARGET_NONE;
         }
       }
@@ -1017,4 +1021,63 @@ void checkWeatherAutoClose() {
   } else {
     Debug.println("Auto-close SUPPRESSED: weather unsafe but telescope not confirmed parked");
   }
+}
+
+// Emergency interlock: if the telescope becomes unparked while the roof is in motion
+// (or is in the startup relay sequence), immediately stop the roof.
+//
+// Sequence:
+//   1. Kill K1 power immediately (inverter off).
+//   2. Press K2 stop button (handles openers on shore power with inverter control disabled).
+//   3. After K2 is released (~500 ms), run the normal inverter shutdown (AC check + K3 if needed).
+//   4. Set ROOF_ERROR so the operator must acknowledge before the roof can move again.
+//
+// Not active when bypassParkSensor is true — the user has explicitly acknowledged the risk.
+void checkParkSensorInterlock() {
+  if (bypassParkSensor)  return;
+  if (telescopeParked)   return;
+
+  // Trigger only when the roof is moving or is in the startup relay sequence
+  bool roofMovingOrStarting =
+    (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) ||
+    (roofOpTarget == TARGET_OPEN || roofOpTarget == TARGET_CLOSE);
+
+  if (!roofMovingOrStarting) return;
+
+  String operation;
+  if      (roofStatus == ROOF_OPENING)  operation = "opening";
+  else if (roofStatus == ROOF_CLOSING)  operation = "closing";
+  else                                  operation = "starting to move";
+
+  roofErrorReason =
+    "EMERGENCY STOP: Telescope became unparked while roof was " + operation + ". "
+    "Roof halted to prevent collision. "
+    "Verify telescope and roof are safe before clearing this error.";
+
+  Debug.println("!!! EMERGENCY STOP: Telescope unparked during roof movement !!!");
+  Debug.println(roofErrorReason);
+
+  // Set error state immediately so all callers see it right away
+  roofStatus = ROOF_ERROR;
+
+  // Kill K1 (inverter 12 V supply) right now — don't wait for the state machine
+  digitalWrite(INVERTER_PIN, LOW);
+  inverterRelayState = false;
+
+  // Abort any in-progress relay sequence and release all relays cleanly
+  if (roofOpState != OP_IDLE) {
+    digitalWrite(ROOF_CONTROL_PIN, LOW);
+    digitalWrite(INVERTER_BUTTON_PIN, LOW);
+  }
+
+  // Press K2 stop button — necessary for openers on shore power where
+  // inverter control is disabled (K1 off alone won't stop them)
+  roofOpTarget = TARGET_EMERGENCY_STOP;
+  roofOpState  = OP_STOP_BUTTON_PRESS;
+  roofOpStepStartTime = millis();
+  digitalWrite(ROOF_CONTROL_PIN, HIGH);
+  Debug.println("Emergency stop: K1 killed, K2 stop button pressed");
+
+  publishStatusToMQTT();
+  lastPublishedStatus = roofStatus;
 }
