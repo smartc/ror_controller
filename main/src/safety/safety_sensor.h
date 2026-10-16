@@ -18,8 +18,11 @@
 #include <vector>
 #include "config.h"
 
-// 90 seconds timeout — 3× the default 30 s broadcast interval
-#define SAFETY_SENSOR_TIMEOUT 90000
+// 5 minute timeout — 10× the default 30 s broadcast interval. At 90 s (3×), two
+// dropped UDP packets marked the sensor offline (= unsafe) for ~1 s several times
+// a night. Wet/dry changes are broadcast immediately, so this only delays
+// detecting a dead sensor.
+#define SAFETY_SENSOR_TIMEOUT 300000
 
 // Per-sensor data structure (mirrors ParkSensor pattern for consistency)
 struct SafetySensor {

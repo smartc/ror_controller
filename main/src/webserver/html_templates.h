@@ -2069,14 +2069,14 @@ inline String getRoofControlPage() {
 
   html += "function roofButtonPress() {\n";
   html += "  fetch('/roof_button', { method: 'POST' })\n";
-  html += "    .then(response => response.text())\n";
+  html += "    .then(response => response.text().then(text => { if (!response.ok) alert(text); return text; }))\n";
   html += "    .then(data => { console.log('Roof button pressed:', data); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
 
   html += "function roofOpenClose() {\n";
   html += "  fetch('/roof_openclose', { method: 'POST' })\n";
-  html += "    .then(response => response.text())\n";
+  html += "    .then(response => response.text().then(text => { if (!response.ok) alert(text); return text; }))\n";
   html += "    .then(data => { console.log('Intelligent roof control:', data); })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";

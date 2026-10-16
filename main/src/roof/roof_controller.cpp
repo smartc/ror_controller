@@ -291,10 +291,22 @@ void updateRoofStatus() {
   } 
   else {
     // Neither limit switch is triggered - roof is in between
-    
+
+    // Only infer a manual movement once BOTH switches have read NOT triggered
+    // continuously for INFERRED_MOVE_STABLE_TIME. A switch that is triggered but
+    // still inside its SWITCH_STABLE_TIME window (i.e. a glitch) must not be
+    // mistaken for the roof leaving a limit (#11).
+    bool limitsClearLongEnough =
+        !currentOpenState && !currentClosedState &&
+        (currentTime - lastOpenStateTime > INFERRED_MOVE_STABLE_TIME) &&
+        (currentTime - lastClosedStateTime > INFERRED_MOVE_STABLE_TIME);
+
     // Only transition to moving states if we're not already in a moving state
     // This prevents oscillation between OPENING and CLOSING
-    if (roofStatus == ROOF_OPEN) {
+    if (!limitsClearLongEnough) {
+      // Wait for the switches to settle before inferring anything
+    }
+    else if (roofStatus == ROOF_OPEN) {
       roofStatus = ROOF_CLOSING;
       movementStartTime = currentTime;
       statusMessage = "Roof state changed from OPEN, now CLOSING";

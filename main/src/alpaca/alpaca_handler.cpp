@@ -6,6 +6,7 @@
 #include "alpaca_handler.h"
 #include "../mqtt/mqtt_handler.h"
 #include "../roof/roof_controller.h"
+#include "../safety/safety_sensor.h"
 #include "../debug/Debug.h"
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
@@ -627,7 +628,15 @@ void handleOpenShutter() {
     sendAlpacaResponse(clientID, clientTransactionID, 1035, "Cannot open roof when telescope is not parked and bypass not enabled", "");
     return;
   }
-  
+
+  // Weather safety interlock - report it explicitly rather than as a generic failure
+  // (startOpeningRoof() would refuse too, but only with "Failed to start opening")
+  if (!isWeatherSafe() && digitalRead(LIMIT_SWITCH_OPEN_PIN) != TRIGGERED) {
+    Debug.println("OpenShutter refused: weather unsafe (safety sensor unsafe or offline)");
+    sendAlpacaResponse(clientID, clientTransactionID, 1035, "Cannot open roof: weather unsafe (safety sensor reporting unsafe or offline)", "");
+    return;
+  }
+
   // Start opening the roof
   if (startOpeningRoof()) {
     sendAlpacaResponse(clientID, clientTransactionID, 0, "", "");

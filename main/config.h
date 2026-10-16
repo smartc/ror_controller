@@ -18,7 +18,7 @@
 #define DISABLE_BROWNOUT_DETECTION 0
 
 // Version Information
-#define DEVICE_VERSION "3.4.0"  // v3.4: UI styling consistency with SkyConditions_90640 (navy theme, nav, setup page layout)
+#define DEVICE_VERSION "3.4.1"  // v3.4.1: interim reliability fixes (inferred-move debounce, safety timeout, refusal reasons)
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
@@ -71,6 +71,7 @@ const int DEFAULT_PARK_STATE = LOW;     // Default park sensor state (LOW = norm
 // Timing Settings
 const uint32_t DEBOUNCE_DELAY = 100;        // Debounce delay in ms
 const unsigned long SWITCH_STABLE_TIME = 500; // Time in ms a switch must be stable
+const unsigned long INFERRED_MOVE_STABLE_TIME = 2000; // Both limits must read NOT triggered this long before a manual move is inferred
 extern unsigned long movementTimeout;        // Roof movement timeout in ms (configurable)
 const unsigned long DEFAULT_MOVEMENT_TIMEOUT = 90000; // Default: 90 seconds
 extern bool movementTimeoutEnabled;          // Enable/disable movement timeout monitoring (configurable)

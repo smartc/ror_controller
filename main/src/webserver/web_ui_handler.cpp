@@ -1112,6 +1112,18 @@ void handleRoofOpenClose() {
     return;
   }
 
+  // A sticky ERROR used to make this button do nothing until a reboot. If exactly one
+  // limit switch is triggered the roof position is known, so clear the error (same as
+  // the Clear Error button) and act on the re-read state.
+  if (roofStatus == ROOF_ERROR) {
+    bool openTriggered = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+    bool closedTriggered = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+    if (openTriggered != closedTriggered) {
+      Debug.println("Intelligent roof control: clearing ERROR, roof position known from limit switch");
+      clearRoofError();
+    }
+  }
+
   // Determine action based on current roof state
   bool success = false;
   String action = "";
@@ -1127,7 +1139,7 @@ void handleRoofOpenClose() {
   } else {
     // Unknown state - return error
     Debug.println("Cannot determine roof action - unknown state");
-    webUiServer.send(400, "text/plain", "Cannot control roof - unknown state");
+    webUiServer.send(400, "text/plain", "Cannot control roof - roof is in ERROR and its position is unknown (neither or both limit switches triggered)");
     return;
   }
 
