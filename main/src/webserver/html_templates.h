@@ -2347,8 +2347,11 @@ inline String getConsolePage() {
     "<h2 style='margin-top:0'>Debug Console</h2>\n"
     "<div style='margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;'>\n"
     "  <button id='btn-pause' onclick='togglePause()'>Pause</button>\n"
-    "  <button id='btn-clear' onclick='clearLog()'>Clear</button>\n"
+    "  <button id='btn-clear' onclick='clearView()'>Clear view</button>\n"
     "  <button id='btn-copy'  onclick='copyLog()'>Copy</button>\n"
+    "  <label style='display:flex;align-items:center;gap:6px;margin:0 0 0 8px;font-size:0.9em;'>"
+    "<input type='checkbox' id='hist' onchange='toggleHistory()' style='width:auto;margin:0'>"
+    "History (FRAM, includes previous boots)</label>\n"
     "  <span id='con-status' style='font-size:0.85em;color:#b0b0b0;margin-left:8px;'>Connecting...</span>\n"
     "</div>\n"
     "<div id='log' style='"
@@ -2356,48 +2359,88 @@ inline String getConsolePage() {
       "padding:10px;font-family:monospace;font-size:0.82em;line-height:1.6;"
       "white-space:pre-wrap;word-break:break-all;"
     "'></div>\n"
+    "</div>\n"
+
+    "<div class='card'>\n"
+    "<h2 style='margin-top:0'>Log Files</h2>\n"
+    "<p id='log-summary' style='font-size:0.9em;color:#b0b0b0;margin:0 0 10px 0'>Loading...</p>\n"
+    "<div class='button-row' style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>\n"
+    "  <button class='button-primary' onclick='flushNow()'>Flush now</button>\n"
+    "  <a href='/logs/download_all' style='text-decoration:none'><button class='button-primary'>Download all</button></a>\n"
+    "  <a href='/logs/fram' style='text-decoration:none'><button class='button-primary'>Download FRAM buffer</button></a>\n"
+    "  <button class='button-danger' onclick='clearAll()'>Clear all logs</button>\n"
+    "</div>\n"
+    "<table><thead><tr><th>File (UTC day)</th><th>Size</th><th></th></tr></thead>"
+    "<tbody id='log-files'></tbody></table>\n"
+    "<p style='font-size:0.8em;color:#8899aa;margin-top:10px'>Every log line is written to FRAM immediately "
+    "(survives power loss) and copied to flash every 15 minutes. Flash files are kept for 90 days, "
+    "2 MB total, oldest deleted first. Downloads and flushes are refused while the roof is moving.</p>\n"
     "</div>\n";
 
   html += R"rawjs(
 <style>
 .le  { margin:0; }
 .ts  { color:#636e72; user-select:none; }
+.bt  { color:#74b9ff; user-select:none; }
 .rep { color:#fd79a8; font-style:italic; }
 </style>
 <script>
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function fmtMs(ms){
-  var h=Math.floor(ms/3600000),
-      m=Math.floor((ms%3600000)/60000),
-      s=Math.floor((ms%60000)/1000);
-  return [h,m,s].map(function(x){return String(x).padStart(2,'0');}).join(':');
+function fmtUp(ms){
+  var h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000), s=Math.floor((ms%60000)/1000);
+  return '+'+[h,m,s].map(function(x){return String(x).padStart(2,'0');}).join(':');
 }
+function fmtTime(e){
+  if(e.t>0){
+    var d=new Date(e.t*1000);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+
+           d.toTimeString().substring(0,8);
+  }
+  return fmtUp(e.ms);
+}
+function fmtSize(n){ return n>=1048576?(n/1048576).toFixed(2)+' MB':n>=1024?(n/1024).toFixed(1)+' KB':n+' B'; }
 
-var lastSeq=-1, paused=false;
+var lastSeq=-1, paused=false, history=false;
 
 function render(entries){
   var el=document.getElementById('log');
   var atBottom=(el.scrollHeight-el.scrollTop-el.clientHeight)<40;
-  el.innerHTML='';
+  var html='';
   for(var i=0;i<entries.length;i++){
     var e=entries[i];
     var rep=e.n>1?' <span class="rep">(\xd7'+e.n+')</span>':'';
-    var d=document.createElement('div');
-    d.className='le';
-    d.innerHTML='<span class="ts">['+fmtMs(e.ms)+']</span> '+esc(e.msg)+rep;
-    el.appendChild(d);
+    var boot=e.b!==undefined?'<span class="bt">#'+e.b+'</span> ':'';
+    html+='<div class="le"><span class="ts">['+fmtTime(e)+']</span> '+boot+esc(e.msg)+rep+'</div>';
   }
-  if(atBottom) el.scrollTop=el.scrollHeight;
+  el.innerHTML=html;
+  if(atBottom||history) el.scrollTop=el.scrollHeight;
 }
 
 function poll(){
-  if(paused) return;
+  if(paused||history) return;
   fetch('/console.json').then(function(r){return r.json();}).then(function(d){
     if(d.seq!==lastSeq){lastSeq=d.seq;render(d.entries);}
     document.getElementById('con-status').textContent=
-      'Updated '+new Date().toLocaleTimeString()+' \u2022 '+d.entries.length+' lines';
+      'Live • updated '+new Date().toLocaleTimeString()+' • '+d.entries.length+' lines since boot';
   }).catch(function(e){
     document.getElementById('con-status').textContent='Error: '+e;
+  });
+}
+
+function toggleHistory(){
+  history=document.getElementById('hist').checked;
+  var st=document.getElementById('con-status');
+  if(!history){ lastSeq=-1; poll(); return; }
+  st.textContent='Loading FRAM history...';
+  fetch('/logs/recent.json?n=500').then(function(r){
+    if(!r.ok) return r.text().then(function(t){throw t;});
+    return r.json();
+  }).then(function(d){
+    render(d.entries);
+    st.textContent='History • last '+d.entries.length+' of '+d.total+' FRAM records • current boot #'+d.boot;
+  }).catch(function(e){
+    st.textContent='History unavailable: '+e;
+    document.getElementById('hist').checked=false; history=false;
   });
 }
 
@@ -2407,7 +2450,7 @@ function togglePause(){
   btn.textContent=paused?'Resume':'Pause';
   btn.style.background=paused?'#c0392b':'';
 }
-function clearLog(){ document.getElementById('log').innerHTML=''; lastSeq=-1; }
+function clearView(){ document.getElementById('log').innerHTML=''; }
 function copyLog(){
   var lines=document.querySelectorAll('#log .le');
   var text=Array.from(lines).map(function(el){return el.innerText;}).join('\n');
@@ -2418,8 +2461,45 @@ function copyLog(){
   });
 }
 
+function loadFiles(){
+  fetch('/logs.json').then(function(r){return r.json();}).then(function(d){
+    var s=d.status, parts=[];
+    if(s.fram_present){
+      parts.push('FRAM: '+fmtSize(s.fram_used)+' of '+fmtSize(s.fram_capacity)+' ('+fmtSize(s.fram_unflushed)+' not yet in flash'+
+                 (s.fram_dropped?', '+s.fram_dropped+' lines lost before archiving':'')+')');
+    } else parts.push('FRAM: not detected (log is RAM-only)');
+    if(s.archive_ready){
+      parts.push('Flash: '+fmtSize(s.archive_bytes)+' of '+fmtSize(s.archive_cap)+' in '+s.archive_files+' files');
+      parts.push('last flush '+Math.round(s.last_flush_age_s/60)+' min ago');
+    } else parts.push('Flash archive: not available');
+    if(s.busy) parts.push('ROOF MOVING - flash access paused');
+    document.getElementById('log-summary').textContent=parts.join(' • ');
+    var rows='';
+    d.files.forEach(function(f){
+      var n=encodeURIComponent(f.name);
+      rows+='<tr><td>'+esc(f.name)+'</td><td>'+fmtSize(f.size)+'</td><td style="white-space:nowrap">'+
+            '<a href="/logs/download?f='+n+'">Download</a> &nbsp; '+
+            '<a href="#" onclick="delFile(\''+f.name+'\');return false;" style="color:#e57373">Delete</a></td></tr>';
+    });
+    document.getElementById('log-files').innerHTML=rows||'<tr><td colspan="3" style="color:#8899aa">No archived log files yet</td></tr>';
+  });
+}
+
+function post(url, okMsg){
+  return fetch(url,{method:'POST'}).then(function(r){
+    return r.text().then(function(t){ if(!r.ok) alert(t); else if(okMsg) console.log(t); loadFiles(); });
+  });
+}
+function flushNow(){ post('/logs/flush', true); }
+function delFile(n){ if(confirm('Delete '+n+'?')) post('/logs/delete?f='+encodeURIComponent(n)); }
+function clearAll(){
+  if(confirm('Clear ALL logs - the FRAM buffer and every archived file? This cannot be undone.')) post('/logs/clear');
+}
+
 poll();
+loadFiles();
 setInterval(poll, 2000);
+setInterval(loadFiles, 30000);
 </script>
 )rawjs";
 

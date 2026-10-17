@@ -13,6 +13,7 @@
 #include "../debug/Debug.h"
 #include "../net/network_manager.h"
 #include "../log/log_archive.h"
+#include "../log/fram_log.h"
 #include <HTTPClient.h>
 
 // Standard Web Server
@@ -510,6 +511,16 @@ void initWebUI() {
   webUiServer.on("/", HTTP_GET, handleRoot);
   webUiServer.on("/console",      HTTP_GET, handleConsole);
   webUiServer.on("/console.json", HTTP_GET, handleConsoleJSON);
+
+  // Log management (FRAM + flash archive)
+  webUiServer.on("/logs.json",           HTTP_GET,  handleLogsJSON);
+  webUiServer.on("/logs/download",       HTTP_GET,  handleLogDownload);
+  webUiServer.on("/logs/download_all",   HTTP_GET,  handleLogDownloadAll);
+  webUiServer.on("/logs/fram",           HTTP_GET,  handleLogFram);
+  webUiServer.on("/logs/recent.json",    HTTP_GET,  handleLogRecentJSON);
+  webUiServer.on("/logs/flush",          HTTP_POST, handleLogFlush);
+  webUiServer.on("/logs/delete",         HTTP_POST, handleLogDelete);
+  webUiServer.on("/logs/clear",          HTTP_POST, handleLogClear);
   
   // Handle setup page
   webUiServer.on("/setup", HTTP_GET, handleSetup);
@@ -1464,4 +1475,166 @@ void handleNetworkSettings() {
   Debug.printf("Network settings updated: Ethernet=%s, preferred=%s, hostname=%s\n",
                ethEnabled ? "enabled" : "disabled", netPreferred == NET_IF_ETH ? "Ethernet" : "WiFi", netHostname);
   webUiServer.send(200, "text/plain", "Network settings saved. Restart required for changes to take effect.");
+}
+
+// ── Log management (Console page) ────────────────────────────────────────────
+// WebServer is synchronous: a download blocks loop() while it streams, so
+// anything that reads flash or the whole FRAM is refused while the roof moves.
+
+static bool refuseIfRoofBusy() {
+  if (!logArchiveBusy()) return false;
+  webUiServer.send(409, "text/plain", "Roof is moving - try again when it has stopped");
+  return true;
+}
+
+void handleLogsJSON() {
+  DynamicJsonDocument doc(6144);
+  logArchiveStatus(doc.createNestedObject("status"));
+  logArchiveListFiles(doc.createNestedArray("files"));
+  String out;
+  serializeJson(doc, out);
+  webUiServer.send(200, "application/json", out);
+}
+
+void handleLogDownload() {
+  if (refuseIfRoofBusy()) return;
+  String name = webUiServer.arg("f");
+  if (!logArchiveReady() || !logArchiveValidName(name)) {
+    webUiServer.send(400, "text/plain", "Invalid log file name");
+    return;
+  }
+  File f = logArchiveFS().open(String(LOG_ARCHIVE_DIR "/") + name, "r");
+  if (!f) {
+    webUiServer.send(404, "text/plain", "Log file not found");
+    return;
+  }
+  webUiServer.sendHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
+  webUiServer.streamFile(f, "text/plain");
+  f.close();
+}
+
+// Every archived file, oldest first, as one download (flushes FRAM first so it's complete)
+void handleLogDownloadAll() {
+  if (refuseIfRoofBusy()) return;
+  if (!logArchiveReady()) {
+    webUiServer.send(503, "text/plain", "Log archive not available");
+    return;
+  }
+  logArchiveFlushNow();
+
+  DynamicJsonDocument doc(6144);
+  JsonArray files = doc.to<JsonArray>();
+  logArchiveListFiles(files);  // newest first
+
+  String stamp = isTimeSynced() ? getDateString() : String("all");
+  webUiServer.sendHeader("Content-Disposition", "attachment; filename=\"" + String(netHostname) + "-logs-" + stamp + ".log\"");
+  webUiServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  webUiServer.send(200, "text/plain", "");
+
+  static uint8_t buf[1024];
+  for (int i = files.size() - 1; i >= 0; i--) {
+    String name = files[i]["name"].as<String>();
+    File f = logArchiveFS().open(String(LOG_ARCHIVE_DIR "/") + name, "r");
+    if (!f) continue;
+    webUiServer.sendContent("===== " + name + " =====\n");
+    size_t n;
+    while ((n = f.read(buf, sizeof(buf))) > 0) {
+      webUiServer.sendContent((const char*)buf, n);
+    }
+    f.close();
+  }
+  webUiServer.sendContent("");
+}
+
+// Raw FRAM contents (all records, including not-yet-archived ones) as text
+void handleLogFram() {
+  if (refuseIfRoofBusy()) return;
+  if (!framLogPresent()) {
+    webUiServer.send(503, "text/plain", "FRAM log not present");
+    return;
+  }
+  webUiServer.sendHeader("Content-Disposition", "attachment; filename=\"" + String(netHostname) + "-fram.log\"");
+  webUiServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  webUiServer.send(200, "text/plain", "");
+
+  FramLogIter it;
+  framLogIterBegin(it, false);
+  FramLogRecord rec;
+  String chunk;
+  while (framLogIterNext(it, rec)) {
+    chunk += logFormatRecord(rec);
+    chunk += '\n';
+    if (chunk.length() > 1024) {
+      webUiServer.sendContent(chunk);
+      chunk = "";
+    }
+  }
+  if (chunk.length()) webUiServer.sendContent(chunk);
+  webUiServer.sendContent("");
+}
+
+// Last N FRAM records as JSON for the console's history view (spans reboots)
+void handleLogRecentJSON() {
+  if (refuseIfRoofBusy()) return;
+  int want = constrain(webUiServer.hasArg("n") ? webUiServer.arg("n").toInt() : 300, 1, 1000);
+  if (!framLogPresent()) {
+    webUiServer.send(503, "application/json", "{\"error\":\"FRAM log not present\"}");
+    return;
+  }
+
+  // Count records first so we can skip to the last N without holding them all
+  FramLogIter it;
+  FramLogRecord rec;
+  int total = 0;
+  framLogIterBegin(it, false);
+  while (framLogIterNext(it, rec)) total++;
+  int skip = max(0, total - want);
+
+  webUiServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  webUiServer.send(200, "application/json", "");
+  String chunk = "{\"total\":" + String(total) + ",\"entries\":[";
+  framLogIterBegin(it, false);
+  int i = 0;
+  bool first = true;
+  while (framLogIterNext(it, rec)) {
+    if (i++ < skip) continue;
+    if (!first) chunk += ',';
+    first = false;
+    chunk += "{\"t\":" + String(rec.utc) + ",\"b\":" + String(rec.boot) + ",\"ms\":" + String(rec.ms) + ",\"msg\":\"";
+    for (const char* p = rec.text; *p; p++) {
+      if (*p == '"' || *p == '\\') { chunk += '\\'; chunk += *p; }
+      else if ((uint8_t)*p >= 0x20) chunk += *p;
+    }
+    chunk += "\"}";
+    if (chunk.length() > 1024) {
+      webUiServer.sendContent(chunk);
+      chunk = "";
+    }
+  }
+  chunk += "],\"boot\":" + String(rebootCount) + "}";
+  webUiServer.sendContent(chunk);
+  webUiServer.sendContent("");
+}
+
+void handleLogFlush() {
+  if (refuseIfRoofBusy()) return;
+  if (!logArchiveFlushNow()) {
+    webUiServer.send(503, "text/plain", "Log archive not available");
+    return;
+  }
+  webUiServer.send(200, "text/plain", "Log flushed to flash");
+}
+
+void handleLogDelete() {
+  String name = webUiServer.arg("f");
+  if (!logArchiveDelete(name)) {
+    webUiServer.send(400, "text/plain", "Could not delete " + name);
+    return;
+  }
+  webUiServer.send(200, "text/plain", "Deleted " + name);
+}
+
+void handleLogClear() {
+  logArchiveClearAll();
+  webUiServer.send(200, "text/plain", "All logs cleared");
 }

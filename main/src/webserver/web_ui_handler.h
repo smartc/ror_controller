@@ -81,6 +81,16 @@ void handleGPSEnabled();             // Enable/disable GPS module
 void handleGPSNtpEnabled();          // Enable/disable NTP server
 void handleGPSPins();                // Set GPS pin configuration
 void handleNetworkSettings();        // Save Ethernet pins / preferred interface / hostname
+
+// Log management (Console page)
+void handleLogsJSON();
+void handleLogDownload();
+void handleLogDownloadAll();
+void handleLogFram();
+void handleLogRecentJSON();
+void handleLogFlush();
+void handleLogDelete();
+void handleLogClear();
 void handleGPSStatus();              // Get GPS status (JSON)
 
 // Timezone control handlers
