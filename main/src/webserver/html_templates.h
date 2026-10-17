@@ -28,10 +28,9 @@ String getToggleSwitchStyles();
 String getStatusDisplay(RoofStatus status);
 String getControlJS();
 String getHomePage(RoofStatus status, bool isApMode);
-String getSetupPage();
 String getRoofControlPage();
 String getWifiConfigPage();
-String getWifiSettingsCard();
+String getNetworkSettingsCard();
 String getMqttSettingsCard();
 String getSwitchConfigCard();
 String getSystemManagementCard();
@@ -131,7 +130,7 @@ inline String getToggleSwitchStyles() {
 // Common HTML page header (title, meta tags, styles)
 inline String getPageHeader(String pageTitle) {
   String header = "<!DOCTYPE html><html>\n"
-    "<head><title>" + pageTitle + "</title>\n"
+    "<head><meta charset='utf-8'><title>" + pageTitle + "</title>\n"
     "<meta name='viewport' content='width=device-width, initial-scale=1'>\n"
     "<style>\n" + 
     getCommonStyles() + 
@@ -150,7 +149,6 @@ inline String getNavBar() {
     "<a href='/'>Home</a>\n"
     "<a href='/control'>Roof Control</a>\n"
     "<a href='/setup'>Setup</a>\n"
-    "<a href='/wificonfig'>WiFi Config</a>\n"
     "<a href='/console'>Console</a>\n"
     "<a href='/update' class='warn'>Update</a>\n"
     "</div>\n";
@@ -1040,13 +1038,25 @@ inline String getStatusCard() {
   return html;
 }
 
-// WiFi settings card for the setup page
-inline String getWifiSettingsCard() {
+// Network tab: WiFi credentials, W5500 Ethernet, preferred interface, live status
+inline String getNetworkSettingsCard() {
   String html = "<div class='card'>";
+  html += "<h2>Network Status</h2>";
+  html += "<table id='net-status'><tr><th></th><th>WiFi</th><th>Ethernet (W5500)</th></tr>"
+          "<tr><th>State</th><td id='ns-w-state'>-</td><td id='ns-e-state'>-</td></tr>"
+          "<tr><th>IP Address</th><td id='ns-w-ip'>-</td><td id='ns-e-ip'>-</td></tr>"
+          "<tr><th>MAC Address</th><td id='ns-w-mac'>-</td><td id='ns-e-mac'>-</td></tr>"
+          "<tr><th>Link</th><td id='ns-w-link'>-</td><td id='ns-e-link'>-</td></tr>"
+          "</table>";
+  html += "<p style='font-size:0.9em;margin-top:10px'>Active interface (default route): <strong id='ns-active'>-</strong>"
+          " &nbsp; Hostname: <strong>" + String(netHostname) + "</strong></p>";
+  html += "</div>";
+
+  // WiFi credentials (same form/handler as before)
+  html += "<div class='card'>";
   html += "<h2>WiFi</h2>";
-  html += "<p>SSID: <strong>" + WiFi.SSID() + "</strong> &nbsp; "
-          "IP: <strong>" + WiFi.localIP().toString() + "</strong> &nbsp; "
-          "Signal: <strong>" + String(WiFi.RSSI()) + " dBm</strong></p>";
+  html += "<p style='font-size:0.85em;color:#b0b0b0'>WiFi is the primary interface and is used for first-time setup: "
+          "with no WiFi and no Ethernet the controller starts the <strong>" + String(AP_SSID) + "</strong> access point.</p>";
   html += "<form method='post' action='/setup'>";
   html += "<label for='ssid'>SSID</label>";
   html += "<input type='text' id='ssid' name='ssid' value='" + String(ssid) + "' placeholder='Network name'>";
@@ -1054,11 +1064,135 @@ inline String getWifiSettingsCard() {
   html += "<input type='password' id='password' name='password' value='" + String(password) + "' placeholder='Leave blank if open'>";
   html += "<input type='submit' value='Save WiFi Settings'>";
   html += "</form>";
-  html += "<hr style='margin:16px 0;border-color:#2d3561'>";
-  html += "<p><a href='/wificonfig'>Advanced WiFi Configuration &rarr;</a></p>";
+  html += "<p style='margin-top:12px'><a href='/wificonfig'>Scan for networks &rarr;</a></p>";
   html += "</div>";
 
+  // Ethernet + routing
+  auto pinInput = [](const char* id, const char* label, int value) {
+    return String("<div style='flex:1;min-width:90px'><label for='") + id + "'>" + label + "</label>"
+           "<input type='number' id='" + id + "' min='-1' max='48' value='" + String(value) + "'></div>";
+  };
+  html += "<div class='card'>";
+  html += "<h2>Ethernet &amp; Routing</h2>";
+  html += "<div class='switch-container' style='margin-bottom:15px'>";
+  html += "<label class='switch'><input type='checkbox' id='ethEnabled'" + String(ethEnabled ? " checked" : "") +
+          " onchange=\"updateToggleLabel('ethEnabled','ethEnabledText','Enabled','Disabled')\"><span class='slider'></span></label>";
+  html += "<span class='switch-label'>W5500 Ethernet: <strong id='ethEnabledText'>" + String(ethEnabled ? "Enabled" : "Disabled") + "</strong></span>";
+  html += "</div>";
+  html += "<h3>W5500 Pins (GPIO)</h3>";
+  html += "<div style='display:flex;gap:10px;flex-wrap:wrap'>";
+  html += pinInput("ethCs", "CS", ethCsPin);
+  html += pinInput("ethSck", "SCK", ethSckPin);
+  html += pinInput("ethMosi", "MOSI", ethMosiPin);
+  html += pinInput("ethMiso", "MISO", ethMisoPin);
+  html += pinInput("ethIrq", "INT (-1 = none)", ethIrqPin);
+  html += pinInput("ethRst", "RST (-1 = none)", ethRstPin);
+  html += "</div>";
+  html += "<p style='font-size:0.8em;color:#b0b0b0;margin-top:0'>Default breakout wiring: CS 10, SCK 46, MOSI 11, MISO 13. "
+          "Without INT the driver polls every 10 ms. Pins may not overlap each other or the GPS pins.</p>";
+
+  html += "<h3>Routing</h3>";
+  html += "<label for='netPreferred'>Preferred interface when both are connected</label>";
+  html += "<select id='netPreferred' style='width:100%;padding:8px;margin-bottom:15px;border:1px solid #2d3561;"
+          "border-radius:4px;background-color:#0f3460;color:#e0e0e0'>";
+  html += "<option value='wifi'" + String(netPreferred == NET_IF_WIFI ? " selected" : "") + ">WiFi</option>";
+  html += "<option value='ethernet'" + String(netPreferred == NET_IF_ETH ? " selected" : "") + ">Ethernet</option>";
+  html += "</select>";
+  html += "<p style='font-size:0.8em;color:#b0b0b0;margin-top:-8px'>Both interfaces stay up and answer the web UI and Alpaca on their own IPs. "
+          "The preferred one carries outbound traffic (MQTT); if it drops, the other takes over automatically.</p>";
+  html += "<label for='netHostname'>Hostname (DHCP and mDNS)</label>";
+  html += "<input type='text' id='netHostname' maxlength='31' value='" + String(netHostname) + "'>";
+  html += "<button class='button-primary' onclick='saveNetwork()'>Save Network Settings</button>";
+  html += "<p style='font-size:0.8em;color:#ffb74d'>Ethernet, routing and hostname changes take effect after a restart.</p>";
+  html += "</div>";
+
+  html += R"rawjs(
+<script>
+function saveNetwork(){
+  var p=new URLSearchParams();
+  p.append('eth_enabled', document.getElementById('ethEnabled').checked?'true':'false');
+  ['Cs','Sck','Mosi','Miso','Irq','Rst'].forEach(function(k){
+    p.append('eth_'+k.toLowerCase(), document.getElementById('eth'+k).value);
+  });
+  p.append('preferred', document.getElementById('netPreferred').value);
+  p.append('hostname', document.getElementById('netHostname').value);
+  fetch('/network_settings',{method:'POST',body:p}).then(function(r){
+    return r.text().then(function(t){
+      if(r.ok && confirm(t+'\n\nRestart now?')) restartDevice();
+      else if(!r.ok) alert(t);
+    });
+  }).catch(function(e){alert('Error: '+e);});
+}
+function refreshNetStatus(){
+  fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+    var n=d.network; if(!n) return;
+    var w=n.wifi, e=n.ethernet;
+    function set(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
+    set('ns-active', n.active+(n.ip?' ('+n.ip+')':''));
+    set('ns-w-state', n.ap_mode?'Access point (setup mode)':(w.connected?'Connected':'Disconnected'));
+    set('ns-w-ip', w.ip||'-'); set('ns-w-mac', w.mac||'-');
+    set('ns-w-link', w.connected?(w.ssid+', '+w.rssi+' dBm'):'-');
+    set('ns-e-state', !e.enabled?'Disabled':(!e.started?'Failed to start (check pins/wiring)':(e.ip?'Connected':(e.link?'Link up, waiting for DHCP':'No cable / no link'))));
+    set('ns-e-ip', e.ip||'-'); set('ns-e-mac', e.mac||'-');
+    set('ns-e-link', e.link?(e.speed+' Mbps '+(e.full_duplex?'full':'half')+' duplex'):'-');
+  }).catch(function(){});
+}
+refreshNetStatus();
+setInterval(refreshNetStatus, 5000);
+</script>
+)rawjs";
+
   return html;
+}
+
+// Tab bar styles + script for the setup page
+inline String getSetupTabsHead() {
+  return R"rawcss(
+<style>
+.tabs { display:flex; flex-wrap:wrap; gap:4px; border-bottom:2px solid #0f3460; margin-bottom:16px; }
+.tabs button { margin:0; border-radius:6px 6px 0 0; background:#16213e; color:#b0b0b0; padding:10px 14px; font-weight:bold; }
+.tabs button:hover { background:#1a4a8a; color:#e0e0e0; }
+.tabs button.active { background:#0f3460; color:#a0c4ff; }
+.tab { display:none; }
+.tab.active { display:block; }
+.saved-banner { background:#1b5e20; color:#e0e0e0; padding:10px 14px; border-radius:6px; margin-bottom:12px; }
+</style>
+)rawcss";
+}
+
+inline String getSetupTabBar() {
+  const char* tabs[][2] = {
+    {"device", "Device Configuration"}, {"park", "Park Sensor"}, {"safety", "Safety Sensor"},
+    {"mqtt", "MQTT"}, {"time", "GPS / RTC / NTP"}, {"network", "Network"}};
+  String html = "<div class='tabs' id='tabbar'>";
+  for (auto& t : tabs) {
+    html += String("<button type='button' data-tab='") + t[0] + "' onclick=\"showTab('" + t[0] + "')\">" + t[1] + "</button>";
+  }
+  html += "</div>";
+  return html;
+}
+
+inline String getSetupTabsScript() {
+  return R"rawjs(
+<script>
+function showTab(id){
+  var found=false;
+  document.querySelectorAll('.tab').forEach(function(t){ var on=t.id==='tab-'+id; t.classList.toggle('active',on); found=found||on; });
+  if(!found){ id='device'; document.getElementById('tab-device').classList.add('active'); }
+  document.querySelectorAll('#tabbar button').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===id); });
+  try { localStorage.setItem('setupTab', id); } catch(e) {}
+  if(location.hash!=='#'+id) history.replaceState(null,'','#'+id);
+}
+(function(){
+  var id=location.hash.replace('#','');
+  if(!id){ try { id=localStorage.getItem('setupTab')||''; } catch(e) {} }
+  showTab(id||'device');
+  if(location.search.indexOf('saved=1')>=0){
+    var b=document.getElementById('saved-banner'); if(b) b.style.display='block';
+  }
+})();
+</script>
+)rawjs";
 }
 
 // MQTT settings card for the setup page
@@ -1773,44 +1907,49 @@ inline String getSystemManagementCard() {
   return html;
 }
 
-// Complete setup page
-inline String getSetupPage() {
-  String html = getPageHeader("Roll-Off Roof Controller Setup");
+// Complete setup page, emitted in pieces (one tab at a time) so the whole page
+// never has to sit in RAM as one String. emit(const String&) sends each piece.
+template <typename Emit>
+inline void buildSetupPage(Emit emit) {
+  String head = getPageHeader("Roll-Off Roof Controller Setup");
+  head += getSetupTabsHead();
+  head += "<h1>Roll-Off Roof Controller Setup</h1>\n";
+  head += "<p style='font-size:0.85em;color:#8899aa'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  head += getNavBar();
+  head += "<div class='saved-banner' id='saved-banner' style='display:none'>Settings saved. "
+          "MQTT changes apply immediately; WiFi changes need a restart.</div>";
+  emit(head);
 
-  html += "<h1>Roll-Off Roof Controller Setup</h1>\n";
-  html += "<p style='font-size:0.85em;color:#8899aa'>Version: " + String(DEVICE_VERSION) + "</p>\n";
-  html += getNavBar();
+  emit(getStatusCard());
+  emit(getSetupTabBar());
 
-  html += getStatusCard();
-  html += getSwitchConfigCard();
-  html += getParkSensorConfigCard();
-  html += getSafetySensorConfigCard();
-  html += getGPSConfigCard();
-  html += getWifiSettingsCard();
-  html += getMqttSettingsCard();
-  html += getSystemManagementCard();
+  emit("<div class='tab' id='tab-device'>" + getSwitchConfigCard() + getSystemManagementCard() + "</div>");
+  emit("<div class='tab' id='tab-park'>" + getParkSensorConfigCard() + "</div>");
+  emit("<div class='tab' id='tab-safety'>" + getSafetySensorConfigCard() + "</div>");
+  emit("<div class='tab' id='tab-mqtt'>" + getMqttSettingsCard() + "</div>");
+  emit("<div class='tab' id='tab-time'>" + getGPSConfigCard() + "</div>");
+  emit("<div class='tab' id='tab-network'>" + getNetworkSettingsCard() + "</div>");
 
-  html += getControlJS();
-
-  html += "<script>";
-  html += "document.addEventListener('DOMContentLoaded', function() {";
-  html += "  updateToggleLabel('triggerState', 'triggerStateText', 'HIGH', 'LOW');";
-  html += "  updateToggleLabel('swapSwitches', 'swapSwitchesText', 'Swapped', 'Default');";
-  html += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
-  html += "  updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED');";
-  html += "  updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED');";
-  html += "  updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED');";
-  html += "  updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED');";
-  html += "  const bypassToggle = document.getElementById('bypassToggle');";
-  html += "  const bypassText = document.getElementById('bypassText');";
-  html += "  if (bypassToggle && bypassText) {";
-  html += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#ffffff';";
-  html += "  }";
-  html += "});";
-  html += "</script>";
-
-  html += "</body></html>";
-  return html;
+  String tail = getControlJS();
+  tail += "<script>";
+  tail += "document.addEventListener('DOMContentLoaded', function() {";
+  tail += "  updateToggleLabel('triggerState', 'triggerStateText', 'HIGH', 'LOW');";
+  tail += "  updateToggleLabel('swapSwitches', 'swapSwitchesText', 'Swapped', 'Default');";
+  tail += "  updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled');";
+  tail += "  updateToggleLabel('inverterRelayToggle', 'inverterRelayText', 'ENABLED', 'DISABLED');";
+  tail += "  updateToggleLabel('inverterSoftPwrToggle', 'inverterSoftPwrText', 'ENABLED', 'DISABLED');";
+  tail += "  updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED');";
+  tail += "  updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED');";
+  tail += "  const bypassToggle = document.getElementById('bypassToggle');";
+  tail += "  const bypassText = document.getElementById('bypassText');";
+  tail += "  if (bypassToggle && bypassText) {";
+  tail += "    bypassText.style.color = bypassToggle.checked ? '#f44336' : '#ffffff';";
+  tail += "  }";
+  tail += "});";
+  tail += "</script>";
+  tail += getSetupTabsScript();
+  tail += "</body></html>";
+  emit(tail);
 }
 
 // Roof Control page (v3)
@@ -2336,7 +2475,7 @@ inline String getRoofControlPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Console page — live debug log viewer (polls /console.json every 2 s)
+// Console page - live debug log viewer (polls /console.json every 2 s)
 // ---------------------------------------------------------------------------
 inline String getConsolePage() {
   String html = getPageHeader("Debug Console - ROR Controller");
@@ -2400,7 +2539,7 @@ function fmtTime(e){
 }
 function fmtSize(n){ return n>=1048576?(n/1048576).toFixed(2)+' MB':n>=1024?(n/1024).toFixed(1)+' KB':n+' B'; }
 
-var lastSeq=-1, paused=false, history=false;
+var lastSeq=-1, paused=false, histMode=false;
 
 function render(entries){
   var el=document.getElementById('log');
@@ -2413,34 +2552,34 @@ function render(entries){
     html+='<div class="le"><span class="ts">['+fmtTime(e)+']</span> '+boot+esc(e.msg)+rep+'</div>';
   }
   el.innerHTML=html;
-  if(atBottom||history) el.scrollTop=el.scrollHeight;
+  if(atBottom||histMode) el.scrollTop=el.scrollHeight;
 }
 
 function poll(){
-  if(paused||history) return;
+  if(paused||histMode) return;
   fetch('/console.json').then(function(r){return r.json();}).then(function(d){
     if(d.seq!==lastSeq){lastSeq=d.seq;render(d.entries);}
     document.getElementById('con-status').textContent=
-      'Live • updated '+new Date().toLocaleTimeString()+' • '+d.entries.length+' lines since boot';
+      'Live \u2022 updated '+new Date().toLocaleTimeString()+' \u2022 '+d.entries.length+' lines since boot';
   }).catch(function(e){
     document.getElementById('con-status').textContent='Error: '+e;
   });
 }
 
 function toggleHistory(){
-  history=document.getElementById('hist').checked;
+  histMode=document.getElementById('hist').checked;
   var st=document.getElementById('con-status');
-  if(!history){ lastSeq=-1; poll(); return; }
+  if(!histMode){ lastSeq=-1; poll(); return; }
   st.textContent='Loading FRAM history...';
   fetch('/logs/recent.json?n=500').then(function(r){
     if(!r.ok) return r.text().then(function(t){throw t;});
     return r.json();
   }).then(function(d){
     render(d.entries);
-    st.textContent='History • last '+d.entries.length+' of '+d.total+' FRAM records • current boot #'+d.boot;
+    st.textContent='History \u2022 last '+d.entries.length+' of '+d.total+' FRAM records \u2022 current boot #'+d.boot;
   }).catch(function(e){
     st.textContent='History unavailable: '+e;
-    document.getElementById('hist').checked=false; history=false;
+    document.getElementById('hist').checked=false; histMode=false;
   });
 }
 
@@ -2473,7 +2612,7 @@ function loadFiles(){
       parts.push('last flush '+Math.round(s.last_flush_age_s/60)+' min ago');
     } else parts.push('Flash archive: not available');
     if(s.busy) parts.push('ROOF MOVING - flash access paused');
-    document.getElementById('log-summary').textContent=parts.join(' • ');
+    document.getElementById('log-summary').textContent=parts.join(' \u2022 ');
     var rows='';
     d.files.forEach(function(f){
       var n=encodeURIComponent(f.name);

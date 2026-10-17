@@ -646,9 +646,16 @@ void handleRoot() {
 
 // Handle setup page
 void handleSetup() {
-  String page = getSetupPage();
-  Debug.printf(2, "Setup page size: %d bytes, free heap: %d bytes\n", page.length(), ESP.getFreeHeap());
-  webUiServer.send(200, "text/html", page);
+  // Streamed tab by tab: the full page is ~40 KB and never held in one String
+  size_t total = 0;
+  webUiServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  webUiServer.send(200, "text/html", "");
+  buildSetupPage([&total](const String& part) {
+    total += part.length();
+    webUiServer.sendContent(part);
+  });
+  webUiServer.sendContent("");
+  Debug.printf(2, "Setup page sent: %u bytes, free heap: %d bytes\n", total, ESP.getFreeHeap());
 }
 
 // Handle setup form submission
@@ -751,16 +758,10 @@ void handleSetupPost() {
     setupMQTT();
   }
   
-  String message = "Settings updated. ";
-  if (settingsChanged) {
-    message += "Changes will take effect immediately for MQTT. ";
-    message += "For WiFi changes, please restart the device.";
-  } else {
-    message += "No changes detected.";
-  }
-  message += "<br><a href='/setup'>Back to setup page</a>";
-  
-  webUiServer.send(200, "text/html", message);
+  // Back to the setup page (it reopens on the same tab) with a "saved" banner
+  Debug.println(settingsChanged ? "Setup form saved" : "Setup form submitted, no changes");
+  webUiServer.sendHeader("Location", settingsChanged ? "/setup?saved=1" : "/setup", true);
+  webUiServer.send(303, "text/plain", "");
 }
 
 // Handle force discovery
