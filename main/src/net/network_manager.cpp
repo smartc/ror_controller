@@ -11,6 +11,7 @@
 #include <SPI.h>
 #include <Preferences.h>
 #include <esp_mac.h>
+#include <ping/ping_sock.h>
 
 // WiFi credentials and AP state
 char ssid[SSID_SIZE] = DEFAULT_WIFI_SSID;
@@ -28,6 +29,7 @@ int ethMisoPin = DEFAULT_ETH_MISO_PIN;
 int ethIrqPin = DEFAULT_ETH_IRQ_PIN;
 int ethRstPin = DEFAULT_ETH_RST_PIN;
 int netPreferred = NET_IF_WIFI;
+bool netGatewayCheck = true;
 char netHostname[NET_HOSTNAME_SIZE] = DEFAULT_NET_HOSTNAME;
 
 static SPIClass ethSPI(FSPI);
@@ -46,26 +48,32 @@ static const unsigned long WIFI_RECONNECT_TIMEOUT = 30000;  // 30 seconds max
 // Failover timing
 static const unsigned long FAILOVER_DELAY_MS = 15000;   // primary down this long -> start backup
 static const unsigned long FAILBACK_HOLD_MS = 60000;    // primary back this long -> stop backup
-static const unsigned long ETH_ONLY_AP_DELAY_MS = 60000; // Ethernet-only: no IP this long -> setup AP
 
 // Route priorities: the netif with the highest priority that has an IP is the
-// default route. Core defaults are WiFi STA 100, Ethernet 50.
+// default route. Core defaults are WiFi STA 100, Ethernet 50. An interface
+// whose gateway has stopped answering drops below both.
 static const int ROUTE_PRIO_PREFERRED = 150;
+static const int ROUTE_PRIO_WIFI_DEFAULT = 100;
 static const int ROUTE_PRIO_ETH_DEFAULT = 50;
+static const int ROUTE_PRIO_DEMOTED = 10;
+
+// Gateway reachability per NetInterface (true until a gateway check fails)
+static bool gwReachable[2] = {true, true};
 
 static void startAPMode();
 
 // ── Modes ────────────────────────────────────────────────────────────────────
 
-static const char* const MODE_KEYS[NET_MODE_COUNT]   = {"wifi", "eth", "dual", "wifi_eth", "eth_wifi"};
+static const char* const MODE_KEYS[NET_MODE_COUNT]   = {"wifi", "", "dual", "wifi_eth", "eth_wifi"};
 static const char* const MODE_LABELS[NET_MODE_COUNT] = {
-  "WiFi only", "Ethernet only", "Dual (both up)", "WiFi, Ethernet failover", "Ethernet, WiFi failover"};
+  "WiFi only (no Ethernet fitted)", "", "Dual (both up)", "WiFi primary, Ethernet backup", "Ethernet primary, WiFi backup"};
 
-const char* netModeKey(int mode)   { return (mode >= 0 && mode < NET_MODE_COUNT) ? MODE_KEYS[mode] : "wifi"; }
-const char* netModeLabel(int mode) { return (mode >= 0 && mode < NET_MODE_COUNT) ? MODE_LABELS[mode] : "?"; }
+bool netModeSelectable(int mode)   { return mode >= 0 && mode < NET_MODE_COUNT && mode != NET_MODE_RETIRED_ETH_ONLY; }
+const char* netModeKey(int mode)   { return netModeSelectable(mode) ? MODE_KEYS[mode] : "wifi"; }
+const char* netModeLabel(int mode) { return netModeSelectable(mode) ? MODE_LABELS[mode] : "?"; }
 
 int netModeFromKey(const String& key) {
-  for (int i = 0; i < NET_MODE_COUNT; i++) if (key == MODE_KEYS[i]) return i;
+  for (int i = 0; i < NET_MODE_COUNT; i++) if (netModeSelectable(i) && key == MODE_KEYS[i]) return i;
   return -1;
 }
 
@@ -75,10 +83,15 @@ static bool isFailoverMode(int mode) { return mode == NET_MODE_WIFI_FAILOVER || 
 static NetInterface routePreferred() {
   switch (runMode) {
     case NET_MODE_DUAL:          return (NetInterface)netPreferred;
-    case NET_MODE_ETH_ONLY:
     case NET_MODE_ETH_FAILOVER:  return NET_IF_ETH;
     default:                     return NET_IF_WIFI;
   }
+}
+
+static int routePrioFor(NetInterface i) {
+  if (!gwReachable[i]) return ROUTE_PRIO_DEMOTED;
+  if (routePreferred() == i) return ROUTE_PRIO_PREFERRED;
+  return i == NET_IF_ETH ? ROUTE_PRIO_ETH_DEFAULT : ROUTE_PRIO_WIFI_DEFAULT;
 }
 
 // ── Configuration ────────────────────────────────────────────────────────────
@@ -95,11 +108,13 @@ void loadNetworkConfiguration() {
   ethIrqPin    = prefs.getInt(PREF_ETH_IRQ_PIN, DEFAULT_ETH_IRQ_PIN);
   ethRstPin    = prefs.getInt(PREF_ETH_RST_PIN, DEFAULT_ETH_RST_PIN);
   netPreferred = prefs.getInt(PREF_NET_PREFERRED, NET_IF_WIFI);
+  netGatewayCheck = prefs.getBool(PREF_NET_GW_CHECK, true);
   String host  = prefs.getString(PREF_NET_HOSTNAME, DEFAULT_NET_HOSTNAME);
   prefs.end();
 
   // Settings saved before network modes existed only had the Ethernet toggle
   if (mode < 0 || mode >= NET_MODE_COUNT) mode = ethOn ? NET_MODE_DUAL : NET_MODE_WIFI_ONLY;
+  if (mode == NET_MODE_RETIRED_ETH_ONLY) mode = NET_MODE_ETH_FAILOVER;  // WiFi stays the way back in
   netMode = mode;
   ethEnabled = netMode != NET_MODE_WIFI_ONLY;
 
@@ -107,8 +122,8 @@ void loadNetworkConfiguration() {
   strncpy(netHostname, host.c_str(), sizeof(netHostname) - 1);
   netHostname[sizeof(netHostname) - 1] = '\0';
 
-  Debug.printf("Network config: mode=%s, hostname=%s, preferred=%s (CS=%d SCK=%d MOSI=%d MISO=%d INT=%d RST=%d)\n",
-               netModeLabel(netMode), netHostname, netPreferred == NET_IF_ETH ? "Ethernet" : "WiFi",
+  Debug.printf("Network config: mode=%s, gateway check=%s, hostname=%s, preferred=%s (CS=%d SCK=%d MOSI=%d MISO=%d INT=%d RST=%d)\n",
+               netModeLabel(netMode), netGatewayCheck ? "on" : "off", netHostname, netPreferred == NET_IF_ETH ? "Ethernet" : "WiFi",
                ethCsPin, ethSckPin, ethMosiPin, ethMisoPin, ethIrqPin, ethRstPin);
 }
 
@@ -125,6 +140,7 @@ void saveNetworkConfiguration() {
   prefs.putInt(PREF_ETH_IRQ_PIN, ethIrqPin);
   prefs.putInt(PREF_ETH_RST_PIN, ethRstPin);
   prefs.putInt(PREF_NET_PREFERRED, netPreferred);
+  prefs.putBool(PREF_NET_GW_CHECK, netGatewayCheck);
   prefs.putString(PREF_NET_HOSTNAME, netHostname);
   prefs.end();
   Debug.println("Network configuration saved");
@@ -172,7 +188,7 @@ static void initEthernet() {
     return;
   }
   ethActive = true;
-  ETH.setRoutePrio(routePreferred() == NET_IF_ETH ? ROUTE_PRIO_PREFERRED : ROUTE_PRIO_ETH_DEFAULT);
+  ETH.setRoutePrio(routePrioFor(NET_IF_ETH));
   Debug.println("Ethernet MAC: " + ETH.macAddress());
 
   if (runMode == NET_MODE_WIFI_FAILOVER) {
@@ -218,8 +234,7 @@ static bool wifiCredentialsSet() {
 }
 
 static void applyWiFiRoutePrio() {
-  // STA keeps its default priority (100) unless it is the preferred interface
-  if (routePreferred() == NET_IF_WIFI) WiFi.STA.setRoutePrio(ROUTE_PRIO_PREFERRED);
+  WiFi.STA.setRoutePrio(routePrioFor(NET_IF_WIFI));
 }
 
 // Start a STA connection attempt without waiting for it
@@ -244,10 +259,10 @@ static void wifiRadioOff() {
 }
 
 static void initWiFi() {
-  if (runMode == NET_MODE_ETH_ONLY || runMode == NET_MODE_ETH_FAILOVER) {
+  if (runMode == NET_MODE_ETH_FAILOVER) {
     WiFi.mode(WIFI_OFF);
     wifiActive = false;
-    Debug.println(runMode == NET_MODE_ETH_ONLY ? "WiFi off (Ethernet only)" : "WiFi on standby (Ethernet primary)");
+    Debug.println("WiFi on standby (Ethernet primary)");
     return;
   }
 
@@ -342,7 +357,8 @@ static void handleWiFi() {
     if (millis() - apStartTime <= AP_TIMEOUT) return;
 
     if (!wifiActive) {
-      // Ethernet-only setup AP: close it once Ethernet is back, else keep it
+      // Setup AP opened as the WiFi backup (no credentials): close it once
+      // Ethernet is back, else keep it
       if (ethHasIP()) {
         Debug.println("AP mode timeout; Ethernet is up, turning WiFi off");
         wifiRadioOff();
@@ -397,18 +413,89 @@ static void handleWiFi() {
   }
 }
 
-// Ethernet-only: open the setup AP if Ethernet stays down, so the controller
-// can always be reached to fix its settings.
-static void handleEthOnlyFallback() {
-  static unsigned long noIpSince = 0;
-  static bool noIp = false;
-  if (runMode != NET_MODE_ETH_ONLY) return;
+// ── Gateway reachability ─────────────────────────────────────────────────────
+// The primary interface (the route-preferred one) pings its gateway every 30 s,
+// 3 echoes per probe. Three failed probes in a row mark it unreachable; one good
+// probe marks it reachable again. Pings run on the lwIP ping task, so the loop
+// only starts a probe and later collects the result.
 
-  if (ethHasIP()) { noIp = false; return; }
-  if (!noIp) { noIp = true; noIpSince = millis(); }
-  if (!apMode && millis() - noIpSince >= ETH_ONLY_AP_DELAY_MS) {
-    Debug.printf("Ethernet has had no IP for %lu s; starting setup access point\n", ETH_ONLY_AP_DELAY_MS / 1000);
-    startAPMode();
+static const unsigned long GW_PROBE_INTERVAL_MS = 30000;
+static const int GW_FAIL_LIMIT = 3;
+static volatile bool gwProbeDone = false;
+static volatile uint32_t gwProbeReplies = 0;
+static bool gwProbeRunning = false;
+static int gwProbeIf = NET_IF_WIFI;
+static int gwFailCount = 0;
+
+static void onGwPingSuccess(esp_ping_handle_t, void*) { gwProbeReplies = gwProbeReplies + 1; }
+static void onGwPingEnd(esp_ping_handle_t hdl, void*) {
+  esp_ping_delete_session(hdl);
+  gwProbeDone = true;
+}
+
+static bool interfaceHasIP(int i) { return i == NET_IF_ETH ? ethHasIP() : wifiIsConnected(); }
+static const char* ifName(int i)  { return i == NET_IF_ETH ? "Ethernet" : "WiFi"; }
+
+static void setGatewayReachable(int i, bool reachable, const char* why) {
+  if (gwReachable[i] == reachable) return;
+  gwReachable[i] = reachable;
+  Debug.printf("Gateway check: %s %s\n", ifName(i), why);
+  if (ethStarted) ETH.setRoutePrio(routePrioFor(NET_IF_ETH));
+  if (WiFi.getMode() & WIFI_MODE_STA) WiFi.STA.setRoutePrio(routePrioFor(NET_IF_WIFI));
+}
+
+static void handleGatewayCheck() {
+  static unsigned long lastProbe = 0;
+
+  if (gwProbeRunning) {
+    if (!gwProbeDone) return;
+    gwProbeRunning = false;
+    if (gwProbeReplies > 0) {
+      gwFailCount = 0;
+      setGatewayReachable(gwProbeIf, true, "gateway answering again - link usable");
+    } else {
+      gwFailCount++;
+      Debug.printf(2, "Gateway check: %s gateway did not answer (%d/%d)\n", ifName(gwProbeIf), gwFailCount, GW_FAIL_LIMIT);
+      if (gwFailCount >= GW_FAIL_LIMIT) {
+        setGatewayReachable(gwProbeIf, false, "gateway not answering - treating link as down");
+      }
+    }
+    return;
+  }
+
+  int target = routePreferred();
+  if (!netGatewayCheck || runMode == NET_MODE_WIFI_ONLY || !interfaceHasIP(target)) {
+    // Nothing to check; losing the IP is handled as "down" on its own
+    gwFailCount = 0;
+    setGatewayReachable(NET_IF_WIFI, true, "gateway check idle");
+    setGatewayReachable(NET_IF_ETH, true, "gateway check idle");
+    return;
+  }
+  if (lastProbe != 0 && millis() - lastProbe < GW_PROBE_INTERVAL_MS) return;
+  lastProbe = millis();
+
+  IPAddress gw = target == NET_IF_ETH ? ETH.gatewayIP() : WiFi.gatewayIP();
+  esp_netif_t* nif = target == NET_IF_ETH ? ETH.netif() : WiFi.STA.netif();
+  if (gw == IPAddress(0, 0, 0, 0) || nif == nullptr) return;  // no gateway (e.g. isolated LAN)
+
+  esp_ping_config_t cfg = ESP_PING_DEFAULT_CONFIG();
+  IP_ADDR4(&cfg.target_addr, gw[0], gw[1], gw[2], gw[3]);
+  cfg.count = 3;
+  cfg.interval_ms = 1000;
+  cfg.timeout_ms = 1000;
+  cfg.interface = esp_netif_get_netif_impl_index(nif);  // probe out of this interface only
+
+  esp_ping_callbacks_t cbs = {};
+  cbs.on_ping_success = onGwPingSuccess;
+  cbs.on_ping_end = onGwPingEnd;
+
+  esp_ping_handle_t hdl;
+  gwProbeReplies = 0;
+  gwProbeDone = false;
+  if (esp_ping_new_session(&cfg, &cbs, &hdl) == ESP_OK) {
+    gwProbeIf = target;
+    gwProbeRunning = true;
+    esp_ping_start(hdl);
   }
 }
 
@@ -420,7 +507,8 @@ static void handleFailover() {
   if (!isFailoverMode(runMode)) return;
 
   bool wifiPrimary = runMode == NET_MODE_WIFI_FAILOVER;
-  bool primaryUp = wifiPrimary ? wifiIsConnected() : ethHasIP();
+  bool primaryUp = wifiPrimary ? (wifiIsConnected() && gwReachable[NET_IF_WIFI])
+                               : (ethHasIP() && gwReachable[NET_IF_ETH]);
   bool backupRunning = wifiPrimary ? ethActive : (wifiActive || apMode);
   const char* primaryName = wifiPrimary ? "WiFi" : "Ethernet";
   const char* backupName = wifiPrimary ? "Ethernet" : "WiFi";
@@ -454,7 +542,11 @@ bool netIsConnected() { return wifiIsConnected() || ethHasIP(); }
 
 static NetInterface defaultInterface() {
   bool wifiUp = wifiIsConnected(), ethUp = ethHasIP();
-  if (wifiUp && ethUp) return routePreferred();
+  if (wifiUp && ethUp) {
+    NetInterface pref = routePreferred();
+    NetInterface other = pref == NET_IF_ETH ? NET_IF_WIFI : NET_IF_ETH;
+    return (gwReachable[pref] || !gwReachable[other]) ? pref : other;
+  }
   return ethUp ? NET_IF_ETH : NET_IF_WIFI;
 }
 
@@ -513,7 +605,7 @@ void initNetwork() {
 
 void handleNetwork() {
   handleWiFi();
-  handleEthOnlyFallback();
+  handleGatewayCheck();
   handleFailover();
   logTransitions();
 }
@@ -526,6 +618,7 @@ void fillNetworkStatus(JsonObject net) {
   net["ip"] = netLocalIP().toString();
   net["hostname"] = netHostname;
   net["preferred"] = routePreferred() == NET_IF_ETH ? "Ethernet" : "WiFi";
+  net["gateway_check"] = netGatewayCheck;
   net["ap_mode"] = apMode;
 
   JsonObject wifi = net.createNestedObject("wifi");
@@ -537,6 +630,7 @@ void fillNetworkStatus(JsonObject net) {
   wifi["ip"] = wifiUp ? WiFi.localIP().toString() : String("");
   wifi["rssi"] = wifiUp ? WiFi.RSSI() : 0;
   wifi["mac"] = wifiMacAddress();
+  wifi["gateway_ok"] = gwReachable[NET_IF_WIFI];
 
   JsonObject eth = net.createNestedObject("ethernet");
   eth["enabled"] = runMode != NET_MODE_WIFI_ONLY;
@@ -547,4 +641,5 @@ void fillNetworkStatus(JsonObject net) {
   eth["full_duplex"] = ethLinkUp() && ETH.fullDuplex();
   eth["ip"] = ethHasIP() ? ETH.localIP().toString() : String("");
   eth["mac"] = ethMacAddress();
+  eth["gateway_ok"] = gwReachable[NET_IF_ETH];
 }

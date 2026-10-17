@@ -1544,6 +1544,7 @@ void handleNetworkSettings() {
   }
 
   netMode = newMode;
+  if (webUiServer.hasArg("gw_check")) netGatewayCheck = webUiServer.arg("gw_check") == "true";
   ethCsPin = cs; ethSckPin = sck; ethMosiPin = mosi; ethMisoPin = miso; ethIrqPin = irq; ethRstPin = rst;
   saveNetworkConfiguration();
   Debug.printf("Network settings updated: mode=%s, preferred=%s, hostname=%s\n",

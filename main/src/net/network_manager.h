@@ -3,16 +3,21 @@
  * Network Manager - WiFi (plus AP-mode setup) and optional W5500 Ethernet
  *
  * Network modes:
- *   WiFi only       - W5500 not started.
- *   Ethernet only   - WiFi radio off. If Ethernet has no IP for 60 s the setup
- *                     access point starts, so the controller is never unreachable.
+ *   WiFi only       - no W5500 fitted; Ethernet not started.
  *   Dual            - both up, each with its own IP. The "preferred" interface
  *                     carries the default route (outbound MQTT); if it drops the
  *                     other carries everything.
- *   WiFi -> Ethernet failover, Ethernet -> WiFi failover
- *                   - only the primary runs. If it has no IP for 15 s the backup
+ *   WiFi primary / Ethernet backup, Ethernet primary / WiFi backup
+ *                   - only the primary runs. If it is down for 15 s the backup
  *                     is brought up; once the primary has been back for 60 s the
  *                     backup is shut down again.
+ *
+ * "Down" means no IP address, or (with the gateway check on) the primary's
+ * gateway has stopped answering pings: an interface can hold an IP and still be
+ * cut off (dead switch port, wrong VLAN). An unreachable primary also loses the
+ * default route, so outbound traffic moves to the other interface.
+ *
+ * There is no Ethernet-only mode on purpose: WiFi is always the way back in.
  *
  * All servers and UDP listeners bind to every interface, so the web UI, Alpaca,
  * discovery, NTP and the sensor listeners answer on whichever addresses are up.
@@ -30,7 +35,7 @@ enum NetInterface { NET_IF_WIFI = 0, NET_IF_ETH = 1 };
 
 enum NetMode {
   NET_MODE_WIFI_ONLY = 0,
-  NET_MODE_ETH_ONLY = 1,
+  NET_MODE_RETIRED_ETH_ONLY = 1,  // stored value maps to NET_MODE_ETH_FAILOVER
   NET_MODE_DUAL = 2,
   NET_MODE_WIFI_FAILOVER = 3,   // WiFi primary, Ethernet backup
   NET_MODE_ETH_FAILOVER = 4,    // Ethernet primary, WiFi backup
@@ -47,9 +52,11 @@ extern int netMode;                      // NetMode (takes effect after restart)
 extern bool ethEnabled;                  // Derived: netMode uses the W5500
 extern int ethCsPin, ethSckPin, ethMosiPin, ethMisoPin, ethIrqPin, ethRstPin;
 extern int netPreferred;                 // NetInterface; Dual mode only
+extern bool netGatewayCheck;             // Ping the primary's gateway to detect a dead link
 extern char netHostname[NET_HOSTNAME_SIZE];
 
-const char* netModeKey(int mode);        // "wifi", "eth", "dual", "wifi_eth", "eth_wifi"
+bool netModeSelectable(int mode);        // Offered on the setup page
+const char* netModeKey(int mode);        // "wifi", "dual", "wifi_eth", "eth_wifi"
 const char* netModeLabel(int mode);      // Human-readable
 int netModeFromKey(const String& key);   // -1 if unknown
 

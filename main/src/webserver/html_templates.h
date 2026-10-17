@@ -1080,13 +1080,14 @@ inline String getNetworkSettingsCard() {
   html += "<label for='netMode'>Network mode</label>";
   html += "<select id='netMode' onchange='updateNetModeUI()' style='" + String(selectStyle) + "'>";
   for (int m = 0; m < NET_MODE_COUNT; m++) {
+    if (!netModeSelectable(m)) continue;
     html += "<option value='" + String(netModeKey(m)) + "'" + String(netMode == m ? " selected" : "") + ">" + netModeLabel(m) + "</option>";
   }
   html += "</select>";
   html += "<div id='netModeHelp' style='font-size:0.85em;color:#b0b0b0;margin-top:-8px;margin-bottom:12px'></div>";
   html += "<div id='netModeWarn' style='font-size:0.85em;color:#ffb74d;margin-bottom:12px;display:none'>"
-          "WiFi will be off while Ethernet is working. If Ethernet has no IP address, the controller falls back to WiFi "
-          "(or the <strong>" + String(AP_SSID) + "</strong> setup access point), so it stays reachable.</div>";
+          "WiFi is off while Ethernet is working. If Ethernet goes down, WiFi starts after 15 s "
+          "(or the <strong>" + String(AP_SSID) + "</strong> setup access point if no WiFi network is saved).</div>";
   html += "<div id='ethPinsBox'>";
   html += "<h3>W5500 Pins (GPIO)</h3>";
   html += "<div style='display:flex;gap:10px;flex-wrap:wrap'>";
@@ -1110,6 +1111,14 @@ inline String getNetworkSettingsCard() {
   html += "<p style='font-size:0.8em;color:#b0b0b0;margin-top:-8px'>The preferred interface carries outbound traffic (MQTT); "
           "if it drops, the other takes over automatically.</p>";
   html += "</div>";
+  html += "<div id='gwRow' class='switch-container' style='margin-bottom:6px'>";
+  html += "<label class='switch'><input type='checkbox' id='netGwCheck'" + String(netGatewayCheck ? " checked" : "") +
+          " onchange=\"updateToggleLabel('netGwCheck','netGwCheckText','On','Off')\"><span class='slider'></span></label>";
+  html += "<span class='switch-label'>Gateway check: <strong id='netGwCheckText'>" + String(netGatewayCheck ? "On" : "Off") + "</strong></span>";
+  html += "</div>";
+  html += "<p id='gwHelp' style='font-size:0.8em;color:#b0b0b0;margin-top:0'>Pings the primary interface's router every 30 s. "
+          "If it stops answering for about 90 s, the link counts as down even though it still has an IP address "
+          "(dead switch port, wrong VLAN), and traffic moves to the other interface. Turn off if your router ignores ping.</p>";
   html += "<label for='netHostname'>Hostname (DHCP and mDNS)</label>";
   html += "<input type='text' id='netHostname' maxlength='31' value='" + String(netHostname) + "'>";
   html += "<button class='button-primary' onclick='saveNetwork()'>Save Network Settings</button>";
@@ -1121,6 +1130,7 @@ inline String getNetworkSettingsCard() {
 function saveNetwork(){
   var p=new URLSearchParams();
   p.append('mode', document.getElementById('netMode').value);
+  p.append('gw_check', document.getElementById('netGwCheck').checked?'true':'false');
   ['Cs','Sck','Mosi','Miso','Irq','Rst'].forEach(function(k){
     p.append('eth_'+k.toLowerCase(), document.getElementById('eth'+k).value);
   });
@@ -1134,16 +1144,17 @@ function saveNetwork(){
   }).catch(function(e){alert('Error: '+e);});
 }
 var NET_MODE_HELP={
-  wifi:'Only WiFi is used. The W5500 is not started.',
-  eth:'Only Ethernet is used; the WiFi radio is off.',
+  wifi:'Only WiFi is used. Choose this when no W5500 is fitted.',
   dual:'Both interfaces stay up and answer the web UI and Alpaca on their own IP addresses.',
-  wifi_eth:'WiFi is used normally. If WiFi has no connection for 15 s, Ethernet is started; once WiFi has been back for 60 s, Ethernet is stopped again.',
-  eth_wifi:'Ethernet is used normally. If Ethernet has no connection for 15 s, WiFi is started; once Ethernet has been back for 60 s, WiFi is turned off again.'
+  wifi_eth:'WiFi is used normally. If WiFi is down for 15 s, Ethernet is started; once WiFi has been back for 60 s, Ethernet is stopped again.',
+  eth_wifi:'Ethernet is used normally. If Ethernet is down for 15 s, WiFi is started; once Ethernet has been back for 60 s, WiFi is turned off again.'
 };
 function updateNetModeUI(){
   var m=document.getElementById('netMode').value;
   document.getElementById('netModeHelp').textContent=NET_MODE_HELP[m]||'';
-  document.getElementById('netModeWarn').style.display=(m==='eth'||m==='eth_wifi')?'block':'none';
+  document.getElementById('netModeWarn').style.display=(m==='eth_wifi')?'block':'none';
+  document.getElementById('gwRow').style.display=(m==='wifi')?'none':'flex';
+  document.getElementById('gwHelp').style.display=(m==='wifi')?'none':'block';
   document.getElementById('prefRow').style.display=(m==='dual')?'block':'none';
   document.getElementById('ethPinsBox').style.display=(m==='wifi')?'none':'block';
 }
@@ -1157,10 +1168,10 @@ function refreshNetStatus(){
     set('ns-mode', n.mode_label+(n.running_mode!==n.mode?' (running as '+n.running_mode+')':''));
     set('ns-w-state', n.ap_mode?'Access point (setup mode)':(w.connected?'Connected':(w.standby?'Standby (failover backup)':(w.enabled?'Disconnected':'Off'))));
     set('ns-w-ip', w.ip||'-'); set('ns-w-mac', w.mac||'-');
-    set('ns-w-link', w.connected?(w.ssid+', '+w.rssi+' dBm'):'-');
+    set('ns-w-link', w.connected?(w.ssid+', '+w.rssi+' dBm'+(w.gateway_ok?'':' - gateway not answering')):'-');
     set('ns-e-state', !e.enabled?'Disabled':(!e.started?'Failed to start (check pins/wiring)':(e.standby?'Standby (failover backup)':(e.ip?'Connected':(e.link?'Link up, waiting for DHCP':'No cable / no link')))));
     set('ns-e-ip', e.ip||'-'); set('ns-e-mac', e.mac||'-');
-    set('ns-e-link', e.link?(e.speed+' Mbps '+(e.full_duplex?'full':'half')+' duplex'):'-');
+    set('ns-e-link', e.link?(e.speed+' Mbps '+(e.full_duplex?'full':'half')+' duplex'+(e.gateway_ok?'':' - gateway not answering')):'-');
   }).catch(function(){});
 }
 refreshNetStatus();

@@ -44,10 +44,15 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 - Manual controls available from Roof Control page
 
 ### Networking (v4)
-- **WiFi** is the primary interface and is used for first-time setup (AP mode)
+- **WiFi** is used for first-time setup (AP mode) and is always available as a way back in
 - **Optional W5500 wired Ethernet** (SPI on the H4 breakout) alongside WiFi
-- Both interfaces stay up with their own IPs; the web UI, Alpaca, discovery, NTP and sensor listeners answer on either
-- A **preferred interface** setting (default WiFi) picks the default route used for outbound traffic (MQTT) while both are up; if it drops, the other takes over automatically
+- **Network mode** (Setup > Network):
+  - *WiFi only (no Ethernet fitted)*
+  - *Dual*: both interfaces up with their own IPs; the web UI, Alpaca, discovery, NTP and sensor listeners answer on either. A **preferred interface** setting picks the default route for outbound traffic (MQTT)
+  - *WiFi primary, Ethernet backup* / *Ethernet primary, WiFi backup*: only the primary runs; the backup starts after the primary has been down 15 s and stops once the primary has been back 60 s
+  - There is deliberately no Ethernet-only mode, so a broken wired network can't lock you out
+- **Gateway check** (on by default): the primary interface pings its router every 30 s; after ~90 s without replies the link counts as down even though it has an IP (dead switch port, wrong VLAN), so the backup starts and outbound traffic moves over
+- If the W5500 fails to start, the controller falls back to WiFi only
 - AP mode only starts when WiFi fails **and** Ethernet has no IP, so a cabled controller with bad WiFi credentials stays reachable
 - Link, IP and active-interface changes are logged, which makes WiFi drops easy to tell apart from resets
 - Alpaca UniqueID and Home Assistant device IDs come from the factory WiFi MAC, so they don't change when Ethernet is added
@@ -291,7 +296,7 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 
 ### v4.0.0 (2026-10-17)
 - **16 MB flash layout** (`main/partitions.csv`): 3 MB OTA app slots plus a 9.9 MB log partition. One-time USB flash needed when upgrading from v3; settings carry over.
-- **W5500 Ethernet** alongside WiFi: both interfaces up, preferred interface sets the default route, automatic failover, no AP mode while Ethernet is up. Network tab on the Setup page.
+- **W5500 Ethernet** alongside WiFi: network modes (WiFi only, dual, WiFi or Ethernet primary with the other as backup), gateway reachability check, no AP mode while Ethernet is up. Network tab on the Setup page.
 - **Persistent logging**: FRAM black box (every line, survives power loss) plus a LittleFS archive (daily files, 90 days / 2 MB). Console page gains history across reboots, downloads, flush and clear.
 - **Time**: network time (SNTP) fallback; DS3231 oscillator-stop flag honoured and cleared; date rollover fixed for RTC/network time.
 - **Setup page** split into tabs and streamed (lower peak heap); saving a form returns to the same tab.

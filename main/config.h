@@ -191,6 +191,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_ETH_RST_PIN "ethRst"
 #define PREF_NET_PREFERRED "netPreferred"
 #define PREF_NET_MODE "netMode"
+#define PREF_NET_GW_CHECK "netGwCheck"
 #define PREF_NET_HOSTNAME "netHostname"
 
 // W5500 defaults (breakout H4). INT is optional: -1 = driver polls every 10 ms.
