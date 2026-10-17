@@ -49,6 +49,10 @@ String roofErrorReason = "";
 static unsigned long roofErrorSince = 0;
 static bool roofErrorNeedsAck = false;
 
+// True when OPENING/CLOSING was inferred from the limit switches (someone moved
+// the roof by hand) rather than commanded through the relays.
+static bool movementInferred = false;
+
 // Timestamps for various operations
 unsigned long lastSwitchTime = 0;
 unsigned long movementStartTime = 0;
@@ -301,7 +305,13 @@ void updateRoofStatus() {
   }
   else if (isOpenLimitTriggered) {
     // Open switch is triggered.
-    if (roofStatus == ROOF_CLOSING) {
+    if (roofStatus == ROOF_CLOSING && movementInferred) {
+      // A manual move away from the open limit came back to it: nothing failed
+      statusMessage = "Roof back at open limit (manual move reversed)";
+      roofStatus = ROOF_OPEN;
+      shutdownInverterPower();
+    }
+    else if (roofStatus == ROOF_CLOSING) {
       // We're trying to CLOSE but open switch is still triggered after limitSwitchTimeout.
       // This means the roof failed to START moving - immediate error.
       roofErrorReason = "Roof failed to start closing. Open limit switch still triggered after " +
@@ -336,7 +346,13 @@ void updateRoofStatus() {
   }
   else if (isClosedLimitTriggered) {
     // Closed switch is triggered.
-    if (roofStatus == ROOF_OPENING) {
+    if (roofStatus == ROOF_OPENING && movementInferred) {
+      // A manual move away from the closed limit came back to it: nothing failed
+      statusMessage = "Roof back at closed limit (manual move reversed)";
+      roofStatus = ROOF_CLOSED;
+      shutdownInverterPower();
+    }
+    else if (roofStatus == ROOF_OPENING) {
       // We're trying to OPEN but closed switch is still triggered after limitSwitchTimeout.
       // This means the roof failed to START moving - immediate error.
       roofErrorReason = "Roof failed to start opening. Closed limit switch still triggered after " +
@@ -387,11 +403,13 @@ void updateRoofStatus() {
     else if (roofStatus == ROOF_OPEN) {
       roofStatus = ROOF_CLOSING;
       movementStartTime = currentTime;
+      movementInferred = true;
       statusMessage = "Roof state changed from OPEN, now CLOSING";
-    } 
+    }
     else if (roofStatus == ROOF_CLOSED) {
       roofStatus = ROOF_OPENING;
       movementStartTime = currentTime;
+      movementInferred = true;
       statusMessage = "Roof state changed from CLOSED, now OPENING";
     }
     // Otherwise, maintain the current state (OPENING, CLOSING, or ERROR)
@@ -950,6 +968,7 @@ void processRoofOperation() {
           Debug.println("Roof closing started");
         }
         movementStartTime = currentTime;
+        movementInferred = false;
         lastSwitchTime = currentTime;  // Debounce after button press
         roofMotorCommandedRunning = true;  // Movement confirmed commanded
 
