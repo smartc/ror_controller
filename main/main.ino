@@ -44,6 +44,9 @@
 #include "src/safety/safety_sensor.h"
 #include "src/sensors/gps_handler.h"
 #include "src/net/network_manager.h"
+#include "src/log/fram_log.h"
+#include "src/log/log_archive.h"
+#include <Wire.h>
 
 // For reset reason detection
 #include "esp_system.h"
@@ -75,6 +78,11 @@ String getResetReasonString() {
     case ESP_RST_SDIO:      return "SDIO reset";
     default:                return "Unknown reset (" + String(reason) + ")";
   }
+}
+
+// Timestamp source for log lines: UTC once any time source is synced, else 0
+static uint32_t logUtcNow() {
+  return isTimeSynced() ? getCurrentUnixTime() : 0;
 }
 
 // v4 needs the 16MB layout from partitions.csv. A board flashed with the wrong
@@ -116,6 +124,17 @@ void setup() {
   bootPrefs.end();
   Debug.printf("Reboot count: %lu\n", rebootCount);
 
+  // Shared I2C bus (DS3231 RTC + FRAM log). Start it once, before either uses it.
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  Wire.setClock(400000);
+
+  // Persistent log: from here on every line is in FRAM the moment it's logged,
+  // and the lines above (reset reason etc.) are replayed into it.
+  logSetTimeSource(logUtcNow);
+  framLogBegin((uint16_t)rebootCount);
+  logArchiveSetBoot((uint16_t)rebootCount);
+  Debug.printf("=== BOOT #%lu - v%s - %s ===\n", rebootCount, DEVICE_VERSION, lastResetReason.c_str());
+
   // If brown-out detected, log a warning
   if (esp_reset_reason() == ESP_RST_BROWNOUT) {
     Debug.println("WARNING: Brown-out detected! Check power supply.");
@@ -127,6 +146,7 @@ void setup() {
   Debug.println("Version: " + String(DEVICE_VERSION));
   Debug.println("Manufacturer: " + String(DEVICE_MANUFACTURER));
   checkFlashLayout();
+  logArchiveBegin();
 
   // Load configuration from preferences
   loadConfiguration();
@@ -140,6 +160,9 @@ void setup() {
 
   // Initialize networking (WiFi primary, optional W5500 Ethernet)
   initNetwork();
+
+  // Network time is the fallback when neither GPS nor the RTC has time
+  initNetworkTime();
   
   // Initialize UDP park sensor listener
   initParkSensorUDP();
@@ -245,6 +268,12 @@ void loop() {
   // Handle NTP server (independent of GPS - uses GPS or RTC time)
   handleNTP();
 
+  // Pick up network (SNTP) time when GPS/RTC have none
+  handleTimeSync();
+
+  // Copy the FRAM log to flash when due (never while the roof is moving)
+  logArchiveHandle();
+
   // Clear timed out park sensors periodically (every 5 minutes)
   static unsigned long lastSensorCleanup = 0;
   if (currentTime - lastSensorCleanup > 300000) {
@@ -263,11 +292,10 @@ void loop() {
                  mqttClient.connected() ? "Connected" : "Disconnected",
                  ESP.getFreeHeap());
     // Time source status
-    TimeSource ts = getTimeSource();
     Debug.printf(2, "Time: %s %s UTC (Source: %s, RTC: %s)\n",
                  getDateString().c_str(),
                  getTimeString().c_str(),
-                 ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None"),
+                 getTimeSourceName(),
                  isRTCPresent() ? "Present" : "Not found");
     Debug.printf(2, "Local: %s %s (TZ: %+d min, DST: %s)\n",
                  getLocalDateString().c_str(),

@@ -24,6 +24,15 @@
 void logAppend(const char* text);
 void logGetJSON(String& out);
 
+// Persistent sink (FRAM): receives every completed line. Setting it replays the
+// lines already in the RAM ring so boot messages logged earlier are kept too.
+typedef void (*LogPersistSink)(uint32_t utc, uint32_t ms, const char* line);
+void logSetPersistSink(LogPersistSink sink);
+
+// UTC source for timestamps (returns 0 when no time source is synced)
+typedef uint32_t (*LogTimeSource)();
+void logSetTimeSource(LogTimeSource fn);
+
 class DebugClass {
 public:
   void begin(unsigned long baud) {

@@ -38,7 +38,8 @@ struct GPSStatus {
 enum TimeSource {
   TIME_SOURCE_NONE = 0,
   TIME_SOURCE_GPS = 1,
-  TIME_SOURCE_RTC = 2
+  TIME_SOURCE_RTC = 2,
+  TIME_SOURCE_NETWORK = 3     // SNTP over the network - fallback when GPS and RTC can't provide time
 };
 
 // Global GPS and RTC variables
@@ -69,6 +70,9 @@ bool writeRTC(const GPSTime* time);       // Write time to RTC
 void syncRTCFromGPS();                    // Sync RTC from GPS when GPS has fix
 
 // Function prototypes - NTP
+void initNetworkTime();                   // Start the SNTP client (fallback time source)
+void handleTimeSync();                    // Promote/refresh the time source; call from loop()
+const char* getTimeSourceName();          // "GPS", "RTC", "Network" or "None"
 void initNTP();                           // Initialize NTP server
 void handleNTP();                         // Handle NTP server requests
 

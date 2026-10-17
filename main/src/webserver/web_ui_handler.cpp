@@ -12,6 +12,7 @@
 #include "../sensors/gps_handler.h"
 #include "../debug/Debug.h"
 #include "../net/network_manager.h"
+#include "../log/log_archive.h"
 #include <HTTPClient.h>
 
 // Standard Web Server
@@ -527,6 +528,7 @@ void initWebUI() {
   webUiServer.on("/restart", HTTP_POST, []() {
     webUiServer.send(200, "text/plain", "Restarting device...");
     Debug.println("Device restart requested via web interface");
+    logArchiveFlushNow();  // archive the FRAM backlog first (skipped if the roof is moving)
     delay(1000);
     ESP.restart();
   });
@@ -598,6 +600,10 @@ void initWebUI() {
 
   // Add ElegantOTA functionality
   ElegantOTA.begin(&webUiServer);
+  ElegantOTA.onEnd([](bool success) {
+    Debug.printf("OTA update %s\n", success ? "complete - restarting" : "FAILED");
+    if (success) logArchiveFlushNow();
+  });
 
   // Start server
   webUiServer.begin();
@@ -623,14 +629,14 @@ void handleConsoleJSON() {
 // Handle the root page - shows a simple status page
 void handleRoot() {
   String html = getHomePage(roofStatus, apMode);
-  Debug.printf("Home page size: %d bytes, free heap: %d bytes\n", html.length(), ESP.getFreeHeap());
+  Debug.printf(2, "Home page size: %d bytes, free heap: %d bytes\n", html.length(), ESP.getFreeHeap());
   webUiServer.send(200, "text/html", html);
 }
 
 // Handle setup page
 void handleSetup() {
   String page = getSetupPage();
-  Debug.printf("Setup page size: %d bytes, free heap: %d bytes\n", page.length(), ESP.getFreeHeap());
+  Debug.printf(2, "Setup page size: %d bytes, free heap: %d bytes\n", page.length(), ESP.getFreeHeap());
   webUiServer.send(200, "text/html", page);
 }
 
@@ -1213,7 +1219,7 @@ void handleApiStatus() {
   doc["time_synced"] = timeSynced;
   doc["rtc_present"] = rtcPresent;
   TimeSource ts = getTimeSource();
-  doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
+  doc["time_source"] = getTimeSourceName();
   doc["current_time"] = getTimeString();
   doc["current_date"] = getDateString();
   doc["local_time"] = getLocalTimeString();
@@ -1286,7 +1292,7 @@ void handleGPSStatus() {
 
   // Time status
   doc["time_synced"] = timeSynced;
-  doc["time_source"] = ts == TIME_SOURCE_GPS ? "GPS" : (ts == TIME_SOURCE_RTC ? "RTC" : "None");
+  doc["time_source"] = getTimeSourceName();
   doc["current_time"] = getTimeString();
   doc["current_date"] = getDateString();
   doc["local_time"] = getLocalTimeString();

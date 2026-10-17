@@ -89,8 +89,7 @@ static uint8_t decToBcd(uint8_t val);
 void initRTC() {
   Debug.println("Initializing RTC (DS3231)...");
 
-  // Initialize I2C
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  // I2C bus is started in setup() (shared with the FRAM log)
 
   // Check if DS3231 is present
   Wire.beginTransmission(DS3231_ADDRESS);
@@ -391,7 +390,9 @@ void initNTP() {
 // Handle NTP server requests
 void handleNTP() {
   // NTP requires time to be synced (from GPS or RTC), and NTP to be enabled
-  if (!gpsNtpEnabled || !timeSynced) {
+  // Only serve time from GPS or the RTC: re-serving SNTP time as a local
+  // reference would mislead clients about its accuracy.
+  if (!gpsNtpEnabled || !timeSynced || currentTimeSource == TIME_SOURCE_NETWORK) {
     return;
   }
 
@@ -525,7 +526,7 @@ void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remo
 
   Debug.printf(2, "NTP response sent to %s:%d (source: %s, PPS: %s)\n",
                remoteIP.toString().c_str(), remotePort,
-               currentTimeSource == TIME_SOURCE_GPS ? "GPS" : "RTC",
+               getTimeSourceName(),
                hasPPS ? "Yes" : "No");
 }
 
@@ -559,12 +560,13 @@ void setGPSEnabled(bool enabled) {
     gpsStatus.hasFix = false;
     gpsStatus.time.valid = false;
 
-    // Fall back to RTC if available
+    // Fall back to RTC, then network time, if available
     if (rtcPresent && rtcTime.valid) {
       currentTimeSource = TIME_SOURCE_RTC;
     } else if (currentTimeSource == TIME_SOURCE_GPS) {
       currentTimeSource = TIME_SOURCE_NONE;
       timeSynced = false;
+      handleTimeSync();  // picks up SNTP time immediately if it's available
     }
 
     Debug.println("GPS disabled");
@@ -630,30 +632,34 @@ GPSStatus getGPSStatus() {
 String getTimeString() {
   if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
     return getGPSTimeString();
-  } else if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
-    // Calculate interpolated time from RTC
-    uint32_t currentUnix = getCurrentUnixTime();
-    uint8_t hour = (currentUnix % 86400) / 3600;
-    uint8_t minute = (currentUnix % 3600) / 60;
-    uint8_t second = currentUnix % 60;
-    char buf[12];
-    snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hour, minute, second);
-    return String(buf);
   }
-  return "No Sync";
+  uint32_t currentUnix = getCurrentUnixTime();
+  if (currentUnix == 0) {
+    return "No Sync";
+  }
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%02lu:%02lu:%02lu",
+           (unsigned long)(currentUnix % 86400) / 3600, (unsigned long)(currentUnix % 3600) / 60,
+           (unsigned long)currentUnix % 60);
+  return String(buf);
 }
 
 // Get formatted date string from best source (YYYY-MM-DD)
 String getDateString() {
   if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
     return getGPSDateString();
-  } else if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
-    char buf[12];
-    snprintf(buf, sizeof(buf), "%04d-%02d-%02d",
-             rtcTime.year, rtcTime.month, rtcTime.day);
-    return String(buf);
   }
-  return "No Sync";
+  // Derived from the interpolated timestamp so the date rolls over at midnight
+  uint32_t currentUnix = getCurrentUnixTime();
+  if (currentUnix == 0) {
+    return "No Sync";
+  }
+  time_t t = currentUnix;
+  struct tm tmUtc;
+  gmtime_r(&t, &tmUtc);
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%04d-%02d-%02d", tmUtc.tm_year + 1900, tmUtc.tm_mon + 1, tmUtc.tm_mday);
+  return String(buf);
 }
 
 // Get formatted GPS time string (HH:MM:SS)
@@ -686,8 +692,60 @@ uint32_t getCurrentUnixTime() {
     // Interpolate from last RTC read
     unsigned long elapsed = (millis() - lastRTCReadMillis) / 1000;
     return lastRTCUnixTime + elapsed;
+  } else if (currentTimeSource == TIME_SOURCE_NETWORK) {
+    return (uint32_t)time(nullptr);
   }
   return 0;
+}
+
+// ============== Network time (SNTP client) ==============
+
+// Anything after 2023-11 means SNTP has set the system clock
+static const time_t NETWORK_TIME_VALID_AFTER = 1700000000;
+
+static bool networkTimeValid() {
+  return time(nullptr) > NETWORK_TIME_VALID_AFTER;
+}
+
+void initNetworkTime() {
+  configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+  Debug.println("SNTP client started (fallback time source)");
+}
+
+// GPS and a trusted RTC win; network time only fills in when neither has time.
+// When it does, it also repairs an untrusted RTC so the next boot has time early.
+void handleTimeSync() {
+  static unsigned long lastCheck = 0;
+  if (millis() - lastCheck < 5000 && lastCheck != 0) return;
+  lastCheck = millis();
+
+  if (currentTimeSource != TIME_SOURCE_NONE || !networkTimeValid()) return;
+
+  currentTimeSource = TIME_SOURCE_NETWORK;
+  timeSynced = true;
+  time_t now = time(nullptr);
+  struct tm tmUtc;
+  gmtime_r(&now, &tmUtc);
+  Debug.printf("Time synced from network (SNTP): %04d-%02d-%02d %02d:%02d:%02d UTC\n",
+               tmUtc.tm_year + 1900, tmUtc.tm_mon + 1, tmUtc.tm_mday,
+               tmUtc.tm_hour, tmUtc.tm_min, tmUtc.tm_sec);
+
+  if (rtcPresent && !rtcTime.valid) {
+    GPSTime t = {(uint16_t)(tmUtc.tm_year + 1900), (uint8_t)(tmUtc.tm_mon + 1), (uint8_t)tmUtc.tm_mday,
+                 (uint8_t)tmUtc.tm_hour, (uint8_t)tmUtc.tm_min, (uint8_t)tmUtc.tm_sec, true};
+    if (writeRTC(&t)) {
+      Debug.println("RTC set from network time");
+    }
+  }
+}
+
+const char* getTimeSourceName() {
+  switch (currentTimeSource) {
+    case TIME_SOURCE_GPS:     return "GPS";
+    case TIME_SOURCE_RTC:     return "RTC";
+    case TIME_SOURCE_NETWORK: return "Network";
+    default:                  return "None";
+  }
 }
 
 // Get Unix timestamp from GPS only

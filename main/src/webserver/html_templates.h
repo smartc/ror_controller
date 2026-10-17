@@ -793,9 +793,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += "<table class='status-table'>\n";
 
     // Time source
-    String timeSourceStr = "None";
-    if (timeSource == TIME_SOURCE_GPS) timeSourceStr = "GPS";
-    else if (timeSource == TIME_SOURCE_RTC) timeSourceStr = "RTC";
+    String timeSourceStr = getTimeSourceName();
     html += "<tr><th>Time Source</th><td>";
     html += "<span class='status-indicator " + String(timeSynced ? "green" : "red") + "'></span> ";
     html += timeSourceStr;
@@ -1564,9 +1562,7 @@ inline String getGPSConfigCard() {
   html += "<table class='status-table'>";
 
   // Time source
-  String timeSourceStr = "None";
-  if (timeSource == TIME_SOURCE_GPS) timeSourceStr = "GPS";
-  else if (timeSource == TIME_SOURCE_RTC) timeSourceStr = "RTC";
+  String timeSourceStr = getTimeSourceName();
   html += "<tr><th>Time Source</th><td>";
   html += "<span class='status-indicator " + String(timeSynced ? "green" : "red") + "'></span> ";
   html += timeSourceStr + (timeSynced ? " (synced)" : " (not synced)");
