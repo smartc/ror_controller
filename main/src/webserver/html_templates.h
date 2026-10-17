@@ -54,7 +54,19 @@ inline String getCommonStyles() {
     ".nav a.warn { background: #7f4f00; }\n"
     ".nav a.warn:hover { background: #a06200; }\n"
     "label { display: block; margin-bottom: 5px; font-weight: bold; color: #b0b0b0; }\n"
-    "input[type=text], input[type=password], input[type=number] { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #2d3561; border-radius: 4px; background-color: #0f3460; color: #e0e0e0; }\n"
+    "input[type=text], input[type=password], input[type=number] { display: block; width: 100%; max-width: 420px; padding: 8px; margin-bottom: 15px; border: 1px solid #2d3561; border-radius: 4px; background-color: #0f3460; color: #e0e0e0; }\n"
+    "input[type=number] { max-width: 200px; }\n"
+    "select { max-width: 420px; }\n"
+    // Status tables: capped width, and the status dot sits in a fixed gutter so
+    // every value in the right-hand column starts at the same x position
+    "table.status-table, table.net-table { max-width: 720px; }\n"
+    "table.status-table td { position: relative; padding-left: 30px; }\n"
+    "table.status-table .status-indicator { position: absolute; left: 10px; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 0; }\n"
+    ".status-indicator.green { background-color: #81c784; }\n"
+    ".status-indicator.red { background-color: #e57373; }\n"
+    ".status-indicator.blue { background-color: #64b5f6; }\n"
+    ".status-indicator.orange { background-color: #ffb74d; }\n"
+    ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
     "input[type=submit] { background: #74b9ff; color: #000; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
     "input[type=submit]:hover { background: #a0c4ff; }\n"
     "button { background-color: #74b9ff; color: #000; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
@@ -1042,7 +1054,7 @@ inline String getStatusCard() {
 inline String getNetworkSettingsCard() {
   String html = "<div class='card'>";
   html += "<h2>Network Status</h2>";
-  html += "<table id='net-status'><tr><th></th><th>WiFi</th><th>Ethernet (W5500)</th></tr>"
+  html += "<table id='net-status' class='net-table'><tr><th></th><th>WiFi</th><th>Ethernet (W5500)</th></tr>"
           "<tr><th>State</th><td id='ns-w-state'>-</td><td id='ns-e-state'>-</td></tr>"
           "<tr><th>IP Address</th><td id='ns-w-ip'>-</td><td id='ns-e-ip'>-</td></tr>"
           "<tr><th>MAC Address</th><td id='ns-w-mac'>-</td><td id='ns-e-mac'>-</td></tr>"

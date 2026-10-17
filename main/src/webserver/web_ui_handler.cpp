@@ -131,7 +131,11 @@ void loadConfiguration() {
 
   // Load MQTT enabled setting
   if (preferences.isKey(PREF_MQTT_ENABLED)) {
-    mqttEnabled = preferences.getBool(PREF_MQTT_ENABLED, true);  // Default to true if not found
+    mqttEnabled = preferences.getBool(PREF_MQTT_ENABLED, false);
+  } else {
+    // Never saved: off on a fresh board, but controllers upgraded from older
+    // firmware (which defaulted to on) keep MQTT if they have a saved broker
+    mqttEnabled = preferences.isKey(PREF_MQTT_SERVER);
   }
 
   // Load park sensor bypass setting

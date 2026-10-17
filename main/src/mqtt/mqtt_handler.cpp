@@ -13,7 +13,7 @@
 #include <Arduino.h>
 
 // Global MQTT configuration variables
-bool mqttEnabled = true; // Default to enabled
+bool mqttEnabled = false; // Off until a broker is configured
 char mqttServer[MQTT_SERVER_SIZE] = DEFAULT_MQTT_SERVER;
 int mqttPort = DEFAULT_MQTT_PORT;
 char mqttUser[MQTT_USER_SIZE] = DEFAULT_MQTT_USER;
