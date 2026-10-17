@@ -88,6 +88,17 @@ inline String getCommonStyles() {
     ".telescope-status { display: inline-block; margin: 20px auto; text-align: center; }\n"
     ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }\n"
     ".telescope-status .status-indicator { width: 24px; height: 24px; margin-right: 10px; }\n"
+    // Home / Roof Control use .status-card; it is the same card as everywhere else
+    ".status-card { background: #16213e; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }\n"
+    ".status-table th { text-align: left; width: 40%; }\n"
+    ".page-sub { font-size: 0.85em; color: #8899aa; }\n"
+    ".status-header { font-size: 22px; margin: 0 0 16px 0; padding: 14px 20px; border-radius: 8px; font-weight: bold; border: 2px solid; }\n"
+    ".status-header.open { background-color: #1e3a5f; color: #64b5f6; }\n"
+    ".status-header.closed { background-color: #1e3a2f; color: #81c784; }\n"
+    ".status-header.moving { background-color: #3a2f1e; color: #ffb74d; }\n"
+    ".status-header.error { background-color: #3a1e1e; color: #e57373; }\n"
+    ".ap-mode-banner { background-color: #3a3a1e; color: #ffd54f; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-weight: bold; border: 1px solid #555; }\n"
+    ".mqtt-json { background-color: #0f1a33; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; max-height: 150px; overflow-y: auto; color: #81c784; border: 1px solid #2d3561; }\n"
     ".status-text { display: inline-block; font-weight: bold; vertical-align: middle; }\n"
     ".indicator-red { background-color: #e57373; }\n"
     ".indicator-green { background-color: #81c784; }\n"
@@ -485,34 +496,10 @@ inline String getStatusDisplay(RoofStatus status) {
 inline String getHomePage(RoofStatus status, bool isApMode = false) {
   String html = getPageHeader("ESP32 Roll-Off Roof Status");
   
-  // Add custom styles for home page - Dark Theme
-  html += "<style>\n"
-          "body { text-align: center; }\n"
-          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
-          ".page-header { margin: 20px 0; }\n"
-          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
-          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
-          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
-          ".error { background-color: #3a1e1e; color: #e57373; }\n"
-          ".ap-mode-banner { background-color: #3a3a1e; color: #ffd54f; padding: 10px; border-radius: 5px; margin: 10px 0; font-weight: bold; border: 1px solid #555; }\n"
-          ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
-          ".status-indicator.green { background-color: #81c784; }\n"
-          ".status-indicator.red { background-color: #e57373; }\n"
-          ".status-indicator.blue { background-color: #64b5f6; }\n"
-          ".status-indicator.orange { background-color: #ffb74d; }\n"
-          ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
-          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
-          ".status-table { width: 100%; margin-bottom: 15px; }\n"
-          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
-          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
-          ".mqtt-json { background-color: #333; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; max-height: 150px; overflow-y: auto; color: #81c784; border: 1px solid #555; }\n"
-          "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
-          "</style>\n";
 
-  html += "<div class='page-header'>\n";
-  html += "<h1>ESP32 Roll-Off Roof Controller</h1>\n";
-  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
-  html += "</div>\n";
+  html += "<h1>Roll-Off Roof Controller</h1>\n";
+  html += "<p class='page-sub'>Version: " + String(DEVICE_VERSION) + " &middot; updates every 2 seconds</p>\n";
+  html += getNavBar();
   
   // AP Mode Banner
   if (isApMode) {
@@ -564,8 +551,6 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
-  // Navigation bar
-  html += getNavBar();
 
   // Device Information Card
   html += "<div class='status-card'>\n";
@@ -752,7 +737,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "</td></tr>\n";
 
   html += "</table>\n";
-  html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Use <a href='/control'>Roof Control</a> page to control inverter</p>\n";
+  html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px;'>Use <a href='/control'>Roof Control</a> page to control inverter</p>\n";
   html += "</div>\n";
 
   // MQTT Information Card
@@ -888,7 +873,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += "</td></tr>\n";
 
     html += "</table>\n";
-    html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px; text-align: center;'>Configure in <a href='/setup'>Device Setup</a></p>\n";
+    html += "<p style='font-size: 12px; color: #b0b0b0; margin-top: 10px;'>Configure in <a href='/setup'>Device Setup</a></p>\n";
     html += "</div>\n";
   }
 
@@ -2059,33 +2044,11 @@ inline void buildSetupPage(Emit emit) {
 inline String getRoofControlPage() {
   String html = getPageHeader("Roof Control");
 
-  // Add custom styles matching home page
-  html += "<style>\n"
-          "body { text-align: center; }\n"
-          ".status-card { background-color: #2d2d2d; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: left; border: 1px solid #404040; }\n"
-          ".page-header { margin: 20px 0; }\n"
-          ".open { background-color: #1e3a5f; color: #64b5f6; }\n"
-          ".closed { background-color: #1e3a2f; color: #81c784; }\n"
-          ".moving { background-color: #3a2f1e; color: #ffb74d; }\n"
-          ".error { background-color: #3a1e1e; color: #e57373; }\n"
-          ".status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }\n"
-          ".status-indicator.green { background-color: #81c784; }\n"
-          ".status-indicator.red { background-color: #e57373; }\n"
-          ".status-indicator.blue { background-color: #64b5f6; }\n"
-          ".status-indicator.orange { background-color: #ffb74d; }\n"
-          ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
-          ".status-header { font-size: 24px; margin: 20px 0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; border: 2px solid; }\n"
-          ".status-table { width: 100%; margin-bottom: 15px; }\n"
-          ".status-table th { text-align: left; width: 40%; padding: 8px; background-color: #333; color: #4fc3f7; }\n"
-          ".status-table td { padding: 8px; background-color: #2d2d2d; color: #e0e0e0; }\n"
-          "@keyframes blink { from { opacity: 0.6; } to { opacity: 1; } }\n"
-          "</style>\n";
 
   // Page header with title
-  html += "<div class='page-header'>\n";
   html += "<h1>Roof Control</h1>\n";
-  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + " | <span style='color: #81c784;'>Auto-updates every 2 seconds</span></p>\n";
-  html += "</div>\n";
+  html += "<p class='page-sub'>Version: " + String(DEVICE_VERSION) + " &middot; updates every 2 seconds</p>\n";
+  html += getNavBar();
 
   // Get current status for header
   String statusString = getRoofStatusString();
@@ -2129,8 +2092,6 @@ inline String getRoofControlPage() {
   html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
   html += "</div>\n";
 
-  // Navigation bar
-  html += getNavBar();
 
   // Current Status Card
   html += "<div class='status-card'>\n";
@@ -2243,7 +2204,7 @@ inline String getRoofControlPage() {
   html += "</div>\n";
   html += "</div>\n";
 
-  html += "<div style='text-align: center; margin: 20px 0;'>\n";
+  html += "<div style='margin: 20px 0;'>\n";
 
   // Determine if buttons should be disabled
   bool parkBlocked    = !bypassParkSensor && !telescopeParked;
@@ -2278,7 +2239,7 @@ inline String getRoofControlPage() {
   // Inverter Control Card
   html += "<div class='status-card'>\n";
   html += "<h2>Inverter Control</h2>\n";
-  html += "<div style='text-align: center; margin: 20px 0;'>\n";
+  html += "<div style='margin: 20px 0;'>\n";
   html += "<button class='btn' onclick='toggleInverterPower()' style='margin: 5px;'>Toggle Power Relay (K1)</button>\n";
   html += "<button class='btn' onclick='sendInverterButton()' style='margin: 5px;'>Press Soft-Power Button (K3)</button>\n";
   html += "</div>\n";
@@ -2759,21 +2720,16 @@ setInterval(loadFiles, 30000);
 inline String getWifiConfigPage() {
   String html = getPageHeader("WiFi Configuration");
 
-  // Add custom styles for the WiFi config page - Dark Theme
   html += "<style>\n"
-          "body { text-align: center; }\n"
-          ".container { max-width: 600px; margin: 0 auto; background-color: #2d2d2d; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #404040; }\n"
-          ".network-list { margin-bottom: 20px; text-align: left; }\n"
-          ".network { padding: 10px; margin-bottom: 5px; border: 1px solid #555; border-radius: 4px; cursor: pointer; background-color: #333; color: #e0e0e0; }\n"
-          ".network:hover { background-color: #404040; }\n"
+          ".network-list { margin-bottom: 20px; }\n"
+          ".network { padding: 10px; margin-bottom: 5px; border: 1px solid #2d3561; border-radius: 4px; cursor: pointer; background-color: #0f3460; color: #e0e0e0; }\n"
+          ".network:hover { background-color: #1a4a8a; }\n"
           ".back-link { margin-top: 20px; display: inline-block; }\n"
           "</style>\n";
 
-  html += "<div class='container'>";
-  html += "<div class='page-header'>\n";
   html += "<h1>WiFi Configuration</h1>\n";
-  html += "<p style='color: #b0b0b0;'>Version: " + String(DEVICE_VERSION) + "</p>\n";
-  html += "</div>\n";
+  html += "<p class='page-sub'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += "<div class='card'>";
   
   // Add network scanning functionality
   html += "<div class='network-list'>";
