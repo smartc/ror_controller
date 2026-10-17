@@ -178,6 +178,9 @@ void loop() {
   // Update telescope park status
   updateTelescopeStatus();
 
+  // Emergency interlock: stop roof immediately if telescope unparks during movement
+  checkParkSensorInterlock();
+
   // Update inverter power status (NEW in v3)
   updateInverterPowerStatus();
 

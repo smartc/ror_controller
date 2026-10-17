@@ -18,7 +18,7 @@
 #define DISABLE_BROWNOUT_DETECTION 0
 
 // Version Information
-#define DEVICE_VERSION "3.4.1"  // v3.4.1: interim reliability fixes (inferred-move debounce, safety timeout, refusal reasons)
+#define DEVICE_VERSION "3.4.2"  // v3.4.2: runtime park sensor interlock (halt roof if telescope unparks during movement)
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
