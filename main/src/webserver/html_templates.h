@@ -66,6 +66,7 @@ inline String getCommonStyles() {
     ".status-indicator.red { background-color: #e57373; }\n"
     ".status-indicator.blue { background-color: #64b5f6; }\n"
     ".status-indicator.orange { background-color: #ffb74d; }\n"
+    ".status-indicator.gray { background-color: #78909c; }\n"
     ".status-indicator.blink { animation: blink 1s infinite alternate; }\n"
     "input[type=submit] { background: #74b9ff; color: #000; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
     "input[type=submit]:hover { background: #a0c4ff; }\n"
@@ -573,7 +574,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<tr><th>IP Address</th><td>" + netLocalIP().toString() + "</td></tr>\n";
   html += "<tr><th>MAC Address</th><td>" + wifiMacAddress() + "</td></tr>\n";
   html += "<tr><th>Firmware Version</th><td>" + String(DEVICE_VERSION) + "</td></tr>\n";
-  html += "<tr><th>Uptime</th><td>" + String(millis() / 1000 / 60) + " minutes</td></tr>\n";
+  html += "<tr><th>Uptime</th><td id='hUptime'>" + String(millis() / 1000 / 60) + " minutes</td></tr>\n";
 
   // Reset diagnostics - helpful for debugging field issues
   String resetClass = "green";
@@ -594,7 +595,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<div class='status-card'>\n";
   html += "<h2>Roof Status</h2>\n";
   html += "<table class='status-table'>\n";
-  html += "<tr><th>Current Status</th><td class='" + statusClass + "'>" + statusDisplayString + "</td></tr>\n";
+  html += "<tr><th>Current Status</th><td id='hCurStatus' class='" + statusClass + "'>" + statusDisplayString + "</td></tr>\n";
 
   // Park sensor information based on type
   html += "<tr><th>Park Sensor Type</th><td>";
@@ -637,7 +638,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
       weatherColor = "red";    weatherLabel = "UNSAFE";
     }
 
-    html += "<tr><th>Weather Safety</th><td>";
+    html += "<tr><th>Weather Safety</th><td id='hWeather'>";
     html += "<span class='status-indicator " + weatherColor + "'></span> ";
     if (!weatherSafe && !bypassSafetySensor && hasEnabledSensor) {
       html += "<span style='color: #e74c3c; font-weight: bold;'>" + weatherLabel + "</span>";
@@ -664,9 +665,10 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   // Show park sensor details based on type
   if (parkSensorType == PARK_SENSOR_PHYSICAL || parkSensorType == PARK_SENSOR_BOTH) {
-    html += "<tr><th>Physical Park Sensor</th><td>";
-    html += "<span class='status-indicator " + String(telescopeParked ? "green" : "red") + "'></span> ";
-    html += telescopeParked ? "Parked" : "Not Parked";
+    bool physicalParked = (digitalRead(TELESCOPE_PARKED_PIN) == TELESCOPE_PARKED);
+    html += "<tr><th>Physical Park Sensor</th><td id='hParkPhys'>";
+    html += "<span class='status-indicator " + String(physicalParked ? "green" : "red") + "'></span> ";
+    html += physicalParked ? "Parked" : "Not Parked";
     html += "</td></tr>\n";
   }
   
@@ -715,12 +717,12 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   bool openSwitchTriggered = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
   bool closedSwitchTriggered = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
   
-  html += "<tr><th>Open Limit Switch</th><td>";
+  html += "<tr><th>Open Limit Switch</th><td id='hLimOpen'>";
   html += "<span class='status-indicator " + String(openSwitchTriggered ? "green" : "red") + "'></span> ";
   html += openSwitchTriggered ? "Triggered" : "Not Triggered";
   html += "</td></tr>\n";
   
-  html += "<tr><th>Closed Limit Switch</th><td>";
+  html += "<tr><th>Closed Limit Switch</th><td id='hLimClosed'>";
   html += "<span class='status-indicator " + String(closedSwitchTriggered ? "green" : "red") + "'></span> ";
   html += closedSwitchTriggered ? "Triggered" : "Not Triggered";
   html += "</td></tr>\n";
@@ -738,13 +740,13 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   bool inverterACPower = getInverterACPowerState();
 
   // Inverter relay state (K1)
-  html += "<tr><th>Power Relay (K1)</th><td>";
+  html += "<tr><th>Power Relay (K1)</th><td id='hK1'>";
   html += "<span class='status-indicator " + String(inverterRelay ? "green" : "red") + "'></span> ";
   html += inverterRelay ? "ON" : "OFF";
   html += "</td></tr>\n";
 
   // Inverter AC power state (via optocoupler)
-  html += "<tr><th>AC Power Detected</th><td>";
+  html += "<tr><th>AC Power Detected</th><td id='hAC'>";
   html += "<span class='status-indicator " + String(inverterACPower ? "green" : "red") + "'></span> ";
   html += inverterACPower ? "ON" : "OFF";
   html += "</td></tr>\n";
@@ -764,7 +766,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   
   if (mqttEnabled) {
     html += "<tr><th>MQTT Server</th><td>" + String(mqttServer) + ":" + String(mqttPort) + "</td></tr>\n";
-    html += "<tr><th>MQTT Connected</th><td>";
+    html += "<tr><th>MQTT Connected</th><td id='hMqttConn'>";
     html += "<span class='status-indicator " + String(mqttClient.connected() ? "green" : "red") + "'></span> ";
     html += mqttClient.connected() ? "Yes" : "No";
     html += "</td></tr>\n";
@@ -804,7 +806,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
 
     // Time source
     String timeSourceStr = getTimeSourceName();
-    html += "<tr><th>Time Source</th><td>";
+    html += "<tr><th>Time Source</th><td id='hTimeSrc'>";
     html += "<span class='status-indicator " + String(timeSynced ? "green" : "red") + "'></span> ";
     html += timeSourceStr;
     html += "</td></tr>\n";
@@ -826,14 +828,14 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local:</span> <span id='localDateDisplay'>" + getLocalDateString() + "</span></td></tr>\n";
 
     // RTC status
-    html += "<tr><th>RTC (DS3231)</th><td>";
+    html += "<tr><th>RTC (DS3231)</th><td id='hRtc'>";
     html += "<span class='status-indicator " + String(rtcPresent ? "green" : "red") + "'></span> ";
     html += rtcPresent ? "Present" : "Not detected";
     html += "</td></tr>\n";
 
     if (gpsEnabled) {
       // GPS Fix status with accuracy (HDOP converted to meters)
-      html += "<tr><th>GPS Fix</th><td>";
+      html += "<tr><th>GPS Fix</th><td id='hGpsFix'>";
       html += "<span class='status-indicator " + String(gpsStatusData.hasFix ? "green" : "red blink") + "'></span> ";
       html += gpsStatusData.hasFix ? "Valid Fix" : "No Fix";
       if (gpsStatusData.hasFix && gpsStatusData.hdop > 0) {
@@ -845,7 +847,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
       html += "</td></tr>\n";
 
       // Satellites (used / in view, or just used if in_view not available)
-      html += "<tr><th>Satellites</th><td>" + String(gpsStatusData.satellites);
+      html += "<tr><th>Satellites</th><td id='hSats'>" + String(gpsStatusData.satellites);
       if (gpsStatusData.satellites_in_view > 0) {
         html += " / " + String(gpsStatusData.satellites_in_view);
       }
@@ -866,14 +868,14 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     // PPS status (show when GPS is enabled and PPS pin is configured)
     if (gpsEnabled && gpsPpsPin >= 0) {
       bool ppsOk = isPPSActive();
-      html += "<tr><th>PPS Signal</th><td>";
+      html += "<tr><th>PPS Signal</th><td id='hPps'>";
       html += "<span class='status-indicator " + String(ppsOk ? "green" : "red blink") + "'></span> ";
       html += ppsOk ? "Active" : "No Signal";
       html += "</td></tr>\n";
     }
 
     // NTP Server status
-    html += "<tr><th>NTP Server</th><td>";
+    html += "<tr><th>NTP Server</th><td id='hNtp'>";
     html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
     if (gpsNtpEnabled && timeSynced) {
       bool ppsOk = isPPSActive();
@@ -908,6 +910,47 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "    })\n";
   html += "    .catch(error => alert('Error: ' + error));\n";
   html += "}\n\n";
+
+  // Every status cell on the home page that can change while it is open
+  html += R"rawjs(
+function setDot(id, cls, text) {
+  var c = document.getElementById(id);
+  if (c) c.innerHTML = "<span class='status-indicator " + cls + "'></span> " + text;
+}
+function updateHomeLive(d) {
+  var up = document.getElementById('hUptime');
+  if (up && d.roof_task) up.textContent = Math.floor(d.roof_task.uptime_ms / 60000) + ' minutes';
+  var cs = document.getElementById('hCurStatus');
+  if (cs) {
+    cs.textContent = d.status + (d.status === 'Error' && d.error_reason ? ' (' + d.error_reason.trim() + ')' : '');
+    cs.className = d.status === 'Open' ? 'status-open' : d.status === 'Closed' ? 'status-closed'
+                 : (d.status === 'Opening' || d.status === 'Closing') ? 'status-moving' : 'status-error';
+  }
+  var cfg = " <small style='margin-left: 10px; color: #b0b0b0;'><a href='/setup'>Configure in setup</a></small>";
+  if (d.safety_bypass) setDot('hWeather', 'orange', 'BYPASSED' + cfg);
+  else if (!d.weather_has_sensor) setDot('hWeather', 'gray', 'No Sensor' + cfg);
+  else if (d.weather_safe) setDot('hWeather', 'green', 'Safe' + cfg);
+  else setDot('hWeather', 'red', "<span style='color: #e74c3c; font-weight: bold;'>UNSAFE</span>" + cfg);
+  setDot('hParkPhys', d.park_physical ? 'green' : 'red', d.park_physical ? 'Parked' : 'Not Parked');
+  setDot('hLimOpen', d.limit_open ? 'green' : 'red', d.limit_open ? 'Triggered' : 'Not Triggered');
+  setDot('hLimClosed', d.limit_closed ? 'green' : 'red', d.limit_closed ? 'Triggered' : 'Not Triggered');
+  setDot('hK1', d.inverter_relay ? 'green' : 'red', d.inverter_relay ? 'ON' : 'OFF');
+  setDot('hAC', d.inverter_ac_power ? 'green' : 'red', d.inverter_ac_power ? 'ON' : 'OFF');
+  setDot('hMqttConn', d.mqtt_connected ? 'green' : 'red', d.mqtt_connected ? 'Yes' : 'No');
+  setDot('hTimeSrc', d.time_synced ? 'green' : 'red', d.time_source);
+  setDot('hRtc', d.rtc_present ? 'green' : 'red', d.rtc_present ? 'Present' : 'Not detected');
+  if (d.gps_enabled) {
+    var fix = d.gps_fix ? 'Valid Fix' + (d.gps_hdop > 0 ? ' (Accuracy: +/- ' + (d.gps_hdop * 2.5).toFixed(1) + 'm)' : '') : 'No Fix';
+    setDot('hGpsFix', d.gps_fix ? 'green' : 'red blink', fix);
+    var sats = document.getElementById('hSats');
+    if (sats) sats.textContent = d.gps_satellites + (d.gps_satellites_in_view > 0 ? ' / ' + d.gps_satellites_in_view : '');
+  }
+  setDot('hPps', d.pps_active ? 'green' : 'red blink', d.pps_active ? 'Active' : 'No Signal');
+  if (d.ntp_enabled && d.time_synced) setDot('hNtp', 'green', d.pps_active ? 'Active (port 123, PPS-disciplined)' : 'Active (port 123)');
+  else if (d.ntp_enabled) setDot('hNtp', 'orange', 'Waiting for time sync');
+  else setDot('hNtp', 'red', 'Disabled');
+}
+)rawjs";
 
   // Add real-time status update function for home page
   html += "function updateHomeStatus() {\n";
@@ -1004,6 +1047,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "        }\n";
   html += "        udpSensorsCell.innerHTML = html;\n";
   html += "      }\n";
+  html += "      updateHomeLive(data);\n";
   html += "    })\n";
   html += "    .catch(error => console.error('Error updating status:', error));\n";
   html += "}\n\n";
@@ -1100,6 +1144,15 @@ inline String getNetworkSettingsCard() {
   html += "<div id='netModeWarn' style='font-size:0.85em;color:#ffb74d;margin-bottom:12px;display:none'>"
           "WiFi is off while Ethernet is working. If Ethernet goes down, WiFi starts after 15 s "
           "(or the <strong>" + String(AP_SSID) + "</strong> setup access point if no WiFi network is saved).</div>";
+
+  // UDP park/weather sensors only work on the network their broadcasts reach
+  bool udpSensorsInUse = parkSensorType != PARK_SENSOR_PHYSICAL;
+  for (const auto& s : getDiscoveredSafetySensors()) { if (s.enabled && !s.bypassEnabled) udpSensorsInUse = true; }
+  html += "<div id='udpSensorWarn' data-inuse='" + String(udpSensorsInUse ? "1" : "0") + "' "
+          "style='display:none;font-size:0.85em;color:#000;background:#ffb74d;padding:10px 12px;border-radius:4px;margin-bottom:12px'>"
+          "<strong>UDP park / weather sensors are in use.</strong> Their broadcasts only reach the network they are sent on. "
+          "<span id='udpWarnText'></span> Put the sensors on the same network as the controller's primary interface, "
+          "or use Dual mode so both networks are listened to.</div>";
   html += "<div id='ethPinsBox'>";
   html += "<h3>W5500 Pins (GPIO)</h3>";
   html += "<div style='display:flex;gap:10px;flex-wrap:wrap'>";
@@ -1165,6 +1218,13 @@ function updateNetModeUI(){
   var m=document.getElementById('netMode').value;
   document.getElementById('netModeHelp').textContent=NET_MODE_HELP[m]||'';
   document.getElementById('netModeWarn').style.display=(m==='eth_wifi')?'block':'none';
+  var uw=document.getElementById('udpSensorWarn'), ut=document.getElementById('udpWarnText');
+  var udpText={
+    eth_wifi:'In this mode WiFi is off while Ethernet works, so sensors that only broadcast on the WiFi network go silent: within 5 s the data is stale and the roof refuses to move.',
+    wifi_eth:'If WiFi fails over to Ethernet, sensors that only broadcast on the WiFi network go silent and the roof refuses to move until WiFi is back.'
+  };
+  if(uw.getAttribute('data-inuse')==='1' && udpText[m]){ ut.textContent=udpText[m]; uw.style.display='block'; }
+  else uw.style.display='none';
   document.getElementById('gwRow').style.display=(m==='wifi')?'none':'flex';
   document.getElementById('gwHelp').style.display=(m==='wifi')?'none':'block';
   document.getElementById('prefRow').style.display=(m==='dual')?'block':'none';
@@ -1408,7 +1468,7 @@ inline String getSwitchConfigCard() {
   html += "<h3>Timing Settings</h3>";
 
   // Limit switch timeout monitoring toggle
-  html += "<div style='display: flex; justify-content: center; margin-bottom: 10px;'>";
+  html += "<div style='margin-bottom: 10px;'>";
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
   html += "<input type='checkbox' id='limitSwitchTimeoutEnabledToggle'" + String(limitSwitchTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('limitSwitchTimeoutEnabledToggle', 'limitSwitchTimeoutEnabledText', 'ENABLED', 'DISABLED')\">";
@@ -1429,7 +1489,7 @@ inline String getSwitchConfigCard() {
   html += "</div>";
 
   // Movement timeout monitoring toggle
-  html += "<div style='display: flex; justify-content: center; margin-bottom: 10px;'>";
+  html += "<div style='margin-bottom: 10px;'>";
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
   html += "<input type='checkbox' id='timeoutEnabledToggle'" + String(movementTimeoutEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('timeoutEnabledToggle', 'timeoutEnabledText', 'ENABLED', 'DISABLED')\">";

@@ -1272,9 +1272,19 @@ void handleApiStatus() {
   // Safety sensor states
   doc["weather_safe"]   = isWeatherSafe();
   doc["safety_bypass"]  = bypassSafetySensor;
+  {
+    bool hasEnabledSensor = false;
+    for (const auto& s : getDiscoveredSafetySensors()) { if (s.enabled && !s.bypassEnabled) hasEnabledSensor = true; }
+    doc["weather_has_sensor"] = hasEnabledSensor;
+  }
 
-  // Park sensor type
+  // Park sensor type, and the wired sensor on its own (telescope_parked is the combined result)
   doc["park_sensor_type"] = static_cast<int>(parkSensorType);
+  doc["park_physical"] = (digitalRead(TELESCOPE_PARKED_PIN) == TELESCOPE_PARKED);
+
+  // MQTT
+  doc["mqtt_enabled"] = mqttEnabled;
+  doc["mqtt_connected"] = mqttEnabled && mqttClient.connected();
 
   // UDP Park sensor data
   if (parkSensorType == PARK_SENSOR_UDP || parkSensorType == PARK_SENSOR_BOTH) {
@@ -1304,6 +1314,7 @@ void handleApiStatus() {
   // GPS status
   doc["gps_enabled"] = gpsEnabled;
   doc["ntp_enabled"] = gpsNtpEnabled;
+  doc["pps_active"] = gpsEnabled && gpsPpsPin >= 0 && isPPSActive();
   if (gpsEnabled) {
     GPSStatus gpsStatusData = getGPSStatus();
     doc["gps_fix"] = gpsStatusData.hasFix;
