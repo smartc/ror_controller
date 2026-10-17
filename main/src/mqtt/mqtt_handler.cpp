@@ -205,6 +205,7 @@ void publishStatusToMQTT() {
   // Add device identification information
   doc["device_id"] = uniqueID;
   doc["ip_address"] = netLocalIP().toString();
+  doc["network_interface"] = netActiveInterfaceName();
   doc["version"] = DEVICE_VERSION;
   
   // Add configuration information about the switches

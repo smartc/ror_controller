@@ -1,8 +1,8 @@
-# ESP32-S3 Roll-Off Roof Controller (v3)
+# ESP32-S3 Roll-Off Roof Controller (v4)
 
 ASCOM Alpaca compatible roll-off roof controller for remote observatory automation, built on ESP32-S3 with MQTT integration, weather safety interlock, and a browser-based control interface.
 
-![Version](https://img.shields.io/badge/version-3.4.2-blue)
+![Version](https://img.shields.io/badge/version-4.0.0-blue)
 ![Hardware](https://img.shields.io/badge/hardware-ESP32--S3-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
@@ -17,7 +17,7 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 ## Features
 
 ### Roof Control
-- Non-blocking state machine sequences relay operations without interrupting WiFi/MQTT
+- Non-blocking state machine sequences relay operations without interrupting networking/MQTT
 - Open, close, and stop via ASCOM, MQTT, or web interface
 - Limit switch detection with configurable trigger state and swap option
 - Two independent configurable timeouts: limit switch response (default 5s) and total movement (default 90s)
@@ -42,10 +42,27 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 - AC power detection via optocoupler distinguishes relay state from actual inverter output
 - Manual controls available from Roof Control page
 
+### Networking (v4)
+- **WiFi** is the primary interface and is used for first-time setup (AP mode)
+- **Optional W5500 wired Ethernet** (SPI on the H4 breakout) alongside WiFi
+- Both interfaces stay up with their own IPs; the web UI, Alpaca, discovery, NTP and sensor listeners answer on either
+- A **preferred interface** setting (default WiFi) picks the default route used for outbound traffic (MQTT) while both are up; if it drops, the other takes over automatically
+- AP mode only starts when WiFi fails **and** Ethernet has no IP, so a cabled controller with bad WiFi credentials stays reachable
+- Link, IP and active-interface changes are logged, which makes WiFi drops easy to tell apart from resets
+- Alpaca UniqueID and Home Assistant device IDs come from the factory WiFi MAC, so they don't change when Ethernet is added
+
+### Logging (v4)
+- Every log line is written to **FRAM** (MB85RC256V, I2C 0x50) the moment it's logged, so the lines leading up to a brownout or crash survive the reset
+- FRAM is copied to **flash** (LittleFS, `/logs/YYYY-MM-DD.log` per UTC day) every 15 minutes, when the FRAM ring is half full, before a web restart and after OTA; never while the roof is moving
+- Retention: 90 days and 2 MB total, oldest deleted first
+- Console page: live view, history across reboots (from FRAM), file list with download/delete, download-all, download FRAM buffer, flush now, clear all
+- Lines are timestamped in UTC once any time source is synced; lines logged before sync in the same boot are back-dated from uptime (marked `~`)
+
 ### Web Interface
 - Dark theme, responsive layout, 2-second live status polling
-- Consistent navigation on all pages: Home, Roof Control, Setup, WiFi Config, Console, Update
-- **Console page**: live ring-buffer debug log (50 entries), accessible remotely without serial monitor
+- Consistent navigation on all pages: Home, Roof Control, Setup, Console, Update
+- **Setup page tabs**: Device Configuration, Park Sensor, Safety Sensor, MQTT, GPS/RTC/NTP, Network
+- **Console page**: live debug log (200 lines), FRAM history across reboots, and log file management
 - Park sensor and safety sensor management: per-sensor enable, bypass, and remove
 - OTA firmware updates via ElegantOTA (auto-reboot after upload)
 
@@ -57,17 +74,19 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 
 ### GPS / NTP / RTC
 - Optional GPS module for time sync (configurable pins)
-- DS3231 RTC backup (I2C)
+- DS3231 RTC backup (I2C). If its oscillator-stop flag is set (e.g. dead backup battery) the RTC time is not trusted until GPS or network time rewrites it
+- Network time (SNTP) as a fallback when neither GPS nor the RTC has time; it also repairs an untrusted RTC. The built-in NTP server only serves GPS/RTC time
 - NTP server mode: serves time to local network devices
 - PPS signal support for sub-second NTP accuracy
 - Configurable timezone offset and DST
 
 ---
 
-## Hardware (v3)
+## Hardware (v3 PCB, v4 firmware)
 
-**Microcontroller**: ESP32-S3 44-pin  
-**Power**: 12V DC input, onboard 5V regulator
+**Microcontroller**: ESP32-S3 44-pin DevKit, **16 MB flash** (e.g. N16R8)  
+**Power**: 12V DC input, onboard 5V regulator  
+**Optional add-ons**: W5500 Ethernet module on the H4 breakout, MB85RC256V FRAM on I2C-EXT
 
 ### GPIO Assignments
 
@@ -77,15 +96,23 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 | GPIO5 | K2 - Roof button relay |
 | GPIO6 | K3 - Inverter soft-power relay |
 | GPIO7 | AC power detection (optocoupler) |
-| GPIO8 | I2C SDA (RTC) |
-| GPIO9 | I2C SCL (RTC) |
+| GPIO8 | I2C SDA (RTC 0x68, FRAM 0x50) |
+| GPIO9 | I2C SCL (RTC 0x68, FRAM 0x50) |
+| GPIO10 | W5500 CS (optional) |
+| GPIO11 | W5500 MOSI (optional) |
+| GPIO12 | GPS PPS (optional) |
+| GPIO13 | W5500 MISO (optional) |
+| GPIO14 | GPS data in (optional) |
 | GPIO35 | Open limit switch |
 | GPIO36 | Closed limit switch |
 | GPIO37 | Rain sensor (RG9) |
 | GPIO38-41 | Snow sensor (digital + RS485) |
 | GPIO42 | Physical park sensor |
+| GPIO46 | W5500 SCK (optional) |
 
-GPS pins are configurable via the web interface (default TX: GPIO14).
+GPS and W5500 pins are configurable on the Setup page (GPS/RTC/NTP and Network tabs). The W5500 runs without its INT pin (the driver polls every 10 ms). SCK sits on GPIO46 because only the ESP32 drives it, so it can't disturb that strapping pin during USB flashing. A GPS PPS signal on GPIO46 could.
+
+**PSRAM must stay disabled.** On boards with octal PSRAM (N8R8/N16R8) GPIO35-37 are shared with the PSRAM. They work as the limit-switch inputs only while PSRAM is off.
 
 ---
 
@@ -102,16 +129,29 @@ GPS pins are configurable via the web interface (default TX: GPIO14).
 | Setting | Value |
 |---------|-------|
 | USB CDC On Boot | Enabled |
-| Flash Size | 4MB |
-| Partition Scheme | Default 4MB with SPIFFS |
+| Flash Size | **16MB (128Mb)** |
+| Partition Scheme | **16M Flash (3MB APP/9.9MB FATFS)** (sets the 3 MB size limit; the actual table comes from `main/partitions.csv`) |
+| PSRAM | **Disabled** |
 | Upload Speed | 921600 |
 | USB Mode | Hardware CDC and JTAG |
+
+`main/partitions.csv` gives two 3 MB OTA app slots and a 9.9 MB LittleFS partition (`spiffs`) for the log archive. The Arduino build picks it up automatically from the sketch folder.
+
+### Upgrading from v3 (one-time USB flash)
+
+v4 changes the partition table and no longer fits v3's 1.25 MB app slot, so **OTA from v3 to v4 is rejected**. Flash once over USB; after that, OTA works as before.
+
+1. In the IDE, use the board settings above and make sure **Erase All Flash Before Sketch Upload is Disabled**.
+2. Upload. The IDE writes the bootloader, partition table, boot_app0 and the app. The settings partition (NVS at 0x9000) is not touched, so all saved settings carry over.
+3. On first boot the log partition is formatted automatically.
+
+Alternatively, flash a spare board with v4, configure it, and swap it in.
 
 ### First Boot
 
 1. Device starts in AP mode: SSID `RoofController`, password `RoofController`
 2. Connect and open `http://192.168.4.1`
-3. Enter WiFi credentials under WiFi Config
+3. Enter WiFi credentials on the Setup page, Network tab (or `/wificonfig` to scan)
 4. Device reboots and connects to your network
 
 ---
@@ -120,9 +160,14 @@ GPS pins are configurable via the web interface (default TX: GPIO14).
 
 All settings are saved to NVS (survives reboots) and configurable via the web interface.
 
-**Setup page** (`/setup`): pin assignments, trigger states, timeout values, MQTT broker, park sensor type, safety sensor enable/bypass, GPS/NTP settings, timezone
+**Setup page** (`/setup`), in tabs:
+- **Device Configuration**: trigger states, switch swap, park switch type, inverter and timeout settings, restart/factory reset
+- **Park Sensor** / **Safety Sensor**: sensor types, per-sensor enable/bypass/remove, auto-close
+- **MQTT**: broker, credentials, client ID, topic prefix, keepalive
+- **GPS / RTC / NTP**: GPS enable and pins, NTP server, timezone/DST
+- **Network**: live WiFi/Ethernet status, WiFi credentials, W5500 enable and pins, preferred interface, hostname
 
-**WiFi Config** (`/wificonfig`): SSID and password
+**WiFi scan** (`/wificonfig`): scan for networks (also used in AP mode)
 
 **Roof Control** (`/control`): park sensor bypass and safety sensor bypass toggles accessible here for quick override without navigating to setup
 
@@ -153,7 +198,8 @@ All settings are saved to NVS (survives reboots) and configurable via the web in
   "limit_closed": true,
   "device_id": "ESP32-XXXXXX",
   "ip_address": "192.168.1.100",
-  "version": "3.3.0"
+  "network_interface": "WiFi",
+  "version": "4.0.0"
 }
 ```
 
@@ -208,8 +254,17 @@ mqtt:
 | `/control` | GET | Roof control page |
 | `/setup` | GET/POST | Configuration page |
 | `/console` | GET | Debug log viewer |
-| `/console.json` | GET | Raw log JSON |
-| `/api/status` | GET | Live status JSON |
+| `/console.json` | GET | Raw log JSON (current boot, RAM) |
+| `/logs.json` | GET | FRAM/archive status and log file list |
+| `/logs/download?f=NAME` | GET | Download one archived log file |
+| `/logs/download_all` | GET | All archived logs as one file (flushes FRAM first) |
+| `/logs/fram` | GET | Current FRAM buffer as text |
+| `/logs/recent.json?n=N` | GET | Last N FRAM records (spans reboots) |
+| `/logs/flush` | POST | Copy FRAM to flash now |
+| `/logs/delete?f=NAME` | POST | Delete one archived log file |
+| `/logs/clear` | POST | Clear FRAM and all archived logs |
+| `/network_settings` | POST | Ethernet pins, preferred interface, hostname (restart to apply) |
+| `/api/status` | GET | Live status JSON (includes `network` object) |
 | `/open` | POST | Open roof |
 | `/close` | POST | Close roof |
 | `/stop` | POST | Stop movement |
@@ -232,6 +287,15 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 ---
 
 ## Changelog
+
+### v4.0.0 (2026-10-17)
+- **16 MB flash layout** (`main/partitions.csv`): 3 MB OTA app slots plus a 9.9 MB log partition. One-time USB flash needed when upgrading from v3; settings carry over.
+- **W5500 Ethernet** alongside WiFi: both interfaces up, preferred interface sets the default route, automatic failover, no AP mode while Ethernet is up. Network tab on the Setup page.
+- **Persistent logging**: FRAM black box (every line, survives power loss) plus a LittleFS archive (daily files, 90 days / 2 MB). Console page gains history across reboots, downloads, flush and clear.
+- **Time**: network time (SNTP) fallback; DS3231 oscillator-stop flag honoured and cleared; date rollover fixed for RTC/network time.
+- **Setup page** split into tabs and streamed (lower peak heap); saving a form returns to the same tab.
+- Log hygiene: AP password no longer logged; chatty page-size lines moved to verbose.
+- Fix: console live view never refreshing.
 
 ### v3.4.2 (2026-10-17)
 - **Runtime park sensor interlock**: if the telescope becomes unparked while the roof is actively moving (or in the inverter startup sequence), the controller immediately kills K1 inverter power, sets `ROOF_ERROR`, and publishes an MQTT alert. Requires operator acknowledgement before further movement.
