@@ -43,6 +43,12 @@ bool swapLimitSwitches = false;                 // Flag for swapping limit switc
 // Error tracking for ASCOM compliance (error reason for Slewing exception)
 String roofErrorReason = "";
 
+// Error auto-recovery: an error clears itself when the roof reaches a limit
+// switch *after* the error began (manual move, or a slow roof finishing after a
+// timeout). Errors that need an operator (park interlock) set roofErrorNeedsAck.
+static unsigned long roofErrorSince = 0;
+static bool roofErrorNeedsAck = false;
+
 // Timestamps for various operations
 unsigned long lastSwitchTime = 0;
 unsigned long movementStartTime = 0;
@@ -237,9 +243,21 @@ void determineInitialRoofStatus() {
   roofMarkChanged();
 }
 
+// True if a limit switch last changed (to triggered) after the current error began,
+// i.e. the roof has physically arrived at a known position since then.
+static bool limitReachedSinceError(unsigned long switchChangedAt) {
+  return !roofErrorNeedsAck && (long)(switchChangedAt - roofErrorSince) > 0;
+}
+
 // Update roof status based on limit switches
 void updateRoofStatus() {
   unsigned long currentTime = millis();
+
+  // Note when the current error began (runs every tick, before any early return)
+  static bool wasInError = false;
+  if (roofStatus == ROOF_ERROR && !wasInError) roofErrorSince = currentTime;
+  wasInError = (roofStatus == ROOF_ERROR);
+  if (!wasInError) roofErrorNeedsAck = false;
 
   // Check whether we have just started moving the roof.  If so, give it time before we revise the roof state.
   if (currentTime - movementStartTime < limitSwitchTimeout) {
@@ -300,8 +318,14 @@ void updateRoofStatus() {
       shutdownInverterPower();
     }
     else if (roofStatus == ROOF_ERROR) {
-      // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
-      // Error must be explicitly cleared via clearRoofError() or by starting a new movement.
+      // A switch that was already triggered when the error began (e.g. "failed to
+      // start") proves nothing; one reached afterwards is a known-good position.
+      if (limitReachedSinceError(lastOpenStateTime)) {
+        statusMessage = "Roof reached open limit - clearing error (was: " + roofErrorReason + ")";
+        roofErrorReason = "";
+        roofStatus = ROOF_OPEN;
+        shutdownInverterPower();
+      }
     }
     else if (roofStatus != ROOF_OPEN) {
       // Transitioning to OPEN from CLOSED state (manual movement detected)
@@ -329,8 +353,12 @@ void updateRoofStatus() {
       shutdownInverterPower();
     }
     else if (roofStatus == ROOF_ERROR) {
-      // Stay in ERROR state - don't auto-clear just because limit switch is triggered.
-      // Error must be explicitly cleared via clearRoofError() or by starting a new movement.
+      if (limitReachedSinceError(lastClosedStateTime)) {
+        statusMessage = "Roof reached closed limit - clearing error (was: " + roofErrorReason + ")";
+        roofErrorReason = "";
+        roofStatus = ROOF_CLOSED;
+        shutdownInverterPower();
+      }
     }
     else if (roofStatus != ROOF_CLOSED) {
       // Transitioning to CLOSED from OPEN state (manual movement detected)
@@ -1164,6 +1192,7 @@ void checkParkSensorInterlock() {
   Debug.println(roofErrorReason);
 
   roofStatus = ROOF_ERROR;
+  roofErrorNeedsAck = true;  // never auto-clears: someone must check the telescope
   roofOpTarget = TARGET_NONE;
 
   // Abort any in-progress relay sequence and release all relays

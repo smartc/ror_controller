@@ -28,6 +28,7 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 - **Weather/sky safety**: receives UDP broadcasts from safety sensor devices; blocks roof opening when any enabled sensor reports unsafe conditions. Fail-safe: an enabled sensor that goes offline is treated as unsafe
 - **Auto-close**: optionally closes the roof automatically when weather becomes unsafe (requires telescope parked)
 - All safety interlocks have bypass toggles accessible from both the Setup and Roof Control pages
+- **Error auto-recovery**: an error (e.g. movement timeout, or a manual move that left the roof between limits) clears itself once the roof reaches a limit switch *after* the error began; the original reason is kept in the log. Errors where the switch never changed ("failed to start", both limits triggered) and the park-interlock emergency stop still need a manual clear
 - **Firmware updates blocked while moving**: OTA uploads are refused (HTTP 409) while the roof is moving or a relay sequence is running, and an upload in progress is aborted if a move starts (flash writes stall both CPU cores)
 
 > **CAUTION — Shore-power openers with no relay on K1:**
@@ -302,6 +303,7 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 - **Setup page** split into tabs and streamed (lower peak heap); saving a form returns to the same tab.
 - **Roof task**: limit switches, interlocks, timeouts, relay sequences and weather auto-close run in a dedicated 10 ms FreeRTOS task with a watchdog, independent of web/MQTT/logging. Stale network inputs let a move finish but block new ones.
 - OTA refused while the roof is moving; an in-flight upload aborts if a move starts.
+- Roof errors clear themselves when the roof next reaches a limit switch (the log keeps the reason); the park-interlock stop still needs a manual clear.
 - Log hygiene: AP password no longer logged; chatty page-size lines moved to verbose.
 - Fix: console live view never refreshing.
 
