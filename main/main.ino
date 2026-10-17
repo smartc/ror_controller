@@ -13,13 +13,18 @@
  *        - AC Power Detection via optocoupler (GPIO7) - NEW
  *        - Support for 12V snow/rain sensor - NEW
  *
- * COMPILE SETTINGS for ESP32-S3:
+ * COMPILE SETTINGS for ESP32-S3 (v4):
  *        - Board: ESP32-S3 Dev Module
  *        - USB CDC On Boot: Enabled
- *        - Flash Size: 4MB (or larger)
- *        - Partition Scheme: Default 4MB with SPIFFS
+ *        - Flash Size: 16MB (128Mb)        <-- required
+ *        - Partition Scheme: 16M Flash (3MB APP/9.9MB FATFS)  <-- sets the 3MB size limit;
+ *          the actual table comes from partitions.csv in this folder (same app sizes)
+ *        - PSRAM: Disabled                 <-- required: octal PSRAM shares GPIO35/36 (limit switches)
  *        - Upload Speed: 921600
  *        - USB Mode: Hardware CDC and JTAG
+ *
+ *        v3 -> v4 needs one USB flash (bootloader + partition table change); OTA
+ *        from v3 is rejected because v4 no longer fits the old 1.25MB app slot.
  *
  */
 
@@ -41,6 +46,7 @@
 
 // For reset reason detection
 #include "esp_system.h"
+#include "esp_partition.h"
 #include "soc/rtc_cntl_reg.h"
 
 // WiFi credentials and configuration
@@ -76,6 +82,20 @@ String getResetReasonString() {
   }
 }
 
+// v4 needs the 16MB layout from partitions.csv. A board flashed with the wrong
+// IDE settings still runs, but without the log archive, so make that loud.
+void checkFlashLayout() {
+  uint32_t flashSize = ESP.getFlashChipSize();
+  const esp_partition_t* logPart =
+      esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "spiffs");
+  Debug.printf("Flash: %lu MB, log partition: %s\n", flashSize / (1024 * 1024),
+               logPart ? (String(logPart->size / 1024) + " KB").c_str() : "MISSING");
+  if (flashSize < 16UL * 1024 * 1024 || logPart == nullptr || logPart->size < 0x100000) {
+    Debug.println("ERROR: firmware not built for the 16MB layout (Flash Size 16MB + partitions.csv).");
+    Debug.println("ERROR: log archive disabled; FRAM log and console still work.");
+  }
+}
+
 void setup() {
   // Initialize debug output
   Debug.begin(115200);
@@ -108,10 +128,11 @@ void setup() {
     Debug.println("Consider setting DISABLE_BROWNOUT_DETECTION=1 in config.h");
   }
 
-  Debug.println("ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v3)");
+  Debug.println("ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v4)");
   Debug.println("Version: " + String(DEVICE_VERSION));
   Debug.println("Manufacturer: " + String(DEVICE_MANUFACTURER));
-  
+  checkFlashLayout();
+
   // Load configuration from preferences
   loadConfiguration();
   

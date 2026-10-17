@@ -63,6 +63,7 @@ void handleGPS();                         // Process GPS data in main loop
 // Function prototypes - RTC
 void initRTC();                           // Initialize RTC module (DS3231)
 bool isRTCPresent();                      // Check if RTC is detected
+bool readRTCOscillatorStopped();          // DS3231 OSF flag: true = stored time is stale
 bool readRTC(GPSTime* time);              // Read time from RTC
 bool writeRTC(const GPSTime* time);       // Write time to RTC
 void syncRTCFromGPS();                    // Sync RTC from GPS when GPS has fix

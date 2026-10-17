@@ -100,6 +100,14 @@ void initRTC() {
     rtcPresent = true;
     Debug.println("DS3231 RTC detected");
 
+    // OSF (status reg bit 7) is set when the oscillator has stopped since the time
+    // was last written, e.g. a dead backup battery. The stored time is then stale
+    // even if it looks plausible, so don't trust it until GPS rewrites it.
+    if (readRTCOscillatorStopped()) {
+      Debug.println("RTC oscillator-stop flag set (backup battery?) - RTC time not trusted until GPS sync");
+      return;
+    }
+
     // Try to read time from RTC
     GPSTime rtcReadTime;
     if (readRTC(&rtcReadTime) && rtcReadTime.valid) {
@@ -119,6 +127,17 @@ void initRTC() {
     rtcPresent = false;
     Debug.println("DS3231 RTC not detected");
   }
+}
+
+// True if the DS3231 reports its oscillator stopped since the time was last set.
+// A failed read is treated as stopped so a flaky bus never yields trusted time.
+bool readRTCOscillatorStopped() {
+  Wire.beginTransmission(DS3231_ADDRESS);
+  Wire.write(DS3231_REG_STATUS);
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom(DS3231_ADDRESS, (uint8_t)1) != 1) {
+    return true;
+  }
+  return (Wire.read() & DS3231_STATUS_OSF) != 0;
 }
 
 // Check if RTC is present
@@ -188,6 +207,19 @@ bool writeRTC(const GPSTime* time) {
 
   if (Wire.endTransmission() != 0) {
     return false;
+  }
+
+  // Time is now valid again: clear OSF so the next boot trusts the RTC
+  Wire.beginTransmission(DS3231_ADDRESS);
+  Wire.write(DS3231_REG_STATUS);
+  if (Wire.endTransmission(false) == 0 && Wire.requestFrom(DS3231_ADDRESS, (uint8_t)1) == 1) {
+    uint8_t status = Wire.read();
+    if (status & DS3231_STATUS_OSF) {
+      Wire.beginTransmission(DS3231_ADDRESS);
+      Wire.write(DS3231_REG_STATUS);
+      Wire.write(status & ~DS3231_STATUS_OSF);
+      Wire.endTransmission();
+    }
   }
 
   Debug.printf("RTC time set to: %04d-%02d-%02d %02d:%02d:%02d\n",

@@ -18,7 +18,7 @@
 #define DISABLE_BROWNOUT_DETECTION 0
 
 // Version Information
-#define DEVICE_VERSION "3.4.2"  // v3.4.2: runtime park sensor interlock (halt roof if telescope unparks during movement)
+#define DEVICE_VERSION "4.0.0"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
 
@@ -47,12 +47,14 @@ extern int gpsPpsPin;                       // GPS PPS pin for precise timing (-
 // Default GPS Pin Settings
 const int DEFAULT_GPS_TX_PIN = 14;          // Default: GPIO14
 const int DEFAULT_GPS_RX_PIN = -1;          // Default: disabled (not needed for receive-only)
-const int DEFAULT_GPS_PPS_PIN = -1;         // Default: disabled (not yet wired)
+const int DEFAULT_GPS_PPS_PIN = 12;         // Default: GPIO12 (IO46 is reserved for W5500 SCK)
 
 // I2C Pins for RTC (DS3231)
 const int I2C_SDA_PIN = 8;                  // I2C SDA
 const int I2C_SCL_PIN = 9;                  // I2C SCL
 const uint8_t DS3231_ADDRESS = 0x68;        // DS3231 I2C address
+const uint8_t DS3231_REG_STATUS = 0x0F;     // DS3231 status register
+const uint8_t DS3231_STATUS_OSF = 0x80;     // Oscillator Stop Flag (time invalid since last set)
 
 // Sensor Pins - defined as extern, will be set at runtime based on preferences
 extern int LIMIT_SWITCH_OPEN_PIN;           // Limit switch at roof open position
