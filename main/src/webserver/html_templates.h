@@ -14,6 +14,7 @@
 #include "../safety/safety_sensor.h"
 #include "../sensors/gps_handler.h"
 #include <WiFi.h>
+#include "../net/network_manager.h"
 
 // Reset diagnostics (from main.ino)
 extern String lastResetReason;
@@ -559,7 +560,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<h2>Device Information</h2>\n";
   html += "<table class='status-table'>\n";
   html += "<tr><th>Unique ID</th><td>" + uniqueID + "</td></tr>\n";
-  html += "<tr><th>IP Address</th><td>" + WiFi.localIP().toString() + "</td></tr>\n";
+  html += "<tr><th>IP Address</th><td>" + netLocalIP().toString() + "</td></tr>\n";
   html += "<tr><th>MAC Address</th><td>" + WiFi.macAddress() + "</td></tr>\n";
   html += "<tr><th>Firmware Version</th><td>" + String(DEVICE_VERSION) + "</td></tr>\n";
   html += "<tr><th>Uptime</th><td>" + String(millis() / 1000 / 60) + " minutes</td></tr>\n";
@@ -771,7 +772,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     doc["limit_closed"] = closedSwitchTriggered;
     doc["bypass_enabled"] = bypassParkSensor;
     doc["device_id"] = uniqueID;
-    doc["ip_address"] = WiFi.localIP().toString();
+    doc["ip_address"] = netLocalIP().toString();
     
     String lastStatusJson;
     serializeJsonPretty(doc, lastStatusJson);
@@ -1028,7 +1029,7 @@ inline String getStatusCard() {
   html += "<tr><th>Manufacturer</th><td>" + String(DEVICE_MANUFACTURER) + "</td></tr>";
   html += "<tr><th>Version</th><td>" + String(DEVICE_VERSION) + "</td></tr>";
   html += "<tr><th>Unique ID</th><td>" + uniqueID + "</td></tr>";
-  html += "<tr><th>IP Address</th><td>" + WiFi.localIP().toString() + "</td></tr>";
+  html += "<tr><th>IP Address</th><td>" + netLocalIP().toString() + "</td></tr>";
   html += "<tr><th>Roof Status</th><td class='" + statusClass + "'>" + statusString + "</td></tr>";
   html += "<tr><th>Telescope Parked</th><td>" + String(telescopeParked ? "Yes" : "No") + "</td></tr>";
   html += "<tr><th>Slaved</th><td>" + String(slaved ? "Yes" : "No") + "</td></tr>";
@@ -1745,9 +1746,9 @@ inline String getGPSConfigCard() {
   // Usage information
   html += "<div style='margin-top: 15px; padding: 10px; background-color: #333; border-radius: 4px; font-size: 0.9em;'>";
   html += "<p style='margin: 5px 0; color: #b0b0b0;'><strong>NTP Client Configuration:</strong></p>";
-  html += "<p style='margin: 5px 0; color: #81c784;'>Server: <code>" + WiFi.localIP().toString() + "</code></p>";
-  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Linux: <code>ntpdate -q " + WiFi.localIP().toString() + "</code></small></p>";
-  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Windows: <code>w32tm /stripchart /computer:" + WiFi.localIP().toString() + "</code></small></p>";
+  html += "<p style='margin: 5px 0; color: #81c784;'>Server: <code>" + netLocalIP().toString() + "</code></p>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Linux: <code>ntpdate -q " + netLocalIP().toString() + "</code></small></p>";
+  html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Windows: <code>w32tm /stripchart /computer:" + netLocalIP().toString() + "</code></small></p>";
   html += "<p style='margin: 5px 0; color: #ffb74d;'><small>Note: NTP server requires time to be synced from GPS or RTC</small></p>";
   html += "</div>";
 

@@ -80,6 +80,7 @@ void handleApiStatus();              // Return JSON status for AJAX polling
 void handleGPSEnabled();             // Enable/disable GPS module
 void handleGPSNtpEnabled();          // Enable/disable NTP server
 void handleGPSPins();                // Set GPS pin configuration
+void handleNetworkSettings();        // Save Ethernet pins / preferred interface / hostname
 void handleGPSStatus();              // Get GPS status (JSON)
 
 // Timezone control handlers

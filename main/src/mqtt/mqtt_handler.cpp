@@ -8,6 +8,8 @@
 #include "../sensors/park_sensor_udp.h"
 #include "../safety/safety_sensor.h"
 #include "../debug/Debug.h"
+#include "../net/network_manager.h"
+#include <esp_mac.h>
 #include <Arduino.h>
 
 // Global MQTT configuration variables
@@ -202,7 +204,7 @@ void publishStatusToMQTT() {
 
   // Add device identification information
   doc["device_id"] = uniqueID;
-  doc["ip_address"] = WiFi.localIP().toString();
+  doc["ip_address"] = netLocalIP().toString();
   doc["version"] = DEVICE_VERSION;
   
   // Add configuration information about the switches
@@ -341,7 +343,7 @@ void publishDiscovery() {
     device["manufacturer"] = DEVICE_MANUFACTURER;
     device["sw_version"] = DEVICE_VERSION;
     // Add configuration URL to make it clickable in HA
-    device["configuration_url"] = "http://" + WiFi.localIP().toString();
+    device["configuration_url"] = "http://" + netLocalIP().toString();
     
     // Serialize and publish
     String topicPath = discoveryPrefix + "/cover/" + deviceId + "_roof_cover/config"; // Modified topic path
@@ -382,7 +384,7 @@ void publishDiscovery() {
     device["manufacturer"] = DEVICE_MANUFACTURER;
     device["sw_version"] = DEVICE_VERSION;
     // Add configuration URL to make it clickable in HA
-    device["configuration_url"] = "http://" + WiFi.localIP().toString();
+    device["configuration_url"] = "http://" + netLocalIP().toString();
     
     // Serialize and publish
     String topicPath = discoveryPrefix + "/binary_sensor/" + deviceId + "_roof_error/config";
@@ -422,7 +424,7 @@ void publishDiscovery() {
     device["manufacturer"] = DEVICE_MANUFACTURER;
     device["sw_version"] = DEVICE_VERSION;
     // Add configuration URL to make it clickable in HA
-    device["configuration_url"] = "http://" + WiFi.localIP().toString();
+    device["configuration_url"] = "http://" + netLocalIP().toString();
     
     // Serialize and publish
     String topicPath = discoveryPrefix + "/sensor/" + deviceId + "_roof_status/config";
@@ -456,7 +458,7 @@ void forceDiscovery() {
   if (uniqueID.length() == 0) {
     // If for some reason uniqueID is empty, regenerate it
     uint8_t mac[6];
-    WiFi.macAddress(mac);
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);  // factory STA MAC: stable whichever interface is up
     uniqueID = "ESP32_ROF_";
     for (int i = 0; i < 6; i++) {
       char buf[3];

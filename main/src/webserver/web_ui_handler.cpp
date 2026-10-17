@@ -11,6 +11,7 @@
 #include "../safety/safety_sensor.h"
 #include "../sensors/gps_handler.h"
 #include "../debug/Debug.h"
+#include "../net/network_manager.h"
 #include <HTTPClient.h>
 
 // Standard Web Server
@@ -325,7 +326,7 @@ void handleSetPins() {
         Debug.println("MQTT disconnected");
       }
       // If MQTT was enabled, try to connect
-      else if (mqttEnabled && !mqttClient.connected() && WiFi.status() == WL_CONNECTED) {
+      else if (mqttEnabled && !mqttClient.connected() && netIsConnected()) {
         reconnectMQTT();
         message += "MQTT connection attempted. ";
         Debug.println("MQTT connection attempted");
@@ -591,6 +592,9 @@ void initWebUI() {
   // Add WiFi configuration routes
   webUiServer.on("/wificonfig", HTTP_GET, handleWifiConfig);
   webUiServer.on("/wificonfig", HTTP_POST, handleWifiConfigPost);
+
+  // Network (Ethernet / interface preference) settings
+  webUiServer.on("/network_settings", HTTP_POST, handleNetworkSettings);
 
   // Add ElegantOTA functionality
   ElegantOTA.begin(&webUiServer);
@@ -1169,7 +1173,7 @@ void handleClearError() {
 
 // API endpoint for real-time status updates (returns JSON)
 void handleApiStatus() {
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(3072);
 
   // Roof status
   doc["status"] = getRoofStatusString();
@@ -1233,6 +1237,9 @@ void handleApiStatus() {
   }
 
   String jsonResponse;
+  // Network interfaces (v4)
+  fillNetworkStatus(doc.createNestedObject("network"));
+
   serializeJson(doc, jsonResponse);
 
   webUiServer.send(200, "application/json", jsonResponse);
@@ -1357,6 +1364,7 @@ void handleDSTEnabled() {
 // Handler for setting GPS pin configuration
 void handleGPSPins() {
   bool changed = false;
+  const int oldTx = gpsTxPin, oldRx = gpsRxPin, oldPps = gpsPpsPin;
 
   if (webUiServer.hasArg("tx_pin")) {
     int txPin = webUiServer.arg("tx_pin").toInt();
@@ -1382,6 +1390,16 @@ void handleGPSPins() {
     }
   }
 
+  if (changed && ethEnabled) {
+    // Re-check against the Ethernet pins with the new GPS pins in place
+    String conflict = ethPinConflict(ethCsPin, ethSckPin, ethMosiPin, ethMisoPin, ethIrqPin, ethRstPin);
+    if (gpsEnabled && conflict.length() > 0) {
+      gpsTxPin = oldTx; gpsRxPin = oldRx; gpsPpsPin = oldPps;
+      webUiServer.send(400, "text/plain", "GPS pins not saved: " + conflict);
+      return;
+    }
+  }
+
   if (changed) {
     // Save to preferences
     Preferences prefs;
@@ -1396,4 +1414,48 @@ void handleGPSPins() {
   } else {
     webUiServer.send(400, "text/plain", "No valid pin parameters provided");
   }
+}
+// Save Ethernet / interface settings (Network tab). Takes effect after restart.
+void handleNetworkSettings() {
+  bool newEthEnabled = webUiServer.hasArg("eth_enabled") ? webUiServer.arg("eth_enabled") == "true" : ethEnabled;
+  int cs   = webUiServer.hasArg("eth_cs")   ? webUiServer.arg("eth_cs").toInt()   : ethCsPin;
+  int sck  = webUiServer.hasArg("eth_sck")  ? webUiServer.arg("eth_sck").toInt()  : ethSckPin;
+  int mosi = webUiServer.hasArg("eth_mosi") ? webUiServer.arg("eth_mosi").toInt() : ethMosiPin;
+  int miso = webUiServer.hasArg("eth_miso") ? webUiServer.arg("eth_miso").toInt() : ethMisoPin;
+  int irq  = webUiServer.hasArg("eth_irq")  ? webUiServer.arg("eth_irq").toInt()  : ethIrqPin;
+  int rst  = webUiServer.hasArg("eth_rst")  ? webUiServer.arg("eth_rst").toInt()  : ethRstPin;
+
+  if (newEthEnabled) {
+    String conflict = ethPinConflict(cs, sck, mosi, miso, irq, rst);
+    if (conflict.length() > 0) {
+      webUiServer.send(400, "text/plain", "Ethernet pins not saved: " + conflict);
+      return;
+    }
+  }
+
+  if (webUiServer.hasArg("preferred")) {
+    netPreferred = webUiServer.arg("preferred") == "ethernet" ? NET_IF_ETH : NET_IF_WIFI;
+  }
+  if (webUiServer.hasArg("hostname")) {
+    String host = webUiServer.arg("hostname");
+    host.trim();
+    bool valid = host.length() > 0 && host.length() < NET_HOSTNAME_SIZE;
+    for (size_t i = 0; valid && i < host.length(); i++) {
+      char c = host[i];
+      valid = isalnum(c) || (c == '-' && i > 0 && i < host.length() - 1);
+    }
+    if (!valid) {
+      webUiServer.send(400, "text/plain", "Hostname must be letters, digits and inner hyphens only");
+      return;
+    }
+    strncpy(netHostname, host.c_str(), sizeof(netHostname) - 1);
+    netHostname[sizeof(netHostname) - 1] = '\0';
+  }
+
+  ethEnabled = newEthEnabled;
+  ethCsPin = cs; ethSckPin = sck; ethMosiPin = mosi; ethMisoPin = miso; ethIrqPin = irq; ethRstPin = rst;
+  saveNetworkConfiguration();
+  Debug.printf("Network settings updated: Ethernet=%s, preferred=%s, hostname=%s\n",
+               ethEnabled ? "enabled" : "disabled", netPreferred == NET_IF_ETH ? "Ethernet" : "WiFi", netHostname);
+  webUiServer.send(200, "text/plain", "Network settings saved. Restart required for changes to take effect.");
 }

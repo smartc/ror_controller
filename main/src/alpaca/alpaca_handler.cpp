@@ -8,6 +8,8 @@
 #include "../roof/roof_controller.h"
 #include "../safety/safety_sensor.h"
 #include "../debug/Debug.h"
+#include "../net/network_manager.h"
+#include <esp_mac.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 
@@ -21,7 +23,7 @@ unsigned int serverTransactionID = 1;
 void setupAlpacaAPI() {
   // Generate a unique ID based on ESP32's MAC address
   uint8_t mac[6];
-  WiFi.macAddress(mac);
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);  // factory STA MAC: stable whichever interface is up
   uniqueID = "ESP32_ROF_";
   for (int i = 0; i < 6; i++) {
     char buf[3];
@@ -30,7 +32,7 @@ void setupAlpacaAPI() {
   }
   
   // Setup MDNS responder
-  if (MDNS.begin("rolloffroof")) {
+  if (MDNS.begin(netHostname)) {
     Serial.println("MDNS responder started");
     MDNS.addService("http", "tcp", ALPACA_PORT);
   }
@@ -48,7 +50,7 @@ void setupAlpacaAPI() {
   
   // Print network info
   Serial.print("ESP32 IP address: ");
-  Serial.println(WiFi.localIP());
+  Serial.println(netLocalIP());
   Serial.print("Discovery port: ");
   Serial.println(ALPACA_DISCOVERY_PORT);
   Serial.print("Alpaca API port: ");
@@ -413,7 +415,7 @@ void handleAction() {
 }
 
 void handleRedirectSetup() {
-  String redirectUrl = "http://" + WiFi.localIP().toString() + ":" + String(WEB_UI_PORT) + "/setup";
+  String redirectUrl = "http://" + netLocalIP().toString() + ":" + String(WEB_UI_PORT) + "/setup";
   Serial.println("Redirecting to: " + redirectUrl);
   
   // Send HTTP 302 redirect

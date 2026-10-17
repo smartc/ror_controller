@@ -140,6 +140,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define MQTT_PASSWORD_SIZE 64
 #define MQTT_CLIENTID_SIZE 32
 #define MQTT_TOPIC_SIZE 64
+#define NET_HOSTNAME_SIZE 32
 
 // Preferences namespace and keys
 #define PREFERENCES_NAMESPACE "roofConfig"
@@ -173,6 +174,29 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_GPS_PPS_PIN "gpsPpsPin"
 #define PREF_TIMEZONE_OFFSET "tzOffset"
 #define PREF_DST_ENABLED "dstEnabled"
+
+// Network (v4): W5500 Ethernet + interface preference
+#define PREF_ETH_ENABLED "ethEnabled"
+#define PREF_ETH_CS_PIN "ethCs"
+#define PREF_ETH_SCK_PIN "ethSck"
+#define PREF_ETH_MOSI_PIN "ethMosi"
+#define PREF_ETH_MISO_PIN "ethMiso"
+#define PREF_ETH_IRQ_PIN "ethIrq"
+#define PREF_ETH_RST_PIN "ethRst"
+#define PREF_NET_PREFERRED "netPreferred"
+#define PREF_NET_HOSTNAME "netHostname"
+
+// W5500 defaults (breakout H4). INT is optional: -1 = driver polls every 10 ms.
+// SCK sits on IO46 because only the ESP32 drives it, so it can't disturb the
+// IO46 strapping level during USB download (a GPS PPS on IO46 could).
+const int DEFAULT_ETH_CS_PIN = 10;
+const int DEFAULT_ETH_SCK_PIN = 46;
+const int DEFAULT_ETH_MOSI_PIN = 11;
+const int DEFAULT_ETH_MISO_PIN = 13;
+const int DEFAULT_ETH_IRQ_PIN = -1;
+const int DEFAULT_ETH_RST_PIN = -1;
+const int ETH_SPI_MHZ = 20;
+#define DEFAULT_NET_HOSTNAME "rolloffroof"
 const int NTP_PORT = 123;                   // Standard NTP port
 const int16_t DEFAULT_TIMEZONE_OFFSET = 0;  // Default: UTC (0 minutes)
 const bool DEFAULT_DST_ENABLED = false;     // Default: DST disabled

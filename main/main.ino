@@ -43,17 +43,12 @@
 #include "src/sensors/park_sensor_udp.h"
 #include "src/safety/safety_sensor.h"
 #include "src/sensors/gps_handler.h"
+#include "src/net/network_manager.h"
 
 // For reset reason detection
 #include "esp_system.h"
 #include "esp_partition.h"
 #include "soc/rtc_cntl_reg.h"
-
-// WiFi credentials and configuration
-char ssid[SSID_SIZE] = DEFAULT_WIFI_SSID;
-char password[PASSWORD_SIZE] = DEFAULT_WIFI_PASSWORD;
-bool apMode = false;
-unsigned long apStartTime = 0;
 
 // Timing variables
 unsigned long lastMqttReconnectAttempt = 0;
@@ -135,6 +130,7 @@ void setup() {
 
   // Load configuration from preferences
   loadConfiguration();
+  loadNetworkConfiguration();
   
   // Initialize roof controller hardware
   initializeRoofController();
@@ -142,8 +138,8 @@ void setup() {
   // Initialize RTC (DS3231) - do this early to have time available
   initRTC();
 
-  // Initialize WiFi
-  initWiFi();
+  // Initialize networking (WiFi primary, optional W5500 Ethernet)
+  initNetwork();
   
   // Initialize UDP park sensor listener
   initParkSensorUDP();
@@ -183,8 +179,8 @@ void setup() {
 void loop() {
   unsigned long currentTime = millis();
   
-  // Handle WiFi connection
-  handleWiFi();
+  // Handle WiFi/Ethernet connection state
+  handleNetwork();
   
   // Handle UDP park sensor messages
   handleParkSensorUDP();
@@ -218,7 +214,7 @@ void loop() {
   alpacaServer.handleClient();
   
   // Handle MQTT
-  if (mqttEnabled) {
+  if (mqttEnabled && netIsConnected()) {
     if (!mqttClient.connected()) {
       if (currentTime - lastMqttReconnectAttempt > 5000) {
         lastMqttReconnectAttempt = currentTime;
@@ -258,10 +254,12 @@ void loop() {
   
   // Periodic status update (every 30 seconds)
   if (currentTime - lastStatusUpdate > 30000) {
-    Debug.printf(2, "Status: Roof=%s, Telescope=%s, WiFi=%s, MQTT=%s, Heap=%d\n",
+    Debug.printf(2, "Status: Roof=%s, Telescope=%s, WiFi=%s, Ethernet=%s, Active=%s, MQTT=%s, Heap=%d\n",
                  getRoofStatusString().c_str(),
                  telescopeParked ? "Parked" : "Unparked",
-                 WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected",
+                 wifiIsConnected() ? "Connected" : "Disconnected",
+                 ethHasIP() ? "Connected" : (ethIsStarted() ? "No link/IP" : "Off"),
+                 netActiveInterfaceName(),
                  mqttClient.connected() ? "Connected" : "Disconnected",
                  ESP.getFreeHeap());
     // Time source status
@@ -289,134 +287,4 @@ void loop() {
   
   // Small delay to prevent watchdog issues
   delay(10);
-}
-
-// Initialize WiFi connection
-void initWiFi() {
-  Debug.println("Initializing WiFi...");
-
-  // Clean up any existing WiFi state
-  WiFi.disconnect(true);  // Disconnect and clear stored credentials
-  WiFi.softAPdisconnect(true);  // Stop any running AP
-  delay(100);  // Allow cleanup to complete
-
-  // Check if we have credentials to connect with
-  if (strlen(ssid) > 0 && strcmp(ssid, "YOUR_SSID") != 0) {
-    Debug.printf("Connecting to WiFi network: %s\n", ssid);
-    
-    // Disable Power Saving Mode -- Troubleshooting device disconnects
-    WiFi.setSleep(WIFI_PS_NONE);
-    
-    // Set WiFi mode to station
-    WiFi.mode(WIFI_STA);
-    delay(100);
-
-    WiFi.begin(ssid, password);
-
-    // Wait up to 30 seconds for connection
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 60) {
-      delay(500);
-      Debug.print(".");
-      attempts++;
-    }
-    Debug.println("");
-
-    if (WiFi.status() == WL_CONNECTED) {
-      Debug.println("WiFi connected successfully!");
-      Debug.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-      Debug.printf("Signal strength: %d dBm\n", WiFi.RSSI());
-      apMode = false;
-    } else {
-      Debug.printf("Failed to connect to WiFi (status: %d), starting AP mode\n", WiFi.status());
-      startAPMode();
-    }
-  } else {
-    Debug.println("No valid WiFi credentials configured, starting AP mode");
-    startAPMode();
-  }
-}
-
-// Start Access Point mode for configuration
-void startAPMode() {
-  Debug.println("Starting AP mode...");
-
-  // Clean up WiFi state before starting AP
-  WiFi.disconnect(true);
-  delay(100);
-
-  // Set WiFi mode to AP
-  WiFi.mode(WIFI_AP);
-  delay(100);
-
-  if (WiFi.softAP(AP_SSID, AP_PASSWORD)) {
-    Debug.printf("AP mode started - SSID: %s, Password: %s\n", AP_SSID, AP_PASSWORD);
-    Debug.printf("AP IP address: %s\n", WiFi.softAPIP().toString().c_str());
-    apMode = true;
-    apStartTime = millis();
-  } else {
-    Debug.println("Failed to start AP mode!");
-    // Try one more time after a longer delay
-    delay(1000);
-    if (WiFi.softAP(AP_SSID, AP_PASSWORD)) {
-      Debug.println("AP mode started on retry");
-      Debug.printf("AP IP address: %s\n", WiFi.softAPIP().toString().c_str());
-      apMode = true;
-      apStartTime = millis();
-    } else {
-      Debug.println("AP mode failed to start after retry!");
-    }
-  }
-}
-
-// WiFi reconnection state (non-blocking)
-bool wifiReconnecting = false;
-unsigned long wifiReconnectStartTime = 0;
-const unsigned long WIFI_RECONNECT_TIMEOUT = 30000;  // 30 seconds max
-
-// Handle WiFi connection in main loop (NON-BLOCKING)
-void handleWiFi() {
-  if (apMode) {
-    // Check if we should exit AP mode after timeout
-    if (millis() - apStartTime > AP_TIMEOUT) {
-      Debug.println("AP mode timeout, attempting to reconnect to WiFi");
-      // Stop AP before trying to reconnect
-      WiFi.softAPdisconnect(true);
-      delay(100);
-      initWiFi();
-    }
-  } else {
-    // Check if WiFi connection is lost
-    if (WiFi.status() != WL_CONNECTED) {
-      if (!wifiReconnecting) {
-        // Start reconnection attempt
-        Debug.printf("WiFi connection lost (status: %d), attempting to reconnect...\n", WiFi.status());
-        
-        // Use disconnect/begin instead of just reconnect()
-        WiFi.disconnect(); 
-        delay(100);
-        WiFi.begin(ssid, password);
-        
-        wifiReconnecting = true;
-        wifiReconnectStartTime = millis();
-      } else {
-        // Already reconnecting - check if we've timed out
-        if (millis() - wifiReconnectStartTime > WIFI_RECONNECT_TIMEOUT) {
-          Debug.printf("\nFailed to reconnect after %lu seconds (status: %d), starting AP mode\n",
-                       WIFI_RECONNECT_TIMEOUT / 1000, WiFi.status());
-          wifiReconnecting = false;
-          startAPMode();
-        }
-        // Otherwise, just let the reconnection continue in the background
-        // WiFi.reconnect() works asynchronously - no need to block
-      }
-    } else {
-      // WiFi is connected
-      if (wifiReconnecting) {
-        Debug.println("WiFi reconnected successfully!");
-        Debug.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-        wifiReconnecting = false;
-      }
-    }
-  }
 }
