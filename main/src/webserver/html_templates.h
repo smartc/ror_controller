@@ -559,7 +559,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<table class='status-table'>\n";
   html += "<tr><th>Unique ID</th><td>" + uniqueID + "</td></tr>\n";
   html += "<tr><th>IP Address</th><td>" + netLocalIP().toString() + "</td></tr>\n";
-  html += "<tr><th>MAC Address</th><td>" + WiFi.macAddress() + "</td></tr>\n";
+  html += "<tr><th>MAC Address</th><td>" + wifiMacAddress() + "</td></tr>\n";
   html += "<tr><th>Firmware Version</th><td>" + String(DEVICE_VERSION) + "</td></tr>\n";
   html += "<tr><th>Uptime</th><td>" + String(millis() / 1000 / 60) + " minutes</td></tr>\n";
 
@@ -1048,15 +1048,16 @@ inline String getNetworkSettingsCard() {
           "<tr><th>MAC Address</th><td id='ns-w-mac'>-</td><td id='ns-e-mac'>-</td></tr>"
           "<tr><th>Link</th><td id='ns-w-link'>-</td><td id='ns-e-link'>-</td></tr>"
           "</table>";
-  html += "<p style='font-size:0.9em;margin-top:10px'>Active interface (default route): <strong id='ns-active'>-</strong>"
+  html += "<p style='font-size:0.9em;margin-top:10px'>Mode: <strong id='ns-mode'>-</strong> &nbsp; "
+          "Active interface (default route): <strong id='ns-active'>-</strong>"
           " &nbsp; Hostname: <strong>" + String(netHostname) + "</strong></p>";
   html += "</div>";
 
   // WiFi credentials (same form/handler as before)
   html += "<div class='card'>";
   html += "<h2>WiFi</h2>";
-  html += "<p style='font-size:0.85em;color:#b0b0b0'>WiFi is the primary interface and is used for first-time setup: "
-          "with no WiFi and no Ethernet the controller starts the <strong>" + String(AP_SSID) + "</strong> access point.</p>";
+  html += "<p style='font-size:0.85em;color:#b0b0b0'>WiFi is used for first-time setup: "
+          "with no working network the controller starts the <strong>" + String(AP_SSID) + "</strong> access point.</p>";
   html += "<form method='post' action='/setup'>";
   html += "<label for='ssid'>SSID</label>";
   html += "<input type='text' id='ssid' name='ssid' value='" + String(ssid) + "' placeholder='Network name'>";
@@ -1073,12 +1074,20 @@ inline String getNetworkSettingsCard() {
            "<input type='number' id='" + id + "' min='-1' max='48' value='" + String(value) + "'></div>";
   };
   html += "<div class='card'>";
-  html += "<h2>Ethernet &amp; Routing</h2>";
-  html += "<div class='switch-container' style='margin-bottom:15px'>";
-  html += "<label class='switch'><input type='checkbox' id='ethEnabled'" + String(ethEnabled ? " checked" : "") +
-          " onchange=\"updateToggleLabel('ethEnabled','ethEnabledText','Enabled','Disabled')\"><span class='slider'></span></label>";
-  html += "<span class='switch-label'>W5500 Ethernet: <strong id='ethEnabledText'>" + String(ethEnabled ? "Enabled" : "Disabled") + "</strong></span>";
-  html += "</div>";
+  const char* selectStyle = "width:100%;padding:8px;margin-bottom:15px;border:1px solid #2d3561;"
+                            "border-radius:4px;background-color:#0f3460;color:#e0e0e0";
+  html += "<h2>Network Mode, Ethernet &amp; Routing</h2>";
+  html += "<label for='netMode'>Network mode</label>";
+  html += "<select id='netMode' onchange='updateNetModeUI()' style='" + String(selectStyle) + "'>";
+  for (int m = 0; m < NET_MODE_COUNT; m++) {
+    html += "<option value='" + String(netModeKey(m)) + "'" + String(netMode == m ? " selected" : "") + ">" + netModeLabel(m) + "</option>";
+  }
+  html += "</select>";
+  html += "<div id='netModeHelp' style='font-size:0.85em;color:#b0b0b0;margin-top:-8px;margin-bottom:12px'></div>";
+  html += "<div id='netModeWarn' style='font-size:0.85em;color:#ffb74d;margin-bottom:12px;display:none'>"
+          "WiFi will be off while Ethernet is working. If Ethernet has no IP address, the controller falls back to WiFi "
+          "(or the <strong>" + String(AP_SSID) + "</strong> setup access point), so it stays reachable.</div>";
+  html += "<div id='ethPinsBox'>";
   html += "<h3>W5500 Pins (GPIO)</h3>";
   html += "<div style='display:flex;gap:10px;flex-wrap:wrap'>";
   html += pinInput("ethCs", "CS", ethCsPin);
@@ -1090,27 +1099,28 @@ inline String getNetworkSettingsCard() {
   html += "</div>";
   html += "<p style='font-size:0.8em;color:#b0b0b0;margin-top:0'>Default breakout wiring: CS 10, SCK 46, MOSI 11, MISO 13. "
           "Without INT the driver polls every 10 ms. Pins may not overlap each other or the GPS pins.</p>";
+  html += "</div>";
 
-  html += "<h3>Routing</h3>";
+  html += "<div id='prefRow'>";
   html += "<label for='netPreferred'>Preferred interface when both are connected</label>";
-  html += "<select id='netPreferred' style='width:100%;padding:8px;margin-bottom:15px;border:1px solid #2d3561;"
-          "border-radius:4px;background-color:#0f3460;color:#e0e0e0'>";
+  html += "<select id='netPreferred' style='" + String(selectStyle) + "'>";
   html += "<option value='wifi'" + String(netPreferred == NET_IF_WIFI ? " selected" : "") + ">WiFi</option>";
   html += "<option value='ethernet'" + String(netPreferred == NET_IF_ETH ? " selected" : "") + ">Ethernet</option>";
   html += "</select>";
-  html += "<p style='font-size:0.8em;color:#b0b0b0;margin-top:-8px'>Both interfaces stay up and answer the web UI and Alpaca on their own IPs. "
-          "The preferred one carries outbound traffic (MQTT); if it drops, the other takes over automatically.</p>";
+  html += "<p style='font-size:0.8em;color:#b0b0b0;margin-top:-8px'>The preferred interface carries outbound traffic (MQTT); "
+          "if it drops, the other takes over automatically.</p>";
+  html += "</div>";
   html += "<label for='netHostname'>Hostname (DHCP and mDNS)</label>";
   html += "<input type='text' id='netHostname' maxlength='31' value='" + String(netHostname) + "'>";
   html += "<button class='button-primary' onclick='saveNetwork()'>Save Network Settings</button>";
-  html += "<p style='font-size:0.8em;color:#ffb74d'>Ethernet, routing and hostname changes take effect after a restart.</p>";
+  html += "<p style='font-size:0.8em;color:#ffb74d'>Mode, Ethernet, routing and hostname changes take effect after a restart.</p>";
   html += "</div>";
 
   html += R"rawjs(
 <script>
 function saveNetwork(){
   var p=new URLSearchParams();
-  p.append('eth_enabled', document.getElementById('ethEnabled').checked?'true':'false');
+  p.append('mode', document.getElementById('netMode').value);
   ['Cs','Sck','Mosi','Miso','Irq','Rst'].forEach(function(k){
     p.append('eth_'+k.toLowerCase(), document.getElementById('eth'+k).value);
   });
@@ -1123,16 +1133,32 @@ function saveNetwork(){
     });
   }).catch(function(e){alert('Error: '+e);});
 }
+var NET_MODE_HELP={
+  wifi:'Only WiFi is used. The W5500 is not started.',
+  eth:'Only Ethernet is used; the WiFi radio is off.',
+  dual:'Both interfaces stay up and answer the web UI and Alpaca on their own IP addresses.',
+  wifi_eth:'WiFi is used normally. If WiFi has no connection for 15 s, Ethernet is started; once WiFi has been back for 60 s, Ethernet is stopped again.',
+  eth_wifi:'Ethernet is used normally. If Ethernet has no connection for 15 s, WiFi is started; once Ethernet has been back for 60 s, WiFi is turned off again.'
+};
+function updateNetModeUI(){
+  var m=document.getElementById('netMode').value;
+  document.getElementById('netModeHelp').textContent=NET_MODE_HELP[m]||'';
+  document.getElementById('netModeWarn').style.display=(m==='eth'||m==='eth_wifi')?'block':'none';
+  document.getElementById('prefRow').style.display=(m==='dual')?'block':'none';
+  document.getElementById('ethPinsBox').style.display=(m==='wifi')?'none':'block';
+}
+updateNetModeUI();
 function refreshNetStatus(){
   fetch('/api/status').then(function(r){return r.json();}).then(function(d){
     var n=d.network; if(!n) return;
     var w=n.wifi, e=n.ethernet;
     function set(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
     set('ns-active', n.active+(n.ip?' ('+n.ip+')':''));
-    set('ns-w-state', n.ap_mode?'Access point (setup mode)':(w.connected?'Connected':'Disconnected'));
+    set('ns-mode', n.mode_label+(n.running_mode!==n.mode?' (running as '+n.running_mode+')':''));
+    set('ns-w-state', n.ap_mode?'Access point (setup mode)':(w.connected?'Connected':(w.standby?'Standby (failover backup)':(w.enabled?'Disconnected':'Off'))));
     set('ns-w-ip', w.ip||'-'); set('ns-w-mac', w.mac||'-');
     set('ns-w-link', w.connected?(w.ssid+', '+w.rssi+' dBm'):'-');
-    set('ns-e-state', !e.enabled?'Disabled':(!e.started?'Failed to start (check pins/wiring)':(e.ip?'Connected':(e.link?'Link up, waiting for DHCP':'No cable / no link'))));
+    set('ns-e-state', !e.enabled?'Disabled':(!e.started?'Failed to start (check pins/wiring)':(e.standby?'Standby (failover backup)':(e.ip?'Connected':(e.link?'Link up, waiting for DHCP':'No cable / no link')))));
     set('ns-e-ip', e.ip||'-'); set('ns-e-mac', e.mac||'-');
     set('ns-e-link', e.link?(e.speed+' Mbps '+(e.full_duplex?'full':'half')+' duplex'):'-');
   }).catch(function(){});

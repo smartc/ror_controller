@@ -26,7 +26,7 @@
 // Version Information
 #define DEVICE_VERSION "4.0.0"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
 #define DEVICE_MANUFACTURER "Corey Smart"
-#define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller (v3)"
+#define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller"
 
 // GPIO pin definitions for ESP32-S3 v3 Hardware
 // Control Pins - Relays
@@ -190,6 +190,7 @@ inline const char* ALPACA_DISCOVERY_MESSAGE = "alpacadiscovery1";
 #define PREF_ETH_IRQ_PIN "ethIrq"
 #define PREF_ETH_RST_PIN "ethRst"
 #define PREF_NET_PREFERRED "netPreferred"
+#define PREF_NET_MODE "netMode"
 #define PREF_NET_HOSTNAME "netHostname"
 
 // W5500 defaults (breakout H4). INT is optional: -1 = driver polls every 10 ms.

@@ -1500,8 +1500,16 @@ void handleGPSPins() {
 }
 // Save Ethernet / interface settings (Network tab). Takes effect after restart.
 void handleNetworkSettings() {
-  bool newEthEnabled = webUiServer.hasArg("eth_enabled") ? webUiServer.arg("eth_enabled") == "true" : ethEnabled;
-  int cs   = webUiServer.hasArg("eth_cs")   ? webUiServer.arg("eth_cs").toInt()   : ethCsPin;
+  int newMode = netMode;
+  if (webUiServer.hasArg("mode")) {
+    newMode = netModeFromKey(webUiServer.arg("mode"));
+    if (newMode < 0) {
+      webUiServer.send(400, "text/plain", "Unknown network mode");
+      return;
+    }
+  }
+  bool newEthEnabled = newMode != NET_MODE_WIFI_ONLY;
+  int cs  = webUiServer.hasArg("eth_cs")   ? webUiServer.arg("eth_cs").toInt()   : ethCsPin;
   int sck  = webUiServer.hasArg("eth_sck")  ? webUiServer.arg("eth_sck").toInt()  : ethSckPin;
   int mosi = webUiServer.hasArg("eth_mosi") ? webUiServer.arg("eth_mosi").toInt() : ethMosiPin;
   int miso = webUiServer.hasArg("eth_miso") ? webUiServer.arg("eth_miso").toInt() : ethMisoPin;
@@ -1535,11 +1543,11 @@ void handleNetworkSettings() {
     netHostname[sizeof(netHostname) - 1] = '\0';
   }
 
-  ethEnabled = newEthEnabled;
+  netMode = newMode;
   ethCsPin = cs; ethSckPin = sck; ethMosiPin = mosi; ethMisoPin = miso; ethIrqPin = irq; ethRstPin = rst;
   saveNetworkConfiguration();
-  Debug.printf("Network settings updated: Ethernet=%s, preferred=%s, hostname=%s\n",
-               ethEnabled ? "enabled" : "disabled", netPreferred == NET_IF_ETH ? "Ethernet" : "WiFi", netHostname);
+  Debug.printf("Network settings updated: mode=%s, preferred=%s, hostname=%s\n",
+               netModeLabel(netMode), netPreferred == NET_IF_ETH ? "Ethernet" : "WiFi", netHostname);
   webUiServer.send(200, "text/plain", "Network settings saved. Restart required for changes to take effect.");
 }
 
