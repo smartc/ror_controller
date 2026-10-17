@@ -4,11 +4,12 @@
  */
 
 #include "roof_controller.h"
-#include "../mqtt/mqtt_handler.h"
+#include "../mqtt/mqtt_handler.h"     // getRoofStatusString() only - the roof task never publishes
 #include "../sensors/park_sensor_udp.h"
 #include "../safety/safety_sensor.h"
 #include "../debug/Debug.h"
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 
 // Define the global variables declared as extern in config.h
 int LIMIT_SWITCH_OPEN_PIN = DEFAULT_OPEN_SWITCH_PIN;    // Default to pin 35
@@ -61,8 +62,54 @@ bool inverterRelayEnabled = true;               // Enable K1 power relay control
 bool inverterSoftPwrEnabled = true;             // Enable K3 soft-power button control for roof movement (default: enabled)
 bool roofMotorCommandedRunning = false;         // True from K2 press (movement start) until stop, limit switch, or timeout
 
+// ── Roof task, lock and shared inputs (v4) ──────────────────────────────────
+static SemaphoreHandle_t roofMutex = nullptr;
+static volatile bool roofChanged = false;
+
+// Written by the loop task (roofUpdateNetInputs), read by the roof task
+static volatile bool netUdpParked = false;
+static volatile bool netWeatherSafe = false;
+static volatile unsigned long netInputsMs = 0;
+static bool netStaleLogged = false;
+
+// Manual relay pulse (web "press button" actions) - timed by the roof task
+static int pulsePin = -1;
+static unsigned long pulseStartMs = 0;
+static const unsigned long MANUAL_PULSE_MS = 500;
+
+SemaphoreHandle_t roofLockHandle() { return roofMutex; }
+
+static void roofMarkChanged() { roofChanged = true; }
+
+bool roofTakeChanged() {
+  if (!roofChanged) return false;
+  roofChanged = false;
+  return true;
+}
+
+String getRoofErrorReason() {
+  RoofLock lock;
+  return roofErrorReason;
+}
+
+void roofUpdateNetInputs(bool udpParked, bool weatherSafe) {
+  netUdpParked = udpParked;
+  netWeatherSafe = weatherSafe;
+  netInputsMs = millis();
+}
+
+bool roofNetInputsFresh() {
+  return netInputsMs != 0 && millis() - netInputsMs < NET_INPUT_STALE_MS;
+}
+
+// Weather as seen by the roof task: stale data is never "safe"
+static bool roofWeatherSafe() {
+  return roofNetInputsFresh() && netWeatherSafe;
+}
+
 // Apply pin settings - useful after changing pin assignments or trigger state
 void applyPinSettings() {
+  RoofLock lock;
   // Configure input pins with internal pull-ups
   pinMode(TELESCOPE_PARKED_PIN, INPUT);
   pinMode(LIMIT_SWITCH_OPEN_PIN, INPUT_PULLUP);
@@ -83,6 +130,8 @@ void applyPinSettings() {
 }
 
 void initializeRoofController() {
+  if (!roofMutex) roofMutex = xSemaphoreCreateRecursiveMutex();
+
   // Initialize GPIO pins
 
   // Configure power inverter relay (K1)
@@ -185,7 +234,7 @@ void determineInitialRoofStatus() {
   lastPublishedStatus = roofStatus;
   
   // Publish initial status
-  publishStatusToMQTT();
+  roofMarkChanged();
 }
 
 // Update roof status based on limit switches
@@ -332,7 +381,7 @@ void updateRoofStatus() {
     Debug.print(" to ");
     Debug.println(getRoofStatusString(roofStatus));
     
-    publishStatusToMQTT();
+    roofMarkChanged();
     lastPublishedStatus = roofStatus;
   }
 }
@@ -366,7 +415,7 @@ void checkMovementTimeout() {
     stopRoofMovement(false);  // Pass false to skip status update
 
     // Publish status change due to timeout
-    publishStatusToMQTT();
+    roofMarkChanged();
     lastPublishedStatus = roofStatus;
   }
 }
@@ -374,7 +423,23 @@ void checkMovementTimeout() {
 // Complete startOpeningRoof() function - NON-BLOCKING version
 // This initiates the roof opening sequence using a state machine.
 // The actual relay operations are performed by processRoofOperation() in the main loop.
+// Shared refusal for new moves while the network-fed safety inputs are stale
+// or a manual relay pulse is still running
+static bool newMoveBlocked(const char* direction) {
+  if (pulsePin >= 0) {
+    Debug.printf("Roof %s refused: manual relay pulse in progress\n", direction);
+    return true;
+  }
+  bool needsNet = parkSensorType != PARK_SENSOR_PHYSICAL || strcmp(direction, "opening") == 0;
+  if (needsNet && !roofNetInputsFresh()) {
+    Debug.printf("Roof %s refused: network sensor data is stale (controller busy) - try again\n", direction);
+    return true;
+  }
+  return false;
+}
+
 bool startOpeningRoof() {
+  RoofLock lock;
   // Check if roof is already open
   if (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED) {
     roofStatus = ROOF_OPEN;
@@ -392,6 +457,8 @@ bool startOpeningRoof() {
     return false;
   }
 
+  if (newMoveBlocked("opening")) return false;
+
   // Check telescope safety interlock - only if bypass is not enabled
   Debug.println("=== ROOF OPENING SAFETY CHECK ===");
   Debug.printf("bypassParkSensor: %s\n", bypassParkSensor ? "TRUE (bypass enabled)" : "FALSE (bypass disabled)");
@@ -405,7 +472,7 @@ bool startOpeningRoof() {
   }
 
   // Weather safety interlock — never open into unsafe conditions
-  if (!isWeatherSafe()) {
+  if (!roofWeatherSafe()) {
     Debug.println("SAFETY CHECK FAILED: Weather unsafe (safety sensor reporting unsafe)");
     Debug.println("=== ROOF OPENING BLOCKED ===");
     return false;
@@ -466,6 +533,7 @@ bool startOpeningRoof() {
 // This initiates the roof closing sequence using a state machine.
 // The actual relay operations are performed by processRoofOperation() in the main loop.
 bool startClosingRoof() {
+  RoofLock lock;
   // Check if roof is already closed
   if (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED) {
     roofStatus = ROOF_CLOSED;
@@ -482,6 +550,8 @@ bool startClosingRoof() {
     Debug.println("Roof operation already in progress");
     return false;
   }
+
+  if (newMoveBlocked("closing")) return false;
 
   // Check telescope safety interlock - only if bypass is not enabled
   Debug.println("=== ROOF CLOSING SAFETY CHECK ===");
@@ -550,6 +620,7 @@ bool startClosingRoof() {
 // updateStatus: if true (default), updates roof status based on limit switches
 //               if false, preserves current status (used during timeout to keep ERROR state)
 bool stopRoofMovement(bool updateStatus) {
+  RoofLock lock;
   // If an operation is in progress, we need to abort it and do a stop
   if (roofOpState != OP_IDLE) {
     Debug.println("Aborting in-progress operation for stop");
@@ -588,6 +659,7 @@ bool stopRoofMovement(bool updateStatus) {
 
 // Clear error state and reason (for recovery from error conditions)
 void clearRoofError() {
+  RoofLock lock;
   if (roofStatus == ROOF_ERROR) {
     Debug.println("Clearing roof error state");
     Debug.println("Previous error: " + roofErrorReason);
@@ -603,30 +675,34 @@ void clearRoofError() {
 }
 
 // Send a button press to the roof controller
+// Starts a 500 ms manual pulse on a relay; the roof task releases it.
+// Returns false if a relay sequence or another pulse is already running.
+static bool startManualPulse(int pin, const char* name) {
+  if (roofOpState != OP_IDLE || pulsePin >= 0) {
+    Debug.printf("Manual %s press ignored: relay sequence in progress\n", name);
+    return false;
+  }
+  digitalWrite(pin, HIGH);
+  pulsePin = pin;
+  pulseStartMs = millis();
+  Debug.printf("Manual %s PRESSED (relay energized)\n", name);
+  return true;
+}
+
+// Called every roof-task tick
+static void processManualPulse() {
+  if (pulsePin < 0 || millis() - pulseStartMs < MANUAL_PULSE_MS) return;
+  digitalWrite(pulsePin, LOW);
+  Debug.println(pulsePin == ROOF_CONTROL_PIN ? "Manual K2 RELEASED" : "Manual K3 RELEASED");
+  pulsePin = -1;
+}
+
+// Send a button press to the roof controller (non-blocking: released by the roof task)
 void sendButtonPress() {
-  // For a normally open relay:
-  // LOW = Relay not energized = Button NOT pressed
-  // HIGH = Relay energized = Button pressed
-  
-  // Before button press
-  Debug.print("Button relay before: ");
-  Debug.println(digitalRead(ROOF_CONTROL_PIN) ? "HIGH (pressed)" : "LOW (not pressed)");
-  
-  // Press button (energize relay)
-  digitalWrite(ROOF_CONTROL_PIN, HIGH);
-  Debug.println("Button PRESSED (relay energized)");
-  delay(500); // Hold the button for half a second
-  
-  // Release button (de-energize relay)
-  digitalWrite(ROOF_CONTROL_PIN, LOW);
-  Debug.println("Button RELEASED (relay de-energized)");
-  
-  // After button press
-  Debug.print("Button relay after: ");
-  Debug.println(digitalRead(ROOF_CONTROL_PIN) ? "HIGH (pressed)" : "LOW (not pressed)");
-  
-  // We need to debounce after a button press
-  lastSwitchTime = millis();
+  RoofLock lock;
+  if (startManualPulse(ROOF_CONTROL_PIN, "K2 roof button")) {
+    lastSwitchTime = millis();  // debounce after a button press
+  }
 }
 
 // Update telescope park status
@@ -634,6 +710,20 @@ void updateTelescopeStatus() {
   unsigned long currentTime = millis();
   bool currentParkedState = false;
   
+  // UDP park data reaches us via the loop task. If that's stale (loop stalled),
+  // hold the last known state rather than guess: a move in progress finishes,
+  // and new moves are refused until the data is fresh (newMoveBlocked).
+  bool netFresh = roofNetInputsFresh();
+  if (parkSensorType != PARK_SENSOR_PHYSICAL) {
+    if (!netFresh && !netStaleLogged && netInputsMs != 0) {
+      Debug.println("Network park/weather data stale - holding last park state, no new moves until it recovers");
+      netStaleLogged = true;
+    } else if (netFresh && netStaleLogged) {
+      Debug.println("Network park/weather data fresh again");
+      netStaleLogged = false;
+    }
+  }
+
   // Determine telescope parked status based on park sensor type
   switch (parkSensorType) {
     case PARK_SENSOR_PHYSICAL:
@@ -643,18 +733,19 @@ void updateTelescopeStatus() {
         currentParkedState = (parkPinValue == TELESCOPE_PARKED);
       }
       break;
-      
+
     case PARK_SENSOR_UDP:
       // Use only UDP park sensors
-      currentParkedState = isTelescopeParkedUDP();
+      currentParkedState = netFresh ? (bool)netUdpParked : lastTelescopeParkedState;
       break;
-      
+
     case PARK_SENSOR_BOTH:
-      // Use both - both must indicate parked (AND logic)
+      // Use both - both must indicate parked (AND logic). A wired "unparked" is
+      // fresh evidence and always counts, even while the UDP data is stale.
       {
         int parkPinValue = digitalRead(TELESCOPE_PARKED_PIN);
         bool physicalParked = (parkPinValue == TELESCOPE_PARKED);
-        bool udpParked = isTelescopeParkedUDP();
+        bool udpParked = netFresh ? (bool)netUdpParked : lastTelescopeParkedState;
         currentParkedState = physicalParked && udpParked;
       }
       break;
@@ -672,7 +763,7 @@ void updateTelescopeStatus() {
     } else if (parkSensorType == PARK_SENSOR_BOTH) {
       int parkPinValue = digitalRead(TELESCOPE_PARKED_PIN);
       bool physicalParked = (parkPinValue == TELESCOPE_PARKED);
-      bool udpParked = isTelescopeParkedUDP();
+      bool udpParked = netUdpParked;
       Debug.printf(2, "Physical: %s, UDP: %s, Combined: %s\n", 
                    physicalParked ? "PARKED" : "NOT PARKED",
                    udpParked ? "PARKED" : "NOT PARKED",
@@ -694,7 +785,7 @@ void updateTelescopeStatus() {
       telescopeParked = currentParkedState;
       Debug.println("Telescope parked status UPDATED to: " + String(telescopeParked ? "PARKED" : "NOT PARKED"));
       // Publish status to MQTT if telescope park state changed
-      publishStatusToMQTT();
+      roofMarkChanged();
     }
   }
 }
@@ -703,6 +794,7 @@ void updateTelescopeStatus() {
 
 // Toggle K1 inverter power relay (manual control)
 void toggleInverterPower() {
+  RoofLock lock;
   inverterRelayState = !inverterRelayState;
   digitalWrite(INVERTER_PIN, inverterRelayState ? HIGH : LOW);
 
@@ -710,28 +802,14 @@ void toggleInverterPower() {
   Debug.println(inverterRelayState ? "ON" : "OFF");
 
   // Publish status change to MQTT
-  publishStatusToMQTT();
+  roofMarkChanged();
 }
 
 // Send K3 soft-power button press to inverter
+// Send K3 soft-power button press to inverter (non-blocking: released by the roof task)
 void sendInverterButtonPress() {
-  // For a normally open relay:
-  // LOW = Relay not energized = Button NOT pressed
-  // HIGH = Relay energized = Button pressed
-
-  Debug.println("Inverter button (K3) press initiated");
-
-  // Press button (energize relay)
-  digitalWrite(INVERTER_BUTTON_PIN, HIGH);
-  Debug.println("Inverter button PRESSED (K3 relay energized)");
-  delay(500); // Hold the button for half a second
-
-  // Release button (de-energize relay)
-  digitalWrite(INVERTER_BUTTON_PIN, LOW);
-  Debug.println("Inverter button RELEASED (K3 relay de-energized)");
-
-  // Give the inverter time to process the button press
-  delay(100);
+  RoofLock lock;
+  startManualPulse(INVERTER_BUTTON_PIN, "K3 inverter button");
 }
 
 // Get state of K1 inverter power relay
@@ -848,7 +926,7 @@ void processRoofOperation() {
         roofMotorCommandedRunning = true;  // Movement confirmed commanded
 
         // Publish status change immediately
-        publishStatusToMQTT();
+        roofMarkChanged();
         lastPublishedStatus = roofStatus;
 
         // Return to idle
@@ -874,7 +952,7 @@ void processRoofOperation() {
         updateRoofStatus();
 
         // Publish status change
-        publishStatusToMQTT();
+        roofMarkChanged();
         lastPublishedStatus = roofStatus;
 
         Debug.println("Roof movement stopped");
@@ -966,7 +1044,7 @@ void updateInverterPowerStatus() {
       Debug.println("AC power state UPDATED to: " + String(inverterACPowerState ? "ON" : "OFF"));
 
       // Publish status to MQTT if AC power state changed
-      publishStatusToMQTT();
+      roofMarkChanged();
     }
   }
 
@@ -1020,7 +1098,8 @@ void shutdownInverterPower() {
 void checkWeatherAutoClose() {
   if (!weatherAutoClose)         return;
   if (roofStatus != ROOF_OPEN)   return;
-  if (isWeatherSafe())           return;
+  if (!roofNetInputsFresh())     return;  // no decision on stale weather data
+  if (netWeatherSafe)            return;
 
   // Rate-limit retries in case the close attempt fails
   static unsigned long lastAttempt = 0;
@@ -1098,6 +1177,59 @@ void checkParkSensorInterlock() {
   // shutdownInverterPower() also clears roofMotorCommandedRunning.
   shutdownInverterPower();
 
-  publishStatusToMQTT();
+  roofMarkChanged();
   lastPublishedStatus = roofStatus;
+}
+
+// ========== ROOF TASK (v4) ==========
+// Everything that watches or drives the roof, every 10 ms, in the same order
+// the v3 main loop used. Holds the roof lock for the duration of one tick
+// (normally well under a millisecond: GPIO reads, a few comparisons, and
+// queued log lines).
+
+static const TickType_t ROOF_TICK = pdMS_TO_TICKS(10);
+
+static void roofTick() {
+  processRoofOperation();
+  processManualPulse();
+  updateRoofStatus();
+  updateTelescopeStatus();
+  checkParkSensorInterlock();
+  updateInverterPowerStatus();
+  checkMovementTimeout();
+  checkWeatherAutoClose();
+}
+
+static volatile uint32_t roofTicks = 0;
+static volatile uint32_t roofTickMaxUs = 0;   // longest tick incl. waiting for the lock
+
+uint32_t roofTaskTicks()    { return roofTicks; }
+uint32_t roofTaskMaxTickUs() { return roofTickMaxUs; }
+
+static void roofTask(void*) {
+  // Watched by the task watchdog (5 s, panics/reboots). A reset leaves every
+  // relay GPIO unpowered, i.e. K1 off = inverter off.
+  esp_task_wdt_add(nullptr);
+  TickType_t lastWake = xTaskGetTickCount();
+  for (;;) {
+    uint32_t t0 = micros();
+    {
+      RoofLock lock;
+      roofTick();
+    }
+    uint32_t dt = micros() - t0;
+    if (dt > roofTickMaxUs) roofTickMaxUs = dt;
+    roofTicks++;
+    esp_task_wdt_reset();
+    vTaskDelayUntil(&lastWake, ROOF_TICK);
+  }
+}
+
+void startRoofTask() {
+  static bool started = false;
+  if (started) return;
+  started = true;
+  // Core 1 (with the loop task, which it preempts); WiFi/lwIP/Ethernet live on core 0
+  xTaskCreatePinnedToCore(roofTask, "roof", 6144, nullptr, 5, nullptr, 1);
+  Debug.println("Roof task started (10 ms, priority 5, watchdog 5 s)");
 }

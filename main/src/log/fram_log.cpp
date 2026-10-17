@@ -1,10 +1,16 @@
 /*
  * ESP32-S3 ASCOM Alpaca Roll-Off Roof Controller (v4)
  * FRAM black-box log implementation
+ *
+ * All access holds the shared I2C lock. Records are written by the logger task;
+ * the loop task only reads (console history, downloads) and clears.
+ * If a write fails (FRAM unplugged, wiring fault) the log goes RAM-only and the
+ * chip is re-probed every minute, so a bad bus costs one timeout, not one per line.
  */
 
 #include "fram_log.h"
 #include "../debug/Debug.h"
+#include "../hw/i2c_bus.h"
 #include <Wire.h>
 #include <rom/crc.h>
 
@@ -15,6 +21,7 @@ static const uint32_t RING_START    = 2 * SLOT_SIZE;
 static const uint8_t  REC_MARK      = 0xA5;
 static const uint32_t REC_HDR_SIZE  = 12;
 static const size_t   I2C_CHUNK     = 64;          // well under the 128-byte Wire buffer
+static const uint32_t REPROBE_MS    = 60000;
 
 struct __attribute__((packed)) FramHeader {
   uint32_t magic;
@@ -31,12 +38,14 @@ struct __attribute__((packed)) FramHeader {
 };
 
 static FramHeader hdr;
-static bool present = false;
+static bool present = false;       // detected at boot
+static bool online = false;        // usable right now
+static unsigned long lastProbeMs = 0;
+static uint16_t bootIdSaved = 0;
 static uint32_t chipSize = 0;
 static uint32_t ringSize = 0;
-static TaskHandle_t ownerTask = nullptr;
 
-// ── Raw I2C access ───────────────────────────────────────────────────────────
+// -- Raw I2C access (caller holds the I2C lock) ----------------------------------
 
 static bool framWrite(uint32_t addr, const uint8_t* data, size_t len) {
   while (len > 0) {
@@ -80,7 +89,15 @@ static bool ringRead(uint32_t pos, uint8_t* data, size_t len) {
 
 static inline uint32_t ringAdvance(uint32_t pos, uint32_t n) { return (pos + n) % ringSize; }
 
-// ── Header ───────────────────────────────────────────────────────────────────
+static void goOffline(const char* what) {
+  if (!online) return;
+  online = false;
+  lastProbeMs = millis();
+  // Queued to the logger, which skips FRAM while offline - no recursion
+  Debug.printf("FRAM %s failed - log is RAM-only until FRAM responds again\n", what);
+}
+
+// -- Header ---------------------------------------------------------------------
 
 static uint32_t headerCrc(const FramHeader& h) {
   return crc32_le(0, (const uint8_t*)&h, offsetof(FramHeader, crc));
@@ -92,10 +109,14 @@ static bool headerValid(const FramHeader& h) {
          h.used <= ringSize && h.unflushed <= h.used;
 }
 
-static void commitHeader() {
+static bool commitHeader() {
   hdr.seq++;
   hdr.crc = headerCrc(hdr);
-  framWrite((hdr.seq & 1) * SLOT_SIZE, (const uint8_t*)&hdr, sizeof(hdr));
+  if (!framWrite((hdr.seq & 1) * SLOT_SIZE, (const uint8_t*)&hdr, sizeof(hdr))) {
+    goOffline("header write");
+    return false;
+  }
+  return true;
 }
 
 static void formatLog(uint16_t bootId) {
@@ -107,12 +128,30 @@ static void formatLog(uint16_t bootId) {
   commitHeader();  // both slots valid
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// Reads the newer valid header slot, formatting if neither is valid
+static bool loadHeader(uint16_t bootId) {
+  FramHeader a, b;
+  bool aRead = framRead(0, (uint8_t*)&a, sizeof(a));
+  bool bRead = framRead(SLOT_SIZE, (uint8_t*)&b, sizeof(b));
+  if (!aRead && !bRead) return false;
+  bool aOk = aRead && headerValid(a);
+  bool bOk = bRead && headerValid(b);
+  if (aOk && bOk)  hdr = (a.seq > b.seq) ? a : b;
+  else if (aOk)    hdr = a;
+  else if (bOk)    hdr = b;
+  else {
+    Debug.println("FRAM log header invalid or blank - formatting");
+    formatLog(bootId);
+  }
+  hdr.bootId = bootId;
+  return commitHeader();
+}
 
-// Debug sink: called for every completed persistent log line
-static void framSink(uint32_t utc, uint32_t ms, const char* text);
+// -- Public API -----------------------------------------------------------------
 
 bool framLogBegin(uint16_t bootId) {
+  I2CLock lock;
+  bootIdSaved = bootId;
   Wire.beginTransmission(FRAM_I2C_ADDRESS);
   if (Wire.endTransmission() != 0) {
     Debug.println("FRAM not detected at 0x50 - log is RAM-only (lost on reset)");
@@ -135,34 +174,34 @@ bool framLogBegin(uint16_t bootId) {
   }
   ringSize = chipSize - RING_START;
 
-  // Pick the newer valid header slot
-  FramHeader a, b;
-  bool aOk = framRead(0, (uint8_t*)&a, sizeof(a)) && headerValid(a);
-  bool bOk = framRead(SLOT_SIZE, (uint8_t*)&b, sizeof(b)) && headerValid(b);
-  if (aOk && bOk)  hdr = (a.seq > b.seq) ? a : b;
-  else if (aOk)    hdr = a;
-  else if (bOk)    hdr = b;
-  else {
-    Debug.println("FRAM log header invalid or blank - formatting");
-    formatLog(bootId);
-  }
-  hdr.bootId = bootId;
-  commitHeader();
-
   present = true;
-  ownerTask = xTaskGetCurrentTaskHandle();
+  online = true;
+  if (!loadHeader(bootId)) {
+    goOffline("header read");
+    return false;
+  }
   Debug.printf("FRAM log: %lu/%lu bytes used, %lu unflushed, %lu dropped\n",
                hdr.used, ringSize, hdr.unflushed, hdr.dropped);
-
-  logSetPersistSink(framSink);  // replays lines logged before FRAM was ready
   return true;
 }
 
-bool framLogPresent() { return present; }
+bool framLogPresent() { return present && online; }
 
-static void framSink(uint32_t utc, uint32_t ms, const char* text) {
-  // Only the loop task touches the I2C bus; lines from other tasks stay RAM-only
-  if (!present || xTaskGetCurrentTaskHandle() != ownerTask) return;
+void framLogHandle() {
+  if (!present || online || millis() - lastProbeMs < REPROBE_MS) return;
+  I2CLock lock;
+  lastProbeMs = millis();
+  Wire.beginTransmission(FRAM_I2C_ADDRESS);
+  if (Wire.endTransmission() != 0) return;
+  online = true;
+  if (loadHeader(bootIdSaved)) {
+    Debug.println("FRAM responding again - persistent logging resumed");
+  }
+}
+
+void framLogWriteLine(uint32_t utc, uint32_t ms, const char* text) {
+  if (!present || !online) return;
+  I2CLock lock;
 
   size_t len = strnlen(text, FRAM_LOG_TEXT_MAX);
   uint32_t need = REC_HDR_SIZE + len;
@@ -170,7 +209,8 @@ static void framSink(uint32_t utc, uint32_t ms, const char* text) {
   // Evict oldest records until the new one fits
   while (hdr.used + need > ringSize && hdr.used > 0) {
     uint8_t lenByte[2];
-    if (!ringRead(hdr.tail, lenByte, 2) || lenByte[0] != REC_MARK) {
+    if (!ringRead(hdr.tail, lenByte, 2)) { goOffline("read"); return; }
+    if (lenByte[0] != REC_MARK) {
       // Ring damaged (e.g. torn record): start over rather than loop on garbage
       formatLog(hdr.bootId);
       break;
@@ -192,7 +232,10 @@ static void framSink(uint32_t utc, uint32_t ms, const char* text) {
   memcpy(rec + 6, &hdr.bootId, 2);
   memcpy(rec + 8, &ms, 4);
   memcpy(rec + REC_HDR_SIZE, text, len);
-  if (!ringWrite(hdr.head, rec, need)) return;  // header not committed: record never existed
+  if (!ringWrite(hdr.head, rec, need)) {   // header not committed: record never existed
+    goOffline("write");
+    return;
+  }
 
   if (hdr.unflushed == 0) hdr.flushed = hdr.head;
   hdr.head = ringAdvance(hdr.head, need);
@@ -202,13 +245,16 @@ static void framSink(uint32_t utc, uint32_t ms, const char* text) {
 }
 
 void framLogIterBegin(FramLogIter& it, bool unflushedOnly) {
+  I2CLock lock;
   it.pos = unflushedOnly ? hdr.flushed : hdr.tail;
-  it.remaining = present ? (unflushedOnly ? hdr.unflushed : hdr.used) : 0;
+  it.remaining = framLogPresent() ? (unflushedOnly ? hdr.unflushed : hdr.used) : 0;
   it.consumed = 0;
+  it.droppedAtStart = hdr.dropped;
 }
 
 bool framLogIterNext(FramLogIter& it, FramLogRecord& rec) {
-  if (it.remaining < REC_HDR_SIZE) return false;
+  if (it.remaining < REC_HDR_SIZE || !framLogPresent()) return false;
+  I2CLock lock;
   uint8_t h[REC_HDR_SIZE];
   if (!ringRead(it.pos, h, REC_HDR_SIZE) || h[0] != REC_MARK) return false;
   rec.len = h[1];
@@ -224,24 +270,30 @@ bool framLogIterNext(FramLogIter& it, FramLogRecord& rec) {
   return true;
 }
 
-// The iterator must have been started with unflushedOnly = true and nothing may
-// be logged between iterating and calling this (log_archive guarantees both).
+// The iterator must have been started with unflushedOnly = true. If records were
+// evicted while iterating (ring overflow), the eviction already advanced
+// "flushed", so leave it alone rather than double-count.
 void framLogMarkFlushed(const FramLogIter& it) {
-  if (!present || it.consumed == 0) return;
+  if (!framLogPresent() || it.consumed == 0) return;
+  I2CLock lock;
+  if (hdr.dropped != it.droppedAtStart) return;
   hdr.flushed = it.pos;
   hdr.unflushed -= min(it.consumed, hdr.unflushed);
   commitHeader();
 }
 
 void framLogClear() {
-  if (!present) return;
-  uint16_t boot = hdr.bootId;
-  formatLog(boot);
+  if (!framLogPresent()) return;
+  {
+    I2CLock lock;
+    formatLog(hdr.bootId);
+  }
   Debug.println("FRAM log cleared");
 }
 
-uint32_t framLogCapacity()  { return present ? ringSize : 0; }
-uint32_t framLogUsed()      { return present ? hdr.used : 0; }
-uint32_t framLogUnflushed() { return present ? hdr.unflushed : 0; }
-uint32_t framLogDropped()   { return present ? hdr.dropped : 0; }
+uint32_t framLogCapacity()  { return framLogPresent() ? ringSize : 0; }
+uint32_t framLogUsed()      { return framLogPresent() ? hdr.used : 0; }
+uint32_t framLogUnflushed() { return framLogPresent() ? hdr.unflushed : 0; }
+uint32_t framLogDropped()   { return framLogPresent() ? hdr.dropped : 0; }
 uint32_t framLogSize()      { return present ? chipSize : 0; }
+bool framLogDetected()      { return present; }

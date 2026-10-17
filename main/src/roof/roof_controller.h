@@ -7,6 +7,8 @@
 #define ROOF_CONTROLLER_H
 
 #include "config.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // Non-blocking state machine for roof operations
 // This allows the main loop to continue running WiFi/MQTT while relay sequences execute
@@ -83,6 +85,38 @@ void clearRoofError();         // Clear error state and reason (for recovery)
 void processRoofOperation();        // Non-blocking state machine - call from main loop
 void checkWeatherAutoClose();       // Auto-close roof on unsafe weather (call from main loop)
 void checkParkSensorInterlock();    // Emergency stop if telescope unparks during roof movement (call from main loop)
+
+// ── Roof task (v4) ──────────────────────────────────────────────────────────
+// All roof monitoring (limit switches, park interlock, timeouts, relay sequences,
+// weather auto-close) runs in a dedicated high-priority task every 10 ms, so a
+// slow web request, MQTT connect or log flush can never delay it.
+//
+// Roof state is guarded by one recursive mutex. The public roof functions
+// (startOpeningRoof, stopRoofMovement, ...) take it themselves; code that
+// changes several roof settings at once wraps the change in a RoofLock.
+// Never hold the lock across network, flash or I2C I/O.
+SemaphoreHandle_t roofLockHandle();
+
+class RoofLock {
+public:
+  RoofLock()  { if (roofLockHandle()) xSemaphoreTakeRecursive(roofLockHandle(), portMAX_DELAY); }
+  ~RoofLock() { if (roofLockHandle()) xSemaphoreGiveRecursive(roofLockHandle()); }
+  RoofLock(const RoofLock&) = delete;
+  RoofLock& operator=(const RoofLock&) = delete;
+};
+
+void startRoofTask();                 // Call once the roof hardware is initialised
+uint32_t roofTaskTicks();             // Diagnostics: ticks run so far
+uint32_t roofTaskMaxTickUs();         // Diagnostics: longest tick (incl. lock wait) in us
+bool roofTakeChanged();               // True once after any roof state change (loop task publishes MQTT)
+String getRoofErrorReason();          // Thread-safe copy of roofErrorReason
+
+// Network-fed safety inputs (UDP park sensors, weather). The loop task refreshes
+// them every pass; if they go stale (loop stalled) the roof task lets a move in
+// progress finish, holds the last known park state, and refuses new moves.
+void roofUpdateNetInputs(bool udpParked, bool weatherSafe);
+bool roofNetInputsFresh();
+const unsigned long NET_INPUT_STALE_MS = 5000;
 
 // Inverter control functions (NEW in v3)
 void toggleInverterPower();           // Toggle K1 inverter power relay

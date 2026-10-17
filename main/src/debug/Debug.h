@@ -24,10 +24,24 @@
 void logAppend(const char* text);
 void logGetJSON(String& out);
 
-// Persistent sink (FRAM): receives every completed line. Setting it replays the
-// lines already in the RAM ring so boot messages logged earlier are kept too.
-typedef void (*LogPersistSink)(uint32_t utc, uint32_t ms, const char* line);
-void logSetPersistSink(LogPersistSink sink);
+#define LOG_LINE_MAX 120
+
+// A completed log line on its way to persistent storage (FRAM)
+struct LogLine {
+  uint32_t utc;
+  uint32_t ms;
+  char     msg[LOG_LINE_MAX];
+};
+
+void logInit();                                  // Create the ring lock (call before starting other tasks)
+
+// Persistence queue: every new line is queued without blocking; the logger task
+// receives and writes them. Enabling it replays the lines already in the RAM
+// ring so boot messages logged earlier are kept too.
+void logEnablePersistQueue(size_t depth);
+bool logPersistReceive(LogLine& out, uint32_t waitMs);
+uint32_t logPersistPending();
+uint32_t logPersistDropped();                    // lines not persisted because the queue was full
 
 // UTC source for timestamps (returns 0 when no time source is synced)
 typedef uint32_t (*LogTimeSource)();
@@ -36,6 +50,7 @@ void logSetTimeSource(LogTimeSource fn);
 class DebugClass {
 public:
   void begin(unsigned long baud) {
+    logInit();
     #if DEBUG_LEVEL > 0
       Serial.begin(baud);
       while (!Serial && millis() < 5000) { delay(100); }

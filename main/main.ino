@@ -46,7 +46,7 @@
 #include "src/net/network_manager.h"
 #include "src/log/fram_log.h"
 #include "src/log/log_archive.h"
-#include <Wire.h>
+#include "src/hw/i2c_bus.h"
 
 // For reset reason detection
 #include "esp_system.h"
@@ -125,14 +125,14 @@ void setup() {
   Debug.printf("Reboot count: %lu\n", rebootCount);
 
   // Shared I2C bus (DS3231 RTC + FRAM log). Start it once, before either uses it.
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  Wire.setClock(400000);
+  i2cBusBegin(I2C_SDA_PIN, I2C_SCL_PIN, 400000);
 
-  // Persistent log: from here on every line is in FRAM the moment it's logged,
-  // and the lines above (reset reason etc.) are replayed into it.
+  // Persistent log: from here on every line is queued for FRAM the moment it's
+  // logged (the logger task writes it), and the lines above are replayed too.
   logSetTimeSource(logUtcNow);
   framLogBegin((uint16_t)rebootCount);
   logArchiveSetBoot((uint16_t)rebootCount);
+  logEnablePersistQueue(64);
   Debug.printf("=== BOOT #%lu - v%s - %s ===\n", rebootCount, DEVICE_VERSION, lastResetReason.c_str());
 
   // If brown-out detected, log a warning
@@ -147,13 +147,18 @@ void setup() {
   Debug.println("Manufacturer: " + String(DEVICE_MANUFACTURER));
   checkFlashLayout();
   logArchiveBegin();
+  logArchiveStartTask();
 
   // Load configuration from preferences
   loadConfiguration();
   loadNetworkConfiguration();
-  
+
   // Initialize roof controller hardware
   initializeRoofController();
+
+  // Roof monitoring runs in its own task from here on - before networking,
+  // which can block for up to 30 s while WiFi connects
+  startRoofTask();
 
   // Initialize RTC (DS3231) - do this early to have time available
   initRTC();
@@ -208,28 +213,16 @@ void loop() {
   // Handle UDP park sensor messages
   handleParkSensorUDP();
 
-  // Process non-blocking roof operations (state machine)
-  // This handles relay timing without blocking WiFi/MQTT
-  processRoofOperation();
+  // Hand the network-fed safety inputs to the roof task (it treats them as
+  // stale if this loop stops refreshing them). Roof monitoring itself -
+  // relays, limits, interlock, timeouts, auto-close - runs in the roof task.
+  roofUpdateNetInputs(isTelescopeParkedUDP(), isWeatherSafe());
 
-  // Update roof status
-  updateRoofStatus();
+  // Publish roof state changes to MQTT (the roof task only flags them)
+  if (roofTakeChanged()) {
+    publishStatusToMQTT();
+  }
 
-  // Update telescope park status
-  updateTelescopeStatus();
-
-  // Emergency interlock: stop roof immediately if telescope unparks during movement
-  checkParkSensorInterlock();
-
-  // Update inverter power status (NEW in v3)
-  updateInverterPowerStatus();
-
-  // Check for movement timeout
-  checkMovementTimeout();
-
-  // Auto-close roof if weather becomes unsafe (no-op unless weatherAutoClose is enabled)
-  checkWeatherAutoClose();
-  
   // Handle Alpaca discovery
   handleAlpacaDiscovery();
 
@@ -271,8 +264,6 @@ void loop() {
   // Pick up network (SNTP) time when GPS/RTC have none
   handleTimeSync();
 
-  // Copy the FRAM log to flash when due (never while the roof is moving)
-  logArchiveHandle();
 
   // Clear timed out park sensors periodically (every 5 minutes)
   static unsigned long lastSensorCleanup = 0;

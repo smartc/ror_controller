@@ -17,6 +17,12 @@
 // WARNING: Disabling brown-out detection can cause data corruption if voltage drops too low
 #define DISABLE_BROWNOUT_DETECTION 0
 
+// Bench-test only: adds POST /test/stall?ms=N, which freezes the loop task to
+// prove roof monitoring keeps running. Never enable in a production build.
+#ifndef ENABLE_TEST_ENDPOINTS
+#define ENABLE_TEST_ENDPOINTS 0
+#endif
+
 // Version Information
 #define DEVICE_VERSION "4.0.0"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
 #define DEVICE_MANUFACTURER "Corey Smart"

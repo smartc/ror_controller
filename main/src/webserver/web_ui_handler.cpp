@@ -243,7 +243,15 @@ void saveConfiguration() {
 void handleSetPins() {
   bool settingsChanged = false;
   String message = "";
-  
+
+  bool mqttStateChanged = false;
+
+  // The roof task reads these settings every 10 ms: change them as one unit
+  // (e.g. a limit-switch swap must never be seen half-applied). No network
+  // I/O happens until the lock is released below.
+  {
+  RoofLock lock;
+
   // Check for trigger state parameter
   if (webUiServer.hasArg("triggerState")) {
     int newTriggerState = webUiServer.arg("triggerState").equals("high") ? HIGH : LOW;
@@ -321,18 +329,8 @@ void handleSetPins() {
       message += "MQTT " + String(mqttEnabled ? "enabled" : "disabled") + ". ";
       Debug.printf("MQTT %s\n", mqttEnabled ? "enabled" : "disabled");
       
-      // If MQTT was disabled, disconnect
-      if (!mqttEnabled && mqttClient.connected()) {
-        mqttClient.disconnect();
-        message += "MQTT disconnected. ";
-        Debug.println("MQTT disconnected");
-      }
-      // If MQTT was enabled, try to connect
-      else if (mqttEnabled && !mqttClient.connected() && netIsConnected()) {
-        reconnectMQTT();
-        message += "MQTT connection attempted. ";
-        Debug.println("MQTT connection attempted");
-      }
+      // Connect/disconnect after the roof lock is released (network I/O)
+      mqttStateChanged = true;
     }
   }
 
@@ -501,7 +499,20 @@ void handleSetPins() {
     message = "No changes were made.";
     Debug.println("No pin setting changes made");
   }
-  
+  }  // RoofLock released
+
+  if (mqttStateChanged) {
+    if (!mqttEnabled && mqttClient.connected()) {
+      mqttClient.disconnect();
+      message += "MQTT disconnected. ";
+      Debug.println("MQTT disconnected");
+    } else if (mqttEnabled && !mqttClient.connected() && netIsConnected()) {
+      reconnectMQTT();
+      message += "MQTT connection attempted. ";
+      Debug.println("MQTT connection attempted");
+    }
+  }
+
   webUiServer.send(200, "text/plain", message);
 }
 
@@ -608,6 +619,20 @@ void initWebUI() {
 
   // Network (Ethernet / interface preference) settings
   webUiServer.on("/network_settings", HTTP_POST, handleNetworkSettings);
+
+#if ENABLE_TEST_ENDPOINTS
+  // Freeze the loop task (simulates a hung web/MQTT call) - roof task must keep running
+  webUiServer.on("/test/stall", HTTP_POST, []() {
+    unsigned long ms = constrain(webUiServer.arg("ms").toInt(), 0, 30000);
+    Debug.printf("TEST: stalling loop task for %lu ms\n", ms);
+    uint32_t ticksBefore = roofTaskTicks();
+    unsigned long t0 = millis();
+    while (millis() - t0 < ms) { /* busy - deliberately never yields to lower priorities */ }
+    uint32_t ticks = roofTaskTicks() - ticksBefore;
+    Debug.printf("TEST: stall done, roof task ran %lu ticks meanwhile\n", ticks);
+    webUiServer.send(200, "text/plain", "Stalled " + String(ms) + " ms; roof task ticks during stall: " + String(ticks));
+  });
+#endif
 
   // Add ElegantOTA functionality
   ElegantOTA.begin(&webUiServer);
@@ -1195,7 +1220,7 @@ void handleApiStatus() {
 
   // Roof status
   doc["status"] = getRoofStatusString();
-  doc["error_reason"] = roofErrorReason;
+  doc["error_reason"] = getRoofErrorReason();
   doc["telescope_parked"] = telescopeParked;
   doc["bypass_enabled"] = bypassParkSensor;
 
@@ -1257,6 +1282,13 @@ void handleApiStatus() {
   String jsonResponse;
   // Network interfaces (v4)
   fillNetworkStatus(doc.createNestedObject("network"));
+
+  // Roof task health (v4): ticks should advance ~100/s even while this loop is busy
+  JsonObject rt = doc.createNestedObject("roof_task");
+  rt["ticks"] = roofTaskTicks();
+  rt["max_tick_us"] = roofTaskMaxTickUs();
+  rt["net_inputs_fresh"] = roofNetInputsFresh();
+  rt["uptime_ms"] = millis();
 
   serializeJson(doc, jsonResponse);
 

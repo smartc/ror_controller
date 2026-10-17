@@ -25,7 +25,8 @@
 bool logArchiveBegin();                   // Mount LittleFS (formats on first use)
 void logArchiveSetBoot(uint16_t boot);    // Current reboot counter (for dating early-boot lines)
 bool logArchiveReady();
-void logArchiveHandle();                  // Call every loop()
+void logArchiveHandle();                  // Called by the logger task
+void logArchiveStartTask();               // Start the logger task (FRAM writes + archive flushes)
 void logArchiveRequestFlush();            // Flush at the next safe moment
 bool logArchiveFlushNow();                // Flush everything now; false if the roof is busy
 bool logArchiveBusy();                    // Roof moving/relay sequence active: no flash I/O

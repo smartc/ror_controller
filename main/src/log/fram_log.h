@@ -34,10 +34,14 @@ struct FramLogIter {
   uint32_t pos;        // ring offset of the next record
   uint32_t remaining;  // bytes left to read
   uint32_t consumed;   // bytes read so far
+  uint32_t droppedAtStart;
 };
 
-bool framLogBegin(uint16_t bootId);       // Wire must already be started
-bool framLogPresent();
+bool framLogBegin(uint16_t bootId);       // i2cBusBegin() must have run
+bool framLogPresent();                    // detected and currently responding
+bool framLogDetected();                   // detected at boot (may be offline now)
+void framLogHandle();                     // re-probe an offline FRAM (logger task)
+void framLogWriteLine(uint32_t utc, uint32_t ms, const char* text);  // logger task only
 
 // Iteration (oldest first). unflushedOnly = only records not yet archived.
 void framLogIterBegin(FramLogIter& it, bool unflushedOnly);

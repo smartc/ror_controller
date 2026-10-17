@@ -11,6 +11,15 @@
 #include <esp_partition.h>
 #include <vector>
 #include <algorithm>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
+// Serialises flush / clear / delete between the logger task and web requests
+static SemaphoreHandle_t archiveMutex = nullptr;   // created in logArchiveBegin()
+struct ArchiveLock {
+  ArchiveLock()  { if (archiveMutex) xSemaphoreTakeRecursive(archiveMutex, portMAX_DELAY); }
+  ~ArchiveLock() { if (archiveMutex) xSemaphoreGiveRecursive(archiveMutex); }
+};
 
 static bool ready = false;
 static bool flushRequested = false;
@@ -23,6 +32,7 @@ static uint16_t currentBoot = 0;
 static const int FLUSH_BATCH = 100;
 
 bool logArchiveBegin() {
+  if (!archiveMutex) archiveMutex = xSemaphoreCreateRecursiveMutex();
   if (!esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "spiffs")) {
     Debug.println("Log archive disabled: no 'spiffs' partition (wrong flash layout)");
     return false;
@@ -188,7 +198,15 @@ static int flushBatch(int maxRecords) {
   return count;
 }
 
+// Writes any queued log lines to FRAM right now (they normally go via the logger task)
+static void drainPersistQueue() {
+  LogLine line;
+  while (logPersistReceive(line, 0)) framLogWriteLine(line.utc, line.ms, line.msg);
+}
+
 bool logArchiveFlushNow() {
+  ArchiveLock lock;
+  drainPersistQueue();
   if (!ready || !framLogPresent()) return false;
   if (logArchiveBusy()) return false;
   uint32_t total = 0;
@@ -206,6 +224,7 @@ bool logArchiveFlushNow() {
 void logArchiveHandle() {
   static bool draining = false;
   if (!ready || !framLogPresent()) return;
+  ArchiveLock lock;
 
   if (!draining) {
     bool due = flushRequested ||
@@ -244,22 +263,57 @@ bool logArchiveValidName(const String& name) {
 
 bool logArchiveDelete(const String& name) {
   if (!ready || !logArchiveValidName(name)) return false;
-  bool ok = LittleFS.remove(String(LOG_ARCHIVE_DIR "/") + name);
+  bool ok;
+  {
+    ArchiveLock lock;
+    ok = LittleFS.remove(String(LOG_ARCHIVE_DIR "/") + name);
+  }
   if (ok) Debug.println("Log file deleted: " + name);
   return ok;
 }
 
 void logArchiveClearAll() {
-  if (ready) {
-    for (auto& f : listLogFiles()) LittleFS.remove(String(LOG_ARCHIVE_DIR "/") + f.name);
+  {
+    ArchiveLock lock;
+    drainPersistQueue();
+    if (ready) {
+      for (auto& f : listLogFiles()) LittleFS.remove(String(LOG_ARCHIVE_DIR "/") + f.name);
+    }
+    framLogClear();
   }
-  framLogClear();
   Debug.println("All logs cleared (FRAM + archive)");
+}
+
+// -- Logger task ------------------------------------------------------------------
+// Owns the slow side of logging: FRAM writes (I2C) and archive flushes (flash).
+// Runs at the lowest priority so it can never delay the roof task.
+
+static void loggerTask(void*) {
+  LogLine line;
+  for (;;) {
+    if (logPersistReceive(line, 50)) {
+      do {
+        framLogWriteLine(line.utc, line.ms, line.msg);
+      } while (logPersistReceive(line, 0));
+    }
+    framLogHandle();
+    logArchiveHandle();
+  }
+}
+
+void logArchiveStartTask() {
+  static bool started = false;
+  if (started) return;
+  started = true;
+  xTaskCreatePinnedToCore(loggerTask, "logger", 6144, nullptr, 1, nullptr, 0);
 }
 
 void logArchiveStatus(JsonObject obj) {
   obj["archive_ready"] = ready;
   obj["fram_present"] = framLogPresent();
+  obj["fram_detected"] = framLogDetected();
+  obj["queue_pending"] = logPersistPending();
+  obj["queue_dropped"] = logPersistDropped();
   obj["fram_capacity"] = framLogCapacity();
   obj["fram_used"] = framLogUsed();
   obj["fram_unflushed"] = framLogUnflushed();

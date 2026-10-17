@@ -593,8 +593,8 @@ void handleSlewing() {
   // See: https://ascom-standards.org/newdocs/dome.html
   // "If the shutter becomes jammed... you must raise an exception when the app tries to read Slewing"
   if (roofStatus == ROOF_ERROR) {
-    String errorMsg = roofErrorReason.length() > 0 ?
-                      roofErrorReason :
+    String errorMsg = getRoofErrorReason().length() > 0 ?
+                      getRoofErrorReason() :
                       "Roof is in error state. Check limit switches and mechanical systems.";
     // Use error code 0x500 (1280) for DriverException - shutter/roof operation failed
     Debug.println("Slewing: returning error (ROOF_ERROR state)");

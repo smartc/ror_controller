@@ -514,14 +514,14 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   String statusString = getRoofStatusString(status);
   String statusDisplayString = statusString;
   // Add error reason in parentheses if in error state
-  if (statusString == "Error" && roofErrorReason.length() > 0) {
+  if (statusString == "Error" && getRoofErrorReason().length() > 0) {
     // Check for timeout with no limit switches - show brief message
     bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
     bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
-    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+    if (getRoofErrorReason().indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
       statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
     } else {
-      String trimmedReason = roofErrorReason;
+      String trimmedReason = getRoofErrorReason();
       trimmedReason.trim();
       statusDisplayString = statusString + " (" + trimmedReason + ")";
     }
@@ -1988,14 +1988,14 @@ inline String getRoofControlPage() {
   String statusString = getRoofStatusString();
   String statusDisplayString = statusString;
   // Add error reason in parentheses if in error state
-  if (statusString == "Error" && roofErrorReason.length() > 0) {
+  if (statusString == "Error" && getRoofErrorReason().length() > 0) {
     // Check for timeout with no limit switches - show brief message
     bool openSwitchState = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
     bool closedSwitchState = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
-    if (roofErrorReason.indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
+    if (getRoofErrorReason().indexOf("timed out") >= 0 && !openSwitchState && !closedSwitchState) {
       statusDisplayString = statusString + " (Timeout: Roof stopped mid-travel. Manually move to fully open or closed, then clear error.)";
     } else {
-      String trimmedReason = roofErrorReason;
+      String trimmedReason = getRoofErrorReason();
       trimmedReason.trim();
       statusDisplayString = statusString + " (" + trimmedReason + ")";
     }
