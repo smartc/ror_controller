@@ -28,6 +28,7 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 - **Weather/sky safety**: receives UDP broadcasts from safety sensor devices; blocks roof opening when any enabled sensor reports unsafe conditions. Fail-safe: an enabled sensor that goes offline is treated as unsafe
 - **Auto-close**: optionally closes the roof automatically when weather becomes unsafe (requires telescope parked)
 - All safety interlocks have bypass toggles accessible from both the Setup and Roof Control pages
+- **Firmware updates blocked while moving**: OTA uploads are refused (HTTP 409) while the roof is moving or a relay sequence is running, and an upload in progress is aborted if a move starts (flash writes stall both CPU cores)
 
 > **CAUTION — Shore-power openers with no relay on K1:**
 > The runtime park sensor interlock kills K1 (inverter power relay) as its primary stop action. If your roof opener runs directly on shore power and K1 is not wired into its supply, the controller **cannot electrically stop the opener** when this interlock fires. The system will still set `ROOF_ERROR`, kill K1 (no-op in this wiring), and publish an immediate MQTT alert — but the opener will continue running until it reaches a limit switch or is stopped manually.
@@ -294,6 +295,8 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 - **Persistent logging**: FRAM black box (every line, survives power loss) plus a LittleFS archive (daily files, 90 days / 2 MB). Console page gains history across reboots, downloads, flush and clear.
 - **Time**: network time (SNTP) fallback; DS3231 oscillator-stop flag honoured and cleared; date rollover fixed for RTC/network time.
 - **Setup page** split into tabs and streamed (lower peak heap); saving a form returns to the same tab.
+- **Roof task**: limit switches, interlocks, timeouts, relay sequences and weather auto-close run in a dedicated 10 ms FreeRTOS task with a watchdog, independent of web/MQTT/logging. Stale network inputs let a move finish but block new ones.
+- OTA refused while the roof is moving; an in-flight upload aborts if a move starts.
 - Log hygiene: AP password no longer logged; chatty page-size lines moved to verbose.
 - Fix: console live view never refreshing.
 

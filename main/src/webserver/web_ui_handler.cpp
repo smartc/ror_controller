@@ -15,6 +15,28 @@
 #include "../log/log_archive.h"
 #include "../log/fram_log.h"
 #include <HTTPClient.h>
+#include <Update.h>
+
+// Flash writes stall both cores, so firmware updates are refused while the roof
+// is moving or a relay sequence is running. Claims /ota/start and /ota/upload
+// only while busy; otherwise ElegantOTA's own handlers take the request.
+class OtaBusyGuard : public RequestHandler {
+public:
+  bool canHandle(WebServer &server, HTTPMethod method, const String &uri) override {
+    (void)server; (void)method;
+    return (uri == "/ota/start" || uri == "/ota/upload") && logArchiveBusy();
+  }
+  bool canUpload(WebServer &server, const String &uri) override {
+    (void)server; (void)uri;
+    return false;  // discard the firmware body
+  }
+  bool handle(WebServer &server, HTTPMethod method, const String &uri) override {
+    (void)method;
+    Debug.printf("OTA refused (%s): roof is moving\n", uri.c_str());
+    server.send(409, "text/plain", "Roof is moving - firmware update refused. Try again when it has stopped.");
+    return true;
+  }
+};
 
 // Standard Web Server
 WebServer webUiServer(WEB_UI_PORT);
@@ -634,8 +656,19 @@ void initWebUI() {
   });
 #endif
 
+  // OTA guard must be registered before ElegantOTA so it gets first look at /ota/*
+  webUiServer.addHandler(new OtaBusyGuard());
+
   // Add ElegantOTA functionality
   ElegantOTA.begin(&webUiServer);
+  ElegantOTA.onProgress([](size_t current, size_t final) {
+    // The loop is blocked during an upload, but the roof task can still start a
+    // move (weather auto-close). Abort: the roof wins, the running firmware stays.
+    if (logArchiveBusy() && !Update.hasError()) {
+      Update.abort();
+      Debug.println("OTA aborted: roof started moving during upload");
+    }
+  });
   ElegantOTA.onEnd([](bool success) {
     Debug.printf("OTA update %s\n", success ? "complete - restarting" : "FAILED");
     if (success) logArchiveFlushNow();
