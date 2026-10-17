@@ -42,7 +42,7 @@ String getGPSConfigCard();         // GPS and NTP server configuration
 inline String getCommonStyles() {
   String styles =
     "* { box-sizing: border-box; }\n"
-    "body { font-family: Arial, sans-serif; margin: 20px; background-color: #1a1a2e; color: #e0e0e0; }\n"
+    "body { font-family: Arial, sans-serif; max-width: 1040px; margin: 20px auto; padding: 0 16px; background-color: #1a1a2e; color: #e0e0e0; }\n"
     "h1, h2 { color: #a0c4ff; margin-top: 0; }\n"
     "h3 { color: #81c784; }\n"
     "a { color: #74b9ff; text-decoration: none; }\n"
@@ -73,7 +73,7 @@ inline String getCommonStyles() {
     "button { background-color: #74b9ff; color: #000; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; }\n"
     "button:hover { background-color: #a0c4ff; }\n"
     "button:disabled { background-color: #2d3561; color: #636e72; cursor: not-allowed; opacity: 0.5; }\n"
-    "table { border-collapse: collapse; width: 100%; }\n"
+    "table { border-collapse: collapse; width: 100%; max-width: 860px; }\n"
     "table, th, td { border: 1px solid #2d3561; }\n"
     "th, td { padding: 8px; text-align: left; }\n"
     "th { background-color: #0f3460; color: #e0e0e0; font-weight: bold; }\n"
@@ -178,7 +178,7 @@ inline String getNavBar() {
     "<a href='/update' class='warn'>Update</a>\n"
     "</div>\n";
 
-  return navbar;
+  return navbar + getStatusCard();
 }
 
 // Updated getRoofControlJS function with better error handling
@@ -545,11 +545,6 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     indicatorClass = "red blink";
   }
 
-  // Status header
-  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
-  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
-  html += "</div>\n";
 
 
   // Device Information Card
@@ -1051,20 +1046,21 @@ function updateHomeLive(d) {
   return html;
 }
 
-// Compact live summary at the top of the setup page (full status is on Home)
+// Compact live status bar shown under the nav on every page
 inline String getStatusCard() {
   auto item = [](const char* label, const char* id) {
     return String("<span><span style='color:#8899aa'>") + label + "</span> <strong id='" + id + "'>-</strong></span>";
   };
   String html = "<div class='card' style='padding:12px 20px'>";
-  html += "<div style='display:flex;flex-wrap:wrap;gap:8px 28px;font-size:0.95em'>";
+  html += "<div style='display:flex;flex-wrap:wrap;gap:6px 20px;font-size:0.9em'>";
   html += item("Roof", "ssRoof");
   html += item("Telescope", "ssPark");
-  html += item("Open limit", "ssOpen");
-  html += item("Closed limit", "ssClosed");
+  html += item("Limit", "ssLimit");
   html += item("Network", "ssNet");
   html += item("MQTT", "ssMqtt");
-  html += "</div></div>";
+  html += "</div>";
+  html += "<div id='ssErr' style='display:none;margin-top:8px;color:#e57373;font-weight:bold'></div>";
+  html += "</div>";
   html += R"rawjs(
 <script>
 function setupSummary(){
@@ -1073,11 +1069,17 @@ function setupSummary(){
     var moving = d.status==='Opening'||d.status==='Closing';
     dot('ssRoof', d.status==='Open'?'blue':d.status==='Closed'?'green':moving?'orange blink':'red blink', d.status);
     dot('ssPark', d.telescope_parked?'green':'red', d.telescope_parked?'Parked':'Not parked');
-    dot('ssOpen', d.limit_open?'green':'red', d.limit_open?'Triggered':'Not Triggered');
-    dot('ssClosed', d.limit_closed?'green':'red', d.limit_closed?'Triggered':'Not Triggered');
+    dot('ssLimit', (d.limit_open && d.limit_closed)?'red blink':(d.limit_open||d.limit_closed)?'green':'orange', (d.limit_open && d.limit_closed)?'Both (fault)':d.limit_open?'Open':d.limit_closed?'Closed':'Neither');
     var n=d.network||{};
     dot('ssNet', n.ip?'green':'red', (n.active||'None')+(n.ip?' '+n.ip:''));
     dot('ssMqtt', d.mqtt_connected?'green':(d.mqtt_enabled?'red':'gray'), d.mqtt_connected?'Connected':(d.mqtt_enabled?'Disconnected':'Off'));
+    var err=document.getElementById('ssErr');
+    if (err) {
+      var reason=(d.status==='Error' && d.error_reason) ? d.error_reason.trim() : '';
+      if (reason && reason.indexOf('timed out')>=0 && !d.limit_open && !d.limit_closed)
+        reason='Timeout: roof stopped mid-travel. Move it fully open or closed (the error clears itself), or clear it on Roof Control.';
+      err.textContent=reason; err.style.display=reason?'block':'none';
+    }
   }).catch(function(){});
 }
 setupSummary();
@@ -1680,7 +1682,7 @@ inline String getSafetySensorConfigCard() {
   if (sensors.empty()) {
     html += "<p><em>No safety sensors discovered yet. Sensors broadcast every 30 seconds on UDP port 23435.</em></p>";
   } else {
-    html += "<table style='width:100%; margin-bottom:15px;'>";
+    html += "<table style='width:100%; max-width:none; margin-bottom:15px;'>";
     html += "<tr><th>Name</th><th>Status</th><th>IP</th><th>Temp</th><th>Last Seen</th><th>Enabled</th><th>Bypass</th><th>Actions</th></tr>";
     for (const auto& sensor : sensors) {
       bool neverSeen = sensor.lastSeen == 0;
@@ -2008,7 +2010,6 @@ inline void buildSetupPage(Emit emit) {
           "MQTT changes apply immediately; WiFi changes need a restart.</div>";
   emit(head);
 
-  emit(getStatusCard());
   emit(getSetupTabBar());
 
   emit("<div class='tab' id='tab-device'>" + getSwitchConfigCard() + getSystemManagementCard() + "</div>");
@@ -2086,11 +2087,6 @@ inline String getRoofControlPage() {
     indicatorClass = "red blink";
   }
 
-  // Status header (matching home page)
-  html += "<div id='mainStatusHeader' class='status-header " + statusClass + "'>\n";
-  html += "<span id='mainStatusIndicator' class='status-indicator " + indicatorClass + "'></span> ";
-  html += "Roof Status: <span id='mainStatusText'>" + statusDisplayString + "</span>";
-  html += "</div>\n";
 
 
   // Current Status Card
