@@ -7,6 +7,7 @@
 #include "../debug/Debug.h"
 #include <WiFiUdp.h>
 #include <Wire.h>
+#include "../hw/i2c_bus.h"
 #include <Preferences.h>
 
 // GPS Serial port (using HardwareSerial 1)
@@ -87,6 +88,7 @@ static uint8_t decToBcd(uint8_t val);
 
 // Initialize RTC module
 void initRTC() {
+  I2CLock lock;  // bus shared with the FRAM logger task
   Debug.println("Initializing RTC (DS3231)...");
 
   // I2C bus is started in setup() (shared with the FRAM log)
@@ -131,6 +133,7 @@ void initRTC() {
 // True if the DS3231 reports its oscillator stopped since the time was last set.
 // A failed read is treated as stopped so a flaky bus never yields trusted time.
 bool readRTCOscillatorStopped() {
+  I2CLock lock;  // bus shared with the FRAM logger task
   Wire.beginTransmission(DS3231_ADDRESS);
   Wire.write(DS3231_REG_STATUS);
   if (Wire.endTransmission(false) != 0 || Wire.requestFrom(DS3231_ADDRESS, (uint8_t)1) != 1) {
@@ -146,6 +149,7 @@ bool isRTCPresent() {
 
 // Read time from DS3231 RTC
 bool readRTC(GPSTime* time) {
+  I2CLock lock;  // bus shared with the FRAM logger task
   if (!rtcPresent) {
     return false;
   }
@@ -190,6 +194,7 @@ bool readRTC(GPSTime* time) {
 
 // Write time to DS3231 RTC
 bool writeRTC(const GPSTime* time) {
+  I2CLock lock;  // bus shared with the FRAM logger task
   if (!rtcPresent || !time->valid) {
     return false;
   }
