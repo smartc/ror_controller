@@ -10,3 +10,7 @@ build/
 .vscode/
 CLAUDE.md
 .claude/
+
+# Device flash backups and decoded settings (contain credentials)
+backups/
+release/
