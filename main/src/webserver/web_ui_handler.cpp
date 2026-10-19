@@ -547,6 +547,7 @@ void initWebUI() {
   // Handle root page
   webUiServer.on("/", HTTP_GET, handleRoot);
   webUiServer.on("/console",      HTTP_GET, handleConsole);
+  webUiServer.on("/firmware",     HTTP_GET, handleFirmware);
   webUiServer.on("/console.json", HTTP_GET, handleConsoleJSON);
 
   // Log management (FRAM + flash archive)
@@ -693,6 +694,11 @@ void handleConsole() {
   webUiServer.send(200, "text/html", getConsolePage());
 }
 
+// Firmware update page: ElegantOTA's /update framed in the site layout
+void handleFirmware() {
+  webUiServer.send(200, "text/html", getFirmwarePage());
+}
+
 void handleConsoleJSON() {
   String json;
   logGetJSON(json);
@@ -755,7 +761,18 @@ void handleSetupPost() {
     String newMqttPassword = webUiServer.arg("mqttPassword");
     String newMqttClientId = webUiServer.arg("mqttClientId");
     String newMqttTopicPrefix = webUiServer.arg("mqttTopicPrefix");
-    
+
+    // The enable toggle is a checkbox: it's only submitted when checked
+    bool newMqttEnabled = webUiServer.hasArg("mqttEnabled");
+    if (newMqttEnabled != mqttEnabled) {
+      mqttEnabled = newMqttEnabled;
+      preferences.begin(PREFERENCES_NAMESPACE, false);
+      preferences.putBool(PREF_MQTT_ENABLED, mqttEnabled);
+      preferences.end();
+      settingsChanged = true;
+      Debug.printf("MQTT %s\n", mqttEnabled ? "enabled" : "disabled");
+    }
+
     if (newMqttServer.length() > 0 && strcmp(newMqttServer.c_str(), mqttServer) != 0) {
       strncpy(mqttServer, newMqttServer.c_str(), sizeof(mqttServer) - 1);
       mqttServer[sizeof(mqttServer) - 1] = '\0';
@@ -1253,7 +1270,7 @@ void handleClearError() {
 
 // API endpoint for real-time status updates (returns JSON)
 void handleApiStatus() {
-  DynamicJsonDocument doc(3072);
+  DynamicJsonDocument doc(8192);  // room for 10 park + safety sensor rows
 
   // Roof status
   doc["status"] = getRoofStatusString();
@@ -1299,6 +1316,22 @@ void handleApiStatus() {
     }
   }
 
+  // Every discovered park and safety sensor, pre-formatted for the setup page tables
+  JsonArray sensorRows = doc.createNestedArray("sensors");
+  for (const auto& s : getDiscoveredSensors()) {
+    JsonObject o = sensorRows.createNestedObject();
+    o["id"] = "park:" + s.uuid;
+    o["status"] = parkSensorStatusHtml(s);
+    o["seen"] = sensorAgoText(s.lastSeen);
+  }
+  for (const auto& s : getDiscoveredSafetySensors()) {
+    JsonObject o = sensorRows.createNestedObject();
+    o["id"] = "safety:" + s.serialNumber;
+    o["status"] = safetySensorStatusHtml(s);
+    o["temp"] = sensorTempText(s.ambTemp);
+    o["seen"] = sensorAgoText(s.lastSeen);
+  }
+
   // Time status
   doc["time_synced"] = timeSynced;
   doc["rtc_present"] = rtcPresent;
@@ -1310,10 +1343,14 @@ void handleApiStatus() {
   doc["local_date"] = getLocalDateString();
   doc["timezone_offset"] = timezoneOffset;
   doc["dst_enabled"] = dstEnabled;
+  doc["unix_ms"] = getCurrentUnixMillis();   // drives the live clocks on every page
+  doc["total_offset"] = getTotalOffset();
 
   // GPS status
   doc["gps_enabled"] = gpsEnabled;
   doc["ntp_enabled"] = gpsNtpEnabled;
+  doc["ntp_state"] = getNTPStateName();
+  doc["ntp_state_text"] = getNTPStateText();
   doc["pps_active"] = gpsEnabled && gpsPpsPin >= 0 && isPPSActive();
   if (gpsEnabled) {
     GPSStatus gpsStatusData = getGPSStatus();
@@ -1402,6 +1439,7 @@ void handleGPSStatus() {
   // GPS status
   doc["gps_enabled"] = gpsEnabled;
   doc["ntp_enabled"] = gpsNtpEnabled;
+  doc["ntp_state"] = getNTPStateName();
   doc["has_fix"] = status.hasFix;
   doc["satellites"] = status.satellites;
   doc["satellites_in_view"] = status.satellites_in_view;

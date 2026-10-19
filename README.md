@@ -282,7 +282,8 @@ mqtt:
 | `/safety_sensor_remove` | POST | Remove a safety sensor |
 | `/inverter_toggle` | POST | Toggle K1 power relay |
 | `/inverter_button` | POST | K3 soft-power button press |
-| `/update` | GET | OTA firmware update |
+| `/firmware` | GET | Firmware update page (site layout, frames `/update`) |
+| `/update` | GET | OTA firmware update (ElegantOTA, standalone) |
 | `/restart` | POST | Reboot device |
 
 ---
@@ -294,6 +295,17 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 ---
 
 ## Changelog
+
+### v4.0.1 (2026-10-18)
+- **NTP server follows RFC 5905 when GPS is lost**: stratum 1 (`PPS`/`GPS`) while GPS time is fresh; then a 1-hour holdover at stratum 1, extrapolating sub-second time from the last PPS edge on the local crystal, with root dispersion growing 15 µs/s; then unsynchronized (LI=3, stratum 0, refid `INIT`) so clients fail over to their other servers. RTC-only time after boot is served as unsynchronized. Holdover length: `NTP_HOLDOVER_SECONDS` in `config.h`.
+- Fix: PPS edges kept PPS "active" without a fresh GPS fix, which froze the served time at the last fix.
+- NTP state shown on the status and setup pages, and as `ntp_state` in the status JSON.
+- Setup page park and safety sensor tables update live every 2 seconds (status and last seen; temperature for safety sensors); both tables share one layout and show a hint when a new sensor is discovered.
+- Live clocks: UTC/local time and date on the home and setup pages tick every second, synced to the controller's millisecond time (`unix_ms` in `/api/status`) instead of jumping on each 2-second poll.
+- Update tab opens `/firmware`: the ElegantOTA uploader framed in the site layout (nav, status bar, dark theme).
+- Fix: the MQTT enable toggle wasn't saved by "Save MQTT Settings" (only by "Apply Settings" on another tab), so it came back on after a reload or reboot.
+- Fix: home page showed an offline UDP park sensor as "Unknown" after the first refresh.
+- Fix: turning off "Monitor Limit Switch Changes" had no effect; the "failed to start" error now respects it, leaving a roof that doesn't move to the movement timeout.
 
 ### v4.0.0 (2026-10-17)
 - **16 MB flash layout** (`main/partitions.csv`): 3 MB OTA app slots plus a 9.9 MB log partition. One-time USB flash needed when upgrading from v3; settings carry over.

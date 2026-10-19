@@ -9,6 +9,7 @@
 #include <Wire.h>
 #include "../hw/i2c_bus.h"
 #include <Preferences.h>
+#include <esp_timer.h>
 
 // GPS Serial port (using HardwareSerial 1)
 HardwareSerial GPSSerial(1);
@@ -54,6 +55,11 @@ static bool ppsActive = false;                        // PPS signal is healthy a
 static uint32_t ppsUnixTimeAtEdge = 0;               // Unix time corresponding to last PPS edge
 static unsigned long ppsLastValidMillis = 0;          // millis() of last validated PPS edge
 
+// Holdover anchor: last validated PPS edge on the 64-bit esp_timer clock (micros() wraps
+// every ~71 minutes), so NTP can extrapolate sub-second time after GPS is lost
+static int64_t ppsAnchorUs = 0;
+static uint32_t ppsAnchorUnix = 0;                    // 0 = no PPS edge yet this boot
+
 // PPS interrupt handler - called on rising edge of PPS signal
 static void IRAM_ATTR ppsInterruptHandler() {
   ppsPrevMicros = ppsLastMicros;
@@ -65,6 +71,9 @@ static void IRAM_ATTR ppsInterruptHandler() {
 // Track if we've synced RTC from GPS
 static bool rtcSyncedFromGPS = false;
 
+// Set once GPS has given a valid fix this boot; until then the NTP server is unsynchronized
+static bool gpsFixSeen = false;
+
 // NTP timestamp epoch offset (1900 to 1970 = 70 years)
 #define NTP_TIMESTAMP_DELTA 2208988800UL
 
@@ -72,6 +81,14 @@ static bool rtcSyncedFromGPS = false;
 #define PPS_TIMEOUT_MS 3000            // PPS considered lost if no pulse for 3 seconds
 #define PPS_PERIOD_MIN_US 950000       // Minimum valid PPS period (950ms)
 #define PPS_PERIOD_MAX_US 1050000      // Maximum valid PPS period (1050ms)
+#define PPS_NMEA_MAX_AGE_MS 2000       // PPS edge is only labelled from NMEA time this fresh
+#define GPS_FRESH_MS 5000              // GPS time older than this puts the NTP server in holdover
+
+// NTP root dispersion (16.16 fixed-point seconds)
+#define NTP_DISP_PPS 0x00000001UL      // ~15 us
+#define NTP_DISP_GPS 0x00008000UL      // 0.5 s (NMEA second boundary only)
+#define NTP_DISP_UNSYNC 0x00100000UL   // 16 s (MAXDISP)
+#define NTP_PHI_PPM 15                 // RFC 5905 dispersion growth: 15 us per second
 
 // Forward declarations for internal functions
 static void parseNMEA(const char* sentence);
@@ -341,7 +358,12 @@ void handleGPS() {
                        (period >= PPS_PERIOD_MIN_US) &&
                        (period <= PPS_PERIOD_MAX_US);
 
-    if (periodValid && gpsStatus.hasFix && gpsStatus.time.valid) {
+    // Only label the edge while NMEA time is fresh: if the fix or the NMEA stream is lost,
+    // a stale label would freeze the served time while PPS keeps it marked active.
+    bool nmeaFresh = gpsStatus.hasFix && gpsStatus.time.valid &&
+                     (millis() - gpsStatus.lastUpdate < PPS_NMEA_MAX_AGE_MS);
+
+    if (periodValid && nmeaFresh) {
       // Determine PPS-to-NMEA timing relationship.
       // handleGPS() reads serial BEFORE checking ppsTriggered, so:
       //   - If NMEA was parsed in this call (after PPS edge): lastGPSUpdateMicros > ppsLastMicros
@@ -350,16 +372,16 @@ void handleGPS() {
       //     → NMEA describes the PREVIOUS second → ppsUnixTimeAtEdge = lastGPSUnixTime + 1
       bool nmeaIsCurrentSecond = ((long)(lastGPSUpdateMicros - lastMicros) > 0);
       ppsUnixTimeAtEdge = nmeaIsCurrentSecond ? lastGPSUnixTime : (lastGPSUnixTime + 1);
+      ppsAnchorUs = esp_timer_get_time() - (int64_t)(unsigned long)(micros() - lastMicros);
+      ppsAnchorUnix = ppsUnixTimeAtEdge;
       ppsActive = true;
       ppsLastValidMillis = millis();
 
       Debug.printf(2, "PPS #%lu: period=%lu us, time=%lu, nmea=%s\n",
                    (unsigned long)ppsCount, period, ppsUnixTimeAtEdge,
                    nmeaIsCurrentSecond ? "current" : "previous");
-    } else if (periodValid) {
-      // PPS pulses are coming but no GPS fix yet - track but don't activate
-      ppsLastValidMillis = millis();
     }
+    // Pulses without fresh NMEA time don't keep PPS active; it times out below
   }
 
   // Mark PPS as inactive if no valid pulse recently
@@ -450,6 +472,21 @@ static bool getPPSNTPTimestamp(uint32_t* ntpSeconds, uint32_t* ntpFraction) {
   return true;
 }
 
+// Holdover timestamp: extrapolate from the last PPS edge on the local crystal, or from the
+// last NMEA second if PPS was never seen. Independent of the current time source, which
+// may have dropped to the RTC. Returns true if PPS-based.
+static bool getHoldoverNTPTimestamp(uint32_t* ntpSeconds, uint32_t* ntpFraction) {
+  if (ppsAnchorUnix != 0) {
+    int64_t elapsed = esp_timer_get_time() - ppsAnchorUs;
+    *ntpSeconds = ppsAnchorUnix + (uint32_t)(elapsed / 1000000) + NTP_TIMESTAMP_DELTA;
+    *ntpFraction = microsToNTPFraction((unsigned long)(elapsed % 1000000));
+    return true;
+  }
+  *ntpSeconds = lastGPSUnixTime + (millis() - lastGPSSecondMillis) / 1000 + NTP_TIMESTAMP_DELTA;
+  *ntpFraction = 0;
+  return false;
+}
+
 // Write a 64-bit NTP timestamp (seconds + fraction) into a buffer at offset
 static void writeNTPTimestamp(uint8_t* buf, int offset, uint32_t seconds, uint32_t fraction) {
   buf[offset]     = (seconds >> 24) & 0xFF;
@@ -462,56 +499,112 @@ static void writeNTPTimestamp(uint8_t* buf, int offset, uint32_t seconds, uint32
   buf[offset + 7] = fraction & 0xFF;
 }
 
+// Seconds since the last valid GPS fix (0 if none this boot)
+static unsigned long gpsFixAgeSeconds() {
+  return gpsFixSeen ? (millis() - gpsStatus.lastUpdate) / 1000 : 0;
+}
+
+// RFC 5905 behaviour: stratum 1 while GPS is fresh, then a holdover period with growing
+// dispersion, then unsynchronized. RTC-only or network time is never advertised as a reference.
+NTPState getNTPState() {
+  if (!timeSynced || !gpsFixSeen ||
+      (currentTimeSource != TIME_SOURCE_GPS && currentTimeSource != TIME_SOURCE_RTC)) {
+    return NTP_STATE_UNSYNCED;
+  }
+  unsigned long ageMs = millis() - gpsStatus.lastUpdate;
+  if (ageMs <= GPS_FRESH_MS) {
+    return ppsActive ? NTP_STATE_PPS : NTP_STATE_GPS;
+  }
+  if (ageMs <= NTP_HOLDOVER_SECONDS * 1000UL) {
+    return NTP_STATE_HOLDOVER;
+  }
+  return NTP_STATE_UNSYNCED;
+}
+
+const char* getNTPStateName() {
+  switch (getNTPState()) {
+    case NTP_STATE_PPS:      return "pps";
+    case NTP_STATE_GPS:      return "gps";
+    case NTP_STATE_HOLDOVER: return "holdover";
+    default:                 return "unsynced";
+  }
+}
+
+const char* getNTPStateText() {
+  switch (getNTPState()) {
+    case NTP_STATE_PPS:      return "Stratum 1, PPS-disciplined (port 123)";
+    case NTP_STATE_GPS:      return "Stratum 1, GPS without PPS (port 123)";
+    case NTP_STATE_HOLDOVER: return "Holdover: GPS lost, still stratum 1 (port 123)";
+    default:                 return "Unsynchronized: clients will use other servers";
+  }
+}
+
 // Send NTP response
 void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remotePort) {
   // Get receive timestamp as early as possible for best accuracy
-  uint32_t rxSeconds, rxFraction;
-  bool hasPPS = getPPSNTPTimestamp(&rxSeconds, &rxFraction);
+  NTPState state = getNTPState();
+  bool holdover = (state == NTP_STATE_HOLDOVER);
+  uint32_t rxSeconds = 0, rxFraction = 0;
+  bool ppsTime = holdover ? getHoldoverNTPTimestamp(&rxSeconds, &rxFraction)
+                          : getPPSNTPTimestamp(&rxSeconds, &rxFraction);
 
   if (rxSeconds == 0) {
     Debug.println("No time available for NTP response");
     return;
   }
 
+  bool synced = (state != NTP_STATE_UNSYNCED);
+
   // Prepare response packet
   uint8_t response[48];
   memset(response, 0, 48);
 
-  // LI (leap indicator) = 0, VN (version) = 4, Mode = 4 (server)
-  response[0] = 0b00100100;  // LI=0, VN=4, Mode=4
+  // LI = 0 (no warning) or 3 (unsynchronized), VN = 4, Mode = 4 (server)
+  response[0] = synced ? 0b00100100 : 0b11100100;
 
-  // Stratum = 1 (primary reference - GPS/RTC)
-  response[1] = 1;
+  // Stratum 1 (primary reference) or 0 (unspecified: RFC 5905 sends stratum 16 as 0 on the wire)
+  response[1] = synced ? 1 : 0;
 
   // Poll interval = 6 (64 seconds)
   response[2] = 6;
 
-  // Precision: with PPS = -20 (~1μs), without PPS = -6 (~15ms NMEA jitter)
-  response[3] = hasPPS ? 0xEC : 0xFA;  // -20 or -6 in signed 8-bit
+  // Precision: PPS-based (live or holdover) = -20 (~1μs), otherwise -6 (~15ms NMEA jitter)
+  bool ppsBased = (state == NTP_STATE_PPS) || (holdover && ppsTime);
+  response[3] = ppsBased ? 0xEC : 0xFA;  // -20 or -6 in signed 8-bit
 
   // Root delay = 0 (we are the reference clock)
   response[4] = 0; response[5] = 0; response[6] = 0; response[7] = 0;
 
-  // Root dispersion: with PPS ~15μs (0x0001), without PPS ~500ms (0x8000)
-  if (hasPPS) {
-    response[8] = 0; response[9] = 0; response[10] = 0x00; response[11] = 0x01;
-  } else {
-    response[8] = 0; response[9] = 0; response[10] = 0x80; response[11] = 0x00;
-  }
-
-  // Reference ID based on time source and PPS
-  if (currentTimeSource == TIME_SOURCE_GPS) {
-    if (hasPPS) {
-      response[12] = 'P'; response[13] = 'P'; response[14] = 'S'; response[15] = '\0';
-    } else {
-      response[12] = 'G'; response[13] = 'P'; response[14] = 'S'; response[15] = '\0';
+  // Root dispersion: PPS ~15μs, GPS 0.5s, unsynchronized 16s; in holdover the base value
+  // grows at 15μs/s (RFC 5905 PHI, above the ESP32 crystal's tolerance) since the last edge/fix
+  uint32_t dispersion;
+  switch (state) {
+    case NTP_STATE_PPS: dispersion = NTP_DISP_PPS; break;
+    case NTP_STATE_GPS: dispersion = NTP_DISP_GPS; break;
+    case NTP_STATE_HOLDOVER: {
+      uint64_t ageSec = ppsTime ? (uint64_t)((esp_timer_get_time() - ppsAnchorUs) / 1000000) : gpsFixAgeSeconds();
+      dispersion = (ppsTime ? NTP_DISP_PPS : NTP_DISP_GPS) +
+                   (uint32_t)(ageSec * NTP_PHI_PPM * 65536ULL / 1000000ULL);
+      break;
     }
-  } else {
-    response[12] = 'L'; response[13] = 'O'; response[14] = 'C'; response[15] = 'L';
+    default: dispersion = NTP_DISP_UNSYNC; break;
   }
+  response[8] = (dispersion >> 24) & 0xFF;
+  response[9] = (dispersion >> 16) & 0xFF;
+  response[10] = (dispersion >> 8) & 0xFF;
+  response[11] = dispersion & 0xFF;
 
-  // Reference timestamp (last PPS edge or last GPS update)
-  writeNTPTimestamp(response, 16, rxSeconds, 0);
+  // Reference ID: PPS / GPS while synced; at stratum 0 it's a kiss code, and INIT
+  // ("not yet synchronized") is the one clients treat as harmless
+  const char* refId = ppsBased ? "PPS" : (synced ? "GPS" : "INIT");
+  strncpy((char*)&response[12], refId, 4);
+
+  // Reference timestamp: last PPS edge / GPS update; zero when unsynchronized
+  if (holdover) {
+    writeNTPTimestamp(response, 16, (ppsTime ? ppsAnchorUnix : lastGPSUnixTime) + NTP_TIMESTAMP_DELTA, 0);
+  } else if (synced) {
+    writeNTPTimestamp(response, 16, rxSeconds, 0);
+  }
 
   // Origin timestamp (copy from request's transmit timestamp)
   memcpy(&response[24], &buffer[40], 8);
@@ -520,8 +613,12 @@ void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remo
   writeNTPTimestamp(response, 32, rxSeconds, rxFraction);
 
   // Transmit timestamp (capture now, just before sending)
-  uint32_t txSeconds, txFraction;
-  getPPSNTPTimestamp(&txSeconds, &txFraction);
+  uint32_t txSeconds = 0, txFraction = 0;
+  if (holdover) {
+    getHoldoverNTPTimestamp(&txSeconds, &txFraction);
+  } else {
+    getPPSNTPTimestamp(&txSeconds, &txFraction);
+  }
   writeNTPTimestamp(response, 40, txSeconds, txFraction);
 
   // Send response
@@ -529,10 +626,9 @@ void sendNTPResponse(uint8_t* buffer, int len, IPAddress remoteIP, uint16_t remo
   ntpUdp.write(response, 48);
   ntpUdp.endPacket();
 
-  Debug.printf(2, "NTP response sent to %s:%d (source: %s, PPS: %s)\n",
+  Debug.printf(2, "NTP response sent to %s:%d (source: %s, state: %s)\n",
                remoteIP.toString().c_str(), remotePort,
-               getTimeSourceName(),
-               hasPPS ? "Yes" : "No");
+               getTimeSourceName(), getNTPStateName());
 }
 
 // ============== Control Functions ==============
@@ -699,6 +795,27 @@ uint32_t getCurrentUnixTime() {
     return lastRTCUnixTime + elapsed;
   } else if (currentTimeSource == TIME_SOURCE_NETWORK) {
     return (uint32_t)time(nullptr);
+  }
+  return 0;
+}
+
+// Unix time in milliseconds from the best source (0 if none), for the web UI clocks.
+// PPS gives the true sub-second phase; the other sources count from when their second was read.
+uint64_t getCurrentUnixMillis() {
+  uint32_t ntpSeconds, ntpFraction;
+  if (currentTimeSource == TIME_SOURCE_GPS && getPPSNTPTimestamp(&ntpSeconds, &ntpFraction)) {
+    return (uint64_t)(ntpSeconds - NTP_TIMESTAMP_DELTA) * 1000 + (((uint64_t)ntpFraction * 1000) >> 32);
+  }
+  if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
+    return (uint64_t)lastGPSUnixTime * 1000 + (millis() - lastGPSSecondMillis);
+  }
+  if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
+    return (uint64_t)lastRTCUnixTime * 1000 + (millis() - lastRTCReadMillis);
+  }
+  if (currentTimeSource == TIME_SOURCE_NETWORK) {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
   }
   return 0;
 }
@@ -940,6 +1057,7 @@ static void parseGPRMC(const char* sentence) {
     lastGPSUpdateMicros = micros();
     lastGPSSecondMillis = millis();
     gpsStatus.lastUpdate = millis();
+    gpsFixSeen = true;
 
     Debug.printf(2, "GPS Time: %s %s, Lat: %.6f, Lon: %.6f\n",
                  getGPSDateString().c_str(), getGPSTimeString().c_str(),

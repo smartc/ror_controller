@@ -42,6 +42,14 @@ enum TimeSource {
   TIME_SOURCE_NETWORK = 3     // SNTP over the network - fallback when GPS and RTC can't provide time
 };
 
+// What the NTP server advertises (RFC 5905)
+enum NTPState {
+  NTP_STATE_PPS = 0,          // Stratum 1, PPS-disciplined
+  NTP_STATE_GPS = 1,          // Stratum 1, NMEA time only (~0.5 s)
+  NTP_STATE_HOLDOVER = 2,     // Stratum 1, GPS lost recently, dispersion growing
+  NTP_STATE_UNSYNCED = 3      // LI=3 / stratum 0: clients should ignore us
+};
+
 // Global GPS and RTC variables
 extern bool gpsEnabled;
 extern bool gpsNtpEnabled;
@@ -75,6 +83,9 @@ void handleTimeSync();                    // Promote/refresh the time source; ca
 const char* getTimeSourceName();          // "GPS", "RTC", "Network" or "None"
 void initNTP();                           // Initialize NTP server
 void handleNTP();                         // Handle NTP server requests
+NTPState getNTPState();                   // What the NTP server currently advertises
+const char* getNTPStateName();            // "pps", "gps", "holdover" or "unsynced"
+const char* getNTPStateText();            // Human-readable NTP server state for the web UI
 
 // GPS control functions
 void setGPSEnabled(bool enabled);         // Enable/disable GPS
@@ -96,6 +107,7 @@ String getLocalDateString();              // Get formatted local date string (wi
 String getGPSTimeString();                // Get formatted GPS time string
 String getGPSDateString();                // Get formatted GPS date string
 uint32_t getCurrentUnixTime();            // Get Unix timestamp from best available source
+uint64_t getCurrentUnixMillis();          // Same, in milliseconds with sub-second phase (0 = no time)
 uint32_t getLocalUnixTime();              // Get local Unix timestamp (with TZ + DST offset)
 uint32_t getGPSUnixTime();                // Get Unix timestamp from GPS only
 

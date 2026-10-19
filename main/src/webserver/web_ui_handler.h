@@ -37,6 +37,7 @@ void initWebUI();
 void handleWebUI();
 void handleRoot();
 void handleConsole();
+void handleFirmware();  // Firmware update page (frames ElegantOTA)
 void handleConsoleJSON();
 void handleControl();  // Roof control page
 void handleSetup();

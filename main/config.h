@@ -24,7 +24,7 @@
 #endif
 
 // Version Information
-#define DEVICE_VERSION "4.0.0"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
+#define DEVICE_VERSION "4.0.1"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller"
 
@@ -210,6 +210,9 @@ const int16_t DEFAULT_TIMEZONE_OFFSET = 0;  // Default: UTC (0 minutes)
 const bool DEFAULT_DST_ENABLED = false;     // Default: DST disabled
 // NTP server runs independently once time is synced from GPS or RTC
 // PPS (Pulse Per Second) provides sub-second accuracy when GPS PPS pin is configured
+// After GPS time is lost the server stays stratum 1 with growing dispersion for this long,
+// then reports itself unsynchronized (LI=3, stratum 0) so clients switch to other servers
+const unsigned long NTP_HOLDOVER_SECONDS = 3600;
 
 // Enum for roof status - matches ASCOM ShutterStatus values
 enum RoofStatus {

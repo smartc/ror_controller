@@ -175,7 +175,7 @@ inline String getNavBar() {
     "<a href='/control'>Roof Control</a>\n"
     "<a href='/setup'>Setup</a>\n"
     "<a href='/console'>Console</a>\n"
-    "<a href='/update' class='warn'>Update</a>\n"
+    "<a href='/firmware' class='warn'>Update</a>\n"
     "</div>\n";
 
   return navbar + getStatusCard();
@@ -800,12 +800,12 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     snprintf(offsetStr, sizeof(offsetStr), "UTC%+d:%02d", offsetHours, offsetMins);
 
     // Combined time row: UTC and Local side by side
-    html += "<tr><th>Time (UTC)</th><td><span id='utcTimeDisplay'>" + getTimeString() + "</span>";
-    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local (" + String(offsetStr) + "):</span> <span id='localTimeDisplay'>" + getLocalTimeString() + "</span></td></tr>\n";
+    html += "<tr><th>Time (UTC)</th><td><span data-clock='utc-time'>" + getTimeString() + "</span>";
+    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local (" + String(offsetStr) + "):</span> <span data-clock='local-time'>" + getLocalTimeString() + "</span></td></tr>\n";
 
     // Combined date row: UTC and Local side by side
-    html += "<tr><th>Date (UTC)</th><td><span id='utcDateDisplay'>" + getDateString() + "</span>";
-    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local:</span> <span id='localDateDisplay'>" + getLocalDateString() + "</span></td></tr>\n";
+    html += "<tr><th>Date (UTC)</th><td><span data-clock='utc-date'>" + getDateString() + "</span>";
+    html += " &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #81c784;'>Local:</span> <span data-clock='local-date'>" + getLocalDateString() + "</span></td></tr>\n";
 
     // RTC status
     html += "<tr><th>RTC (DS3231)</th><td id='hRtc'>";
@@ -855,11 +855,11 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
     }
 
     // NTP Server status
+    NTPState ntpState = getNTPState();
     html += "<tr><th>NTP Server</th><td id='hNtp'>";
-    html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
+    html += "<span class='status-indicator " + String(!gpsNtpEnabled ? "red" : (ntpState <= NTP_STATE_GPS ? "green" : "orange")) + "'></span> ";
     if (gpsNtpEnabled && timeSynced) {
-      bool ppsOk = isPPSActive();
-      html += ppsOk ? "Active (port 123, PPS-disciplined)" : "Active (port 123)";
+      html += getNTPStateText();
     } else if (gpsNtpEnabled) {
       html += "Waiting for time sync";
     } else {
@@ -926,7 +926,7 @@ function updateHomeLive(d) {
     if (sats) sats.textContent = d.gps_satellites + (d.gps_satellites_in_view > 0 ? ' / ' + d.gps_satellites_in_view : '');
   }
   setDot('hPps', d.pps_active ? 'green' : 'red blink', d.pps_active ? 'Active' : 'No Signal');
-  if (d.ntp_enabled && d.time_synced) setDot('hNtp', 'green', d.pps_active ? 'Active (port 123, PPS-disciplined)' : 'Active (port 123)');
+  if (d.ntp_enabled && d.time_synced) setDot('hNtp', (d.ntp_state == 'pps' || d.ntp_state == 'gps') ? 'green' : 'orange', d.ntp_state_text);
   else if (d.ntp_enabled) setDot('hNtp', 'orange', 'Waiting for time sync');
   else setDot('hNtp', 'red', 'Disabled');
 }
@@ -971,15 +971,7 @@ function updateHomeLive(d) {
   html += "          statusIndicator.className += 'red blink';\n";
   html += "        }\n";
   html += "      }\n";
-  html += "      // Update time displays in real-time\n";
-  html += "      const utcTime = document.getElementById('utcTimeDisplay');\n";
-  html += "      const utcDate = document.getElementById('utcDateDisplay');\n";
-  html += "      const localTime = document.getElementById('localTimeDisplay');\n";
-  html += "      const localDate = document.getElementById('localDateDisplay');\n";
-  html += "      if (utcTime && data.current_time) utcTime.textContent = data.current_time;\n";
-  html += "      if (utcDate && data.current_date) utcDate.textContent = data.current_date;\n";
-  html += "      if (localTime && data.local_time) localTime.textContent = data.local_time;\n";
-  html += "      if (localDate && data.local_date) localDate.textContent = data.local_date;\n";
+  html += "      // Time and date cells are live clocks (data-clock), driven by the status bar script\n";
   html += "      // Update telescope parked status\n";
   html += "      const tpInd = document.getElementById('homeTelescopeParkedIndicator');\n";
   html += "      const tpText = document.getElementById('homeTelescopeParkedText');\n";
@@ -1020,6 +1012,8 @@ function updateHomeLive(d) {
   html += "            } else if (sensor.status === 2) {\n";
   html += "              statusClass = 'red';\n";
   html += "              statusText = 'Unparked';\n";
+  html += "            } else if (sensor.status === 3) {\n";
+  html += "              statusText = 'Offline';\n";
   html += "            }\n";
   html += "            html += sensor.name + \": <span class='status-indicator \" + statusClass + \"'></span>\" + statusText;\n";
   html += "          }\n";
@@ -1063,8 +1057,38 @@ inline String getStatusCard() {
   html += "</div>";
   html += R"rawjs(
 <script>
+// Live clocks: any element with data-clock='utc-time|utc-date|local-time|local-date' ticks
+// every second from the browser clock, corrected by the controller's time on each poll.
+// The poll with the shortest round trip gives the best estimate, so prefer those.
+var clk={off:null,rtt:1e9,at:0,tz:0};
+function clockSample(d,t0,t1){
+  if (!d.unix_ms) { clk.off=null; return; }
+  clk.tz=d.total_offset||0;
+  var rtt=t1-t0, now=Date.now();
+  if (clk.off===null || rtt<=clk.rtt+20 || now-clk.at>60000) {
+    clk.off=d.unix_ms+rtt/2-t1; clk.rtt=rtt; clk.at=now;
+  }
+}
+function clockTick(){
+  var els=document.querySelectorAll('[data-clock]');
+  if (clk.off!==null) {
+    var ms=Date.now()+clk.off;
+    var utc=new Date(ms).toISOString(), loc=new Date(ms+clk.tz*60000).toISOString();
+    els.forEach(function(e){
+      var k=e.getAttribute('data-clock'), s=k.indexOf('local')===0?loc:utc;
+      e.textContent=k.indexOf('date')>0?s.slice(0,10):s.slice(11,19);
+    });
+    setTimeout(clockTick, 1000-(ms%1000)+5);   // just after the next second boundary
+  } else {
+    setTimeout(clockTick, 500);
+  }
+}
+clockTick();
 function setupSummary(){
+  var t0=performance.now();
   fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+    var t1=performance.now();
+    clockSample(d, t0+Date.now()-t1, Date.now());
     function dot(id,cls,t){ var e=document.getElementById(id); if(e) e.innerHTML="<span class='status-indicator "+cls+"'></span>"+t; }
     var moving = d.status==='Opening'||d.status==='Closing';
     dot('ssRoof', d.status==='Open'?'blue':d.status==='Closed'?'green':moving?'orange blink':'red blink', d.status);
@@ -1080,7 +1104,23 @@ function setupSummary(){
         reason='Timeout: roof stopped mid-travel. Move it fully open or closed (the error clears itself), or clear it on Roof Control.';
       err.textContent=reason; err.style.display=reason?'block':'none';
     }
+    updateSensorRows(d.sensors||[]);
   }).catch(function(){});
+}
+// Park / safety sensor tables on the setup page: refresh status, temp and last seen in place
+function updateSensorRows(list){
+  var rows={};
+  document.querySelectorAll('tr[data-sensor]').forEach(function(r){ rows[r.getAttribute('data-sensor')]=r; });
+  var newPark=false, newSafety=false;
+  list.forEach(function(s){
+    var r=rows[s.id];
+    if (!r) { if (s.id.indexOf('park:')===0) newPark=true; else newSafety=true; return; }
+    r.querySelector("[data-f='status']").innerHTML=s.status;
+    var t=r.querySelector("[data-f='temp']"); if (t && s.temp!==undefined) t.innerHTML=s.temp;
+    r.querySelector("[data-f='seen']").innerHTML='<small>'+s.seen+'</small>';
+  });
+  var h=document.getElementById('parkNewHint'); if (h) h.style.display=newPark?'block':'none';
+  h=document.getElementById('safetyNewHint'); if (h) h.style.display=newSafety?'block':'none';
 }
 setupSummary();
 setInterval(setupSummary, 2000);
@@ -1308,7 +1348,7 @@ inline String getMqttSettingsCard() {
   // MQTT enabled toggle
   html += "<div class='switch-container' style='margin-bottom: 20px;'>";
   html += "<label class='switch'>";
-  html += "<input type='checkbox' id='mqttEnabled'" + String(mqttEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled')\">";
+  html += "<input type='checkbox' id='mqttEnabled' name='mqttEnabled' value='true'" + String(mqttEnabled ? " checked" : "") + " onchange=\"updateToggleLabel('mqttEnabled', 'mqttEnabledText', 'Enabled', 'Disabled')\">";
   html += "<span class='slider'></span>";
   html += "</label>";
   html += "<span class='switch-label'>MQTT: <strong id='mqttEnabledText'>" + String(mqttEnabled ? "Enabled" : "Disabled") + "</strong></span>";
@@ -1471,7 +1511,7 @@ inline String getSwitchConfigCard() {
   html += "</label>";
   html += "<span class='switch-label'>";
   html += "Monitor Limit Switch Changes: <strong id='limitSwitchTimeoutEnabledText'>" + String(limitSwitchTimeoutEnabled ? "Enabled" : "Disabled") + "</strong><br>";
-  html += "<small>Turn off inverter if limit switch doesn't change state within timeout after movement starts</small>";
+  html += "<small>Stop with an error if the roof hasn't left its limit switch within the timeout after movement starts. When off, only the movement timeout catches a roof that doesn't move.</small>";
   html += "</span>";
   html += "</div>";
   html += "</div>";
@@ -1509,6 +1549,48 @@ inline String getSwitchConfigCard() {
   html += "</div>";
 
   return html;
+}
+
+// ===== Sensor table cells, shared by the setup page and /api/status (live refresh) =====
+
+inline String sensorAgoText(unsigned long lastSeen) {
+  if (lastSeen == 0) return "Never";
+  unsigned long s = (millis() - lastSeen) / 1000;
+  if (s < 60) return String(s) + "s ago";
+  if (s < 3600) return String(s / 60) + "m ago";
+  return String(s / 3600) + "h ago";
+}
+
+inline String sensorTempText(float t) {
+  return isnan(t) ? "&mdash;" : String(t, 1) + " &deg;C";
+}
+
+inline String sensorDot(const String& color, const String& label) {
+  return "<span class='status-indicator " + color + "'></span> " + label;
+}
+
+inline String parkSensorStatusHtml(const ParkSensor& s) {
+  const char* color = s.status == SENSOR_PARKED   ? "green"
+                    : s.status == SENSOR_UNPARKED ? "red"
+                    : s.status == SENSOR_OFFLINE  ? "red blink"
+                                                  : "gray";
+  return sensorDot(color, getParkSensorStatusString(s.status));
+}
+
+inline String safetySensorStatusHtml(const SafetySensor& s) {
+  bool neverSeen = s.lastSeen == 0;
+  if (s.bypassEnabled) return sensorDot("orange", "Bypassed");
+  if (neverSeen)       return sensorDot("gray", "Not seen");
+  if (!s.online)       return sensorDot("red blink", "Offline");
+  return s.isSafe ? sensorDot("green", "Safe") : sensorDot("red", "UNSAFE");
+}
+
+// Status, Temp (safety sensors only; empty = no cell) and Last Seen cells;
+// data-sensor / data-f let the status poll update them
+inline String sensorLiveCells(const String& status, const String& temp, const String& ago) {
+  String html = "<td data-f='status'>" + status + "</td>";
+  if (temp.length()) html += "<td data-f='temp'>" + temp + "</td>";
+  return html + "<td data-f='seen'><small>" + ago + "</small></td>";
 }
 
 // Park Sensor configuration card for the setup page
@@ -1557,44 +1639,18 @@ inline String getParkSensorConfigCard() {
   
   if (discoveredSensorsList.empty()) {
     html += "<p><em>No UDP park sensors discovered yet. Sensors broadcast every 2 seconds on UDP port " + String(PARK_SENSOR_UDP_PORT) + ".</em></p>";
+    html += "<p id='parkNewHint' style='display:none;color:#ffb74d'><small>New park sensor discovered &mdash; refresh the page to manage it.</small></p>";
   } else {
     html += "<h4>Discovered Sensors (" + String(discoveredSensorsList.size()) + " total)</h4>";
     html += "<table style='width: 100%; margin-bottom: 15px;'>";
-    html += "<tr><th>Name</th><th>Status</th><th>IP Address</th><th>Last Seen</th><th>Enabled</th><th>Bypass</th><th>Actions</th></tr>";
-    
+    html += "<tr><th>Name</th><th>Status</th><th>Last Seen</th><th>IP Address</th><th>Enabled</th><th>Bypass</th><th>Actions</th></tr>";
+
     for (const auto& sensor : discoveredSensorsList) {
-      html += "<tr>";
+      html += "<tr data-sensor='park:" + sensor.uuid + "'>";
       html += "<td>" + sensor.name + "<br><small>" + sensor.uuid.substring(0, 8) + "...</small></td>";
-      
-      // Status with color coding
-      String statusClass = "";
-      if (sensor.status == SENSOR_PARKED) {
-        statusClass = "style='color: green; font-weight: bold;'";
-      } else if (sensor.status == SENSOR_UNPARKED) {
-        statusClass = "style='color: red; font-weight: bold;'";
-      } else if (sensor.status == SENSOR_OFFLINE) {
-        statusClass = "style='color: orange; font-weight: bold;'";
-      } else {
-        statusClass = "style='color: gray;'";
-      }
-      html += "<td " + statusClass + ">" + getParkSensorStatusString(sensor.status) + "</td>";
-      
-      html += "<td>" + sensor.ipAddress + "</td>";
-      
-      // Last seen
-      String lastSeenStr = "Never";
-      if (sensor.lastSeen > 0) {
-        unsigned long timeDiff = (millis() - sensor.lastSeen) / 1000;
-        if (timeDiff < 60) {
-          lastSeenStr = String(timeDiff) + "s ago";
-        } else if (timeDiff < 3600) {
-          lastSeenStr = String(timeDiff / 60) + "m ago";
-        } else {
-          lastSeenStr = String(timeDiff / 3600) + "h ago";
-        }
-      }
-      html += "<td>" + lastSeenStr + "</td>";
-      
+      html += sensorLiveCells(parkSensorStatusHtml(sensor), "", sensorAgoText(sensor.lastSeen));
+      html += "<td><small>" + sensor.ipAddress + "</small></td>";
+
       // Enabled status
       html += "<td>";
       html += "<label class='switch' style='transform: scale(0.7);'>";
@@ -1623,7 +1679,8 @@ inline String getParkSensorConfigCard() {
       html += "</tr>";
     }
     html += "</table>";
-    
+    html += "<p id='parkNewHint' style='display:none;color:#ffb74d'><small>New park sensor discovered &mdash; refresh the page to manage it.</small></p>";
+
     // Management buttons
     html += "<div class='button-row'>";
     html += "<button onclick='refreshSensors()' class='button-primary'>Refresh</button>";
@@ -1681,31 +1738,15 @@ inline String getSafetySensorConfigCard() {
   html += "<div class='toggle-group'><h3>Discovered Safety Sensors</h3>";
   if (sensors.empty()) {
     html += "<p><em>No safety sensors discovered yet. Sensors broadcast every 30 seconds on UDP port 23435.</em></p>";
+    html += "<p id='safetyNewHint' style='display:none;color:#ffb74d'><small>New safety sensor discovered &mdash; refresh the page to manage it.</small></p>";
   } else {
     html += "<table style='width:100%; max-width:none; margin-bottom:15px;'>";
-    html += "<tr><th>Name</th><th>Status</th><th>IP</th><th>Temp</th><th>Last Seen</th><th>Enabled</th><th>Bypass</th><th>Actions</th></tr>";
+    html += "<tr><th>Name</th><th>Status</th><th>Temp</th><th>Last Seen</th><th>IP</th><th>Enabled</th><th>Bypass</th><th>Actions</th></tr>";
     for (const auto& sensor : sensors) {
-      bool neverSeen = sensor.lastSeen == 0;
-      String statusColor = sensor.bypassEnabled ? "orange"
-                         : neverSeen             ? "gray"
-                         : (!sensor.online)      ? "red blink"
-                         : sensor.isSafe         ? "green"
-                                                 : "red";
-      String statusLabel = sensor.bypassEnabled ? "Bypassed"
-                         : neverSeen             ? "Not seen"
-                         : (!sensor.online)      ? "Offline"
-                         : sensor.isSafe         ? "Safe"
-                                                 : "UNSAFE";
-      String lastSeen = neverSeen ? "Never"
-                       : String((millis() - sensor.lastSeen) / 1000) + "s ago";
-      String tempStr  = isnan(sensor.ambTemp) ? "&mdash;" : String(sensor.ambTemp, 1) + " &deg;C";
-
-      html += "<tr>";
+      html += "<tr data-sensor='safety:" + sensor.serialNumber + "'>";
       html += "<td>" + sensor.name + "<br><small style='color:#888;'>" + sensor.serialNumber + "</small></td>";
-      html += "<td><span class='status-indicator " + statusColor + "'></span> " + statusLabel + "</td>";
+      html += sensorLiveCells(safetySensorStatusHtml(sensor), sensorTempText(sensor.ambTemp), sensorAgoText(sensor.lastSeen));
       html += "<td><small>" + sensor.ipAddress + "</small></td>";
-      html += "<td>" + tempStr + "</td>";
-      html += "<td><small>" + lastSeen + "</small></td>";
       // Enable toggle
       html += "<td style='text-align:center;'>";
       html += "<label class='switch' style='transform: scale(0.7);'>";
@@ -1726,6 +1767,7 @@ inline String getSafetySensorConfigCard() {
       html += "</tr>";
     }
     html += "</table>";
+    html += "<p id='safetyNewHint' style='display:none;color:#ffb74d'><small>New safety sensor discovered &mdash; refresh the page to manage it.</small></p>";
     html += "<div class='button-row'>";
     html += "<button onclick='location.reload()' class='button-primary'>Refresh</button>";
     html += "<button onclick='removeAllSafetySensors()' class='button-danger'>Remove All Sensors</button>";
@@ -1793,8 +1835,8 @@ inline String getGPSConfigCard() {
   html += "</td></tr>";
 
   // Current time
-  html += "<tr><th>Current Time (UTC)</th><td>" + getTimeString() + "</td></tr>";
-  html += "<tr><th>Current Date</th><td>" + getDateString() + "</td></tr>";
+  html += "<tr><th>Current Time (UTC)</th><td data-clock='utc-time'>" + getTimeString() + "</td></tr>";
+  html += "<tr><th>Current Date</th><td data-clock='utc-date'>" + getDateString() + "</td></tr>";
 
   // RTC status
   html += "<tr><th>RTC (DS3231)</th><td>";
@@ -1848,9 +1890,9 @@ inline String getGPSConfigCard() {
 
   // NTP Server status
   html += "<tr><th>NTP Server</th><td>";
-  html += "<span class='status-indicator " + String(gpsNtpEnabled && timeSynced ? "green" : (gpsNtpEnabled ? "orange" : "red")) + "'></span> ";
+  html += "<span class='status-indicator " + String(!gpsNtpEnabled ? "red" : (getNTPState() <= NTP_STATE_GPS ? "green" : "orange")) + "'></span> ";
   if (gpsNtpEnabled && timeSynced) {
-    html += "Active on port 123";
+    html += getNTPStateText();
   } else if (gpsNtpEnabled) {
     html += "Waiting for time sync";
   } else {
@@ -1882,7 +1924,7 @@ inline String getGPSConfigCard() {
 
   html += "<div class='toggle-row'>";
 
-  // NTP Server Enable toggle (no longer requires GPS - works with RTC too)
+  // NTP Server Enable toggle (answers on RTC time too, but only as unsynchronized)
   html += "<div class='switch-container'>";
   html += "<label class='switch'>";
   html += "<input type='checkbox' id='gpsNtpEnabledToggle'" + String(gpsNtpEnabled ? " checked" : "") + " onchange='toggleGPSNtp(this.checked)'>";
@@ -1890,7 +1932,7 @@ inline String getGPSConfigCard() {
   html += "</label>";
   html += "<span class='switch-label'>";
   html += "NTP Server: <strong id='gpsNtpEnabledText'>" + String(gpsNtpEnabled ? "Enabled" : "Disabled") + "</strong><br>";
-  html += "<small>Provides NTP time service on UDP port 123 using GPS or RTC time</small>";
+  html += "<small>Provides NTP time service on UDP port 123 using GPS time</small>";
   html += "</span>";
   html += "</div>";
 
@@ -1958,7 +2000,7 @@ inline String getGPSConfigCard() {
   char offsetStr[16];
   snprintf(offsetStr, sizeof(offsetStr), "UTC%+d:%02d", offsetHours, offsetMins);
   html += "<div style='margin-top: 10px; padding: 10px; background-color: #333; border-radius: 4px;'>";
-  html += "<p style='margin: 5px 0; color: #81c784;'>Current Local Time (" + String(offsetStr) + "): <strong id='localTimeDisplay'>" + getLocalTimeString() + "</strong></p>";
+  html += "<p style='margin: 5px 0; color: #81c784;'>Current Local Time (" + String(offsetStr) + "): <strong data-clock='local-time'>" + getLocalTimeString() + "</strong></p>";
   html += "</div>";
 
   html += "</div>";  // End settings toggle-group
@@ -1969,7 +2011,7 @@ inline String getGPSConfigCard() {
   html += "<p style='margin: 5px 0; color: #81c784;'>Server: <code>" + netLocalIP().toString() + "</code></p>";
   html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Linux: <code>ntpdate -q " + netLocalIP().toString() + "</code></small></p>";
   html += "<p style='margin: 5px 0; color: #b0b0b0;'><small>Windows: <code>w32tm /stripchart /computer:" + netLocalIP().toString() + "</code></small></p>";
-  html += "<p style='margin: 5px 0; color: #ffb74d;'><small>Note: NTP server requires time to be synced from GPS or RTC</small></p>";
+  html += "<p style='margin: 5px 0; color: #ffb74d;'><small>Note: the server is stratum 1 only while GPS has time. After GPS is lost it holds over for " + String(NTP_HOLDOVER_SECONDS / 60) + " minutes, then reports itself unsynchronized so clients switch to their other servers. RTC-only time is never served as a reference.</small></p>";
   html += "</div>";
 
   html += "</div>";  // End card
@@ -2536,6 +2578,47 @@ inline String getRoofControlPage() {
 
   html += "</body></html>";
 
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Firmware update page - ElegantOTA's /update page framed inside our layout.
+// Same origin, so its dark theme is switched on through the shared localStorage
+// ("theme"), its background is cleared to show our card, and the frame is sized
+// to its content as the upload UI changes.
+// ---------------------------------------------------------------------------
+inline String getFirmwarePage() {
+  String html = getPageHeader("Firmware Update - ROR Controller");
+  html += "<h1>Firmware Update</h1>\n";
+  html += "<p class='page-sub'>Version: " + String(DEVICE_VERSION) + "</p>\n";
+  html += getNavBar();
+  html += R"rawhtml(
+<div class='card'>
+<p style='margin-top:0;color:#b0b0b0;font-size:0.9em'>Upload <code>ror_controller_vX.Y.Z_ota.bin</code>. Updates are refused while the roof is moving; the controller restarts when the upload finishes.</p>
+<iframe id='ota' src='/update' title='Firmware upload' style='width:100%;height:520px;border:0;background:transparent;display:block' onload='otaLoaded()'></iframe>
+</div>
+<script>
+try { localStorage.setItem('theme', 'dark'); } catch (e) {}
+function otaLoaded() {
+  var f = document.getElementById('ota');
+  try {
+    var doc = f.contentDocument;
+    doc.documentElement.classList.add('dark');
+    var st = doc.createElement('style');
+    st.textContent = 'html,body,body>div{background:transparent!important}';
+    doc.head.appendChild(st);
+  } catch (e) {}
+}
+setInterval(function () {
+  var f = document.getElementById('ota');
+  try {
+    var h = f.contentDocument.documentElement.scrollHeight;
+    if (h > 100 && Math.abs(h - f.offsetHeight) > 4) f.style.height = h + 'px';
+  } catch (e) {}
+}, 500);
+</script>
+</body></html>
+)rawhtml";
   return html;
 }
 

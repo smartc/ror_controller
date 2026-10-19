@@ -313,13 +313,16 @@ void updateRoofStatus() {
     }
     else if (roofStatus == ROOF_CLOSING) {
       // We're trying to CLOSE but open switch is still triggered after limitSwitchTimeout.
-      // This means the roof failed to START moving - immediate error.
-      roofErrorReason = "Roof failed to start closing. Open limit switch still triggered after " +
-                        String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
-      statusMessage = "ERROR: Roof failed to start closing";
-      Debug.println("Error reason: " + roofErrorReason);
-      roofStatus = ROOF_ERROR;
-      shutdownInverterPower();
+      // This means the roof failed to START moving - immediate error, if monitoring is on.
+      // Otherwise stay CLOSING and leave it to the movement timeout.
+      if (limitSwitchTimeoutEnabled) {
+        roofErrorReason = "Roof failed to start closing. Open limit switch still triggered after " +
+                          String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
+        statusMessage = "ERROR: Roof failed to start closing";
+        Debug.println("Error reason: " + roofErrorReason);
+        roofStatus = ROOF_ERROR;
+        shutdownInverterPower();
+      }
     }
     else if (roofStatus == ROOF_OPENING) {
       // We were opening and reached the open position - success!
@@ -354,13 +357,16 @@ void updateRoofStatus() {
     }
     else if (roofStatus == ROOF_OPENING) {
       // We're trying to OPEN but closed switch is still triggered after limitSwitchTimeout.
-      // This means the roof failed to START moving - immediate error.
-      roofErrorReason = "Roof failed to start opening. Closed limit switch still triggered after " +
-                        String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
-      statusMessage = "ERROR: Roof failed to start opening";
-      Debug.println("Error reason: " + roofErrorReason);
-      roofStatus = ROOF_ERROR;
-      shutdownInverterPower();
+      // This means the roof failed to START moving - immediate error, if monitoring is on.
+      // Otherwise stay OPENING and leave it to the movement timeout.
+      if (limitSwitchTimeoutEnabled) {
+        roofErrorReason = "Roof failed to start opening. Closed limit switch still triggered after " +
+                          String(limitSwitchTimeout / 1000) + " seconds. Check motor, relay, or mechanical obstruction.";
+        statusMessage = "ERROR: Roof failed to start opening";
+        Debug.println("Error reason: " + roofErrorReason);
+        roofStatus = ROOF_ERROR;
+        shutdownInverterPower();
+      }
     }
     else if (roofStatus == ROOF_CLOSING) {
       // We were closing and reached the closed position - success!
