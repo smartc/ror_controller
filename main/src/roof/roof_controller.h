@@ -45,7 +45,6 @@ extern bool roofOpNeedsInverterButton;  // Whether K3 press is needed (AC power 
 extern RoofStatus roofStatus;
 extern RoofStatus lastPublishedStatus; // Track last published status
 extern bool slaved;
-extern bool isConnected;
 extern unsigned long lastSwitchTime;
 extern unsigned long movementStartTime;
 extern bool swapLimitSwitches;  // Flag to swap open/closed limit switch pins
@@ -82,6 +81,7 @@ void applyPinSettings();  // Function to apply pin settings
 void determineInitialRoofStatus();
 void updateTelescopeStatus();  // Function to update telescope park status
 void clearRoofError();         // Clear error state and reason (for recovery)
+bool roofStoppedMidTravel();   // ERROR because a stop left the roof between the limits (not a fault)
 void processRoofOperation();        // Non-blocking state machine - call from main loop
 void checkWeatherAutoClose();       // Auto-close roof on unsafe weather (call from main loop)
 void checkParkSensorInterlock();    // Emergency stop if telescope unparks during roof movement (call from main loop)

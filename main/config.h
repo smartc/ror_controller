@@ -24,7 +24,7 @@
 #endif
 
 // Version Information
-#define DEVICE_VERSION "4.0.2"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
+#define DEVICE_VERSION "4.1.0"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller"
 
@@ -79,7 +79,7 @@ const int DEFAULT_PARK_STATE = LOW;     // Default park sensor state (LOW = norm
 // Timing Settings
 const uint32_t DEBOUNCE_DELAY = 100;        // Debounce delay in ms
 const unsigned long SWITCH_STABLE_TIME = 500; // Time in ms a switch must be stable
-const unsigned long INFERRED_MOVE_STABLE_TIME = 2000; // Both limits must read NOT triggered this long before a manual move is inferred
+const unsigned long INFERRED_MOVE_STABLE_TIME = 2000; // Both limits must read NOT triggered this long before a limit counts as lost while idle
 extern unsigned long movementTimeout;        // Roof movement timeout in ms (configurable)
 const unsigned long DEFAULT_MOVEMENT_TIMEOUT = 90000; // Default: 90 seconds
 extern bool movementTimeoutEnabled;          // Enable/disable movement timeout monitoring (configurable)

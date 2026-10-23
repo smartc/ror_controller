@@ -37,7 +37,6 @@ unsigned long lastClosedStateTime = 0;
 RoofStatus roofStatus = ROOF_CLOSED;
 RoofStatus lastPublishedStatus = ROOF_CLOSED;   // Track last published status for change detection
 bool slaved = false;
-bool isConnected = true;                        // Device is always connected in this implementation
 bool swapLimitSwitches = false;                 // Flag for swapping limit switch pins
 
 // Error tracking for ASCOM compliance (error reason for Slewing exception)
@@ -49,9 +48,18 @@ String roofErrorReason = "";
 static unsigned long roofErrorSince = 0;
 static bool roofErrorNeedsAck = false;
 
-// True when OPENING/CLOSING was inferred from the limit switches (someone moved
-// the roof by hand) rather than commanded through the relays.
-static bool movementInferred = false;
+// Limit switch lost while the roof sat idle at it (#11, decision 2). A sensor dropout
+// and a hand move look the same from one switch, so no move is inferred: the roof
+// keeps its last known position until a limit triggers, and only after
+// movementTimeout with no limit is it reported as a sensor fault. 0 = not lost.
+static unsigned long limitLostSince = 0;
+
+// ERROR set by a deliberate stop between the limits (AbortSlew, Stop). The position is
+// unknown but nothing failed, so Slewing reads false instead of raising.
+static bool roofStoppedBetweenLimits = false;
+
+// Stop asked for while K2's start press was in progress: stop once the press completes
+static bool roofStopPending = false;
 
 // Timestamps for various operations
 unsigned long lastSwitchTime = 0;
@@ -115,6 +123,39 @@ bool roofNetInputsFresh() {
 // Weather as seen by the roof task: stale data is never "safe"
 static bool roofWeatherSafe() {
   return roofNetInputsFresh() && netWeatherSafe;
+}
+
+// An accepted open/close is still in its relay start-up sequence (K1 -> K3 -> K2).
+// roofStatus already reads OPENING/CLOSING, but the opener hasn't started yet.
+static bool roofStartupInProgress() {
+  return roofOpTarget == TARGET_OPEN || roofOpTarget == TARGET_CLOSE;
+}
+
+bool roofStoppedMidTravel() {
+  return roofStatus == ROOF_ERROR && roofStoppedBetweenLimits;
+}
+
+// Status from the limit switches as they read now, after a stop or a cancelled start.
+// Between the limits the position is unknown: ERROR, but flagged as a deliberate stop.
+static void setStatusFromLimits() {
+  bool openNow = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
+  bool closedNow = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
+  if (openNow && !closedNow) {
+    roofStatus = ROOF_OPEN;
+  } else if (closedNow && !openNow) {
+    roofStatus = ROOF_CLOSED;
+  } else if (openNow && closedNow) {
+    roofErrorReason = "Both open and closed limit switches are triggered simultaneously. "
+                      "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
+    roofStatus = ROOF_ERROR;
+  } else {
+    roofErrorReason = "Roof stopped between the limits; position unknown. Open or close it to continue.";
+    roofStatus = ROOF_ERROR;
+    roofStoppedBetweenLimits = true;
+  }
+  Debug.println("Roof status after stop: " + getRoofStatusString(roofStatus));
+  roofMarkChanged();
+  lastPublishedStatus = roofStatus;
 }
 
 // Apply pin settings - useful after changing pin assignments or trigger state
@@ -261,7 +302,16 @@ void updateRoofStatus() {
   static bool wasInError = false;
   if (roofStatus == ROOF_ERROR && !wasInError) roofErrorSince = currentTime;
   wasInError = (roofStatus == ROOF_ERROR);
-  if (!wasInError) roofErrorNeedsAck = false;
+  if (!wasInError) {
+    roofErrorNeedsAck = false;
+    roofStoppedBetweenLimits = false;
+  }
+
+  // An accepted move reads OPENING/CLOSING through its relay start-up; the limits
+  // are only judged once K2 has started the opener (movementStartTime below)
+  if (roofStartupInProgress()) {
+    return;
+  }
 
   // Check whether we have just started moving the roof.  If so, give it time before we revise the roof state.
   if (currentTime - movementStartTime < limitSwitchTimeout) {
@@ -293,7 +343,13 @@ void updateRoofStatus() {
   // Save previous status for change detection
   RoofStatus previousStatus = roofStatus;
   String statusMessage = "";
-  
+
+  if (limitLostSince != 0 && (isOpenLimitTriggered || isClosedLimitTriggered)) {
+    Debug.printf("Limit switch back after %lu s (%s limit triggered)\n",
+                 (currentTime - limitLostSince) / 1000, isOpenLimitTriggered ? "open" : "closed");
+    limitLostSince = 0;
+  }
+
   // Handle clear terminal states first
   if (isOpenLimitTriggered && isClosedLimitTriggered) {
     // Both switches triggered is an error condition
@@ -305,13 +361,7 @@ void updateRoofStatus() {
   }
   else if (isOpenLimitTriggered) {
     // Open switch is triggered.
-    if (roofStatus == ROOF_CLOSING && movementInferred) {
-      // A manual move away from the open limit came back to it: nothing failed
-      statusMessage = "Roof back at open limit (manual move reversed)";
-      roofStatus = ROOF_OPEN;
-      shutdownInverterPower();
-    }
-    else if (roofStatus == ROOF_CLOSING) {
+    if (roofStatus == ROOF_CLOSING) {
       // We're trying to CLOSE but open switch is still triggered after limitSwitchTimeout.
       // This means the roof failed to START moving - immediate error, if monitoring is on.
       // Otherwise stay CLOSING and leave it to the movement timeout.
@@ -341,21 +391,15 @@ void updateRoofStatus() {
       }
     }
     else if (roofStatus != ROOF_OPEN) {
-      // Transitioning to OPEN from CLOSED state (manual movement detected)
-      statusMessage = "Roof fully open";
+      // Arrived at OPEN from CLOSED without a command: moved by hand
+      statusMessage = "Roof fully open (moved by hand)";
       roofStatus = ROOF_OPEN;
       shutdownInverterPower();
     }
   }
   else if (isClosedLimitTriggered) {
     // Closed switch is triggered.
-    if (roofStatus == ROOF_OPENING && movementInferred) {
-      // A manual move away from the closed limit came back to it: nothing failed
-      statusMessage = "Roof back at closed limit (manual move reversed)";
-      roofStatus = ROOF_CLOSED;
-      shutdownInverterPower();
-    }
-    else if (roofStatus == ROOF_OPENING) {
+    if (roofStatus == ROOF_OPENING) {
       // We're trying to OPEN but closed switch is still triggered after limitSwitchTimeout.
       // This means the roof failed to START moving - immediate error, if monitoring is on.
       // Otherwise stay OPENING and leave it to the movement timeout.
@@ -383,42 +427,42 @@ void updateRoofStatus() {
       }
     }
     else if (roofStatus != ROOF_CLOSED) {
-      // Transitioning to CLOSED from OPEN state (manual movement detected)
-      statusMessage = "Roof fully closed";
+      // Arrived at CLOSED from OPEN without a command: moved by hand
+      statusMessage = "Roof fully closed (moved by hand)";
       roofStatus = ROOF_CLOSED;
       shutdownInverterPower();
     }
   } 
   else {
-    // Neither limit switch is triggered - roof is in between
+    // Neither limit switch is triggered - roof is in between, or a switch dropped out
 
-    // Only infer a manual movement once BOTH switches have read NOT triggered
-    // continuously for INFERRED_MOVE_STABLE_TIME. A switch that is triggered but
-    // still inside its SWITCH_STABLE_TIME window (i.e. a glitch) must not be
-    // mistaken for the roof leaving a limit (#11).
+    // A limit lost while idle (#11, decision 2): a sensor dropout and a hand move look
+    // the same, so don't infer a move. Hold the last known position (imaging carries on
+    // and weather auto-close can still act); a hand move shows up when the other limit
+    // triggers. Only if no limit returns within movementTimeout is it a sensor fault.
+    // Both switches must have read NOT triggered for INFERRED_MOVE_STABLE_TIME first,
+    // so a glitch inside the SWITCH_STABLE_TIME window isn't counted.
     bool limitsClearLongEnough =
         !currentOpenState && !currentClosedState &&
         (currentTime - lastOpenStateTime > INFERRED_MOVE_STABLE_TIME) &&
         (currentTime - lastClosedStateTime > INFERRED_MOVE_STABLE_TIME);
 
-    // Only transition to moving states if we're not already in a moving state
-    // This prevents oscillation between OPENING and CLOSING
-    if (!limitsClearLongEnough) {
-      // Wait for the switches to settle before inferring anything
+    if (limitsClearLongEnough && (roofStatus == ROOF_OPEN || roofStatus == ROOF_CLOSED)) {
+      const char* which = (roofStatus == ROOF_OPEN) ? "Open" : "Closed";
+      if (limitLostSince == 0) {
+        limitLostSince = currentTime;
+        Debug.printf("Warning: %s limit lost while idle - holding %s until a limit triggers\n",
+                     which, roofStatus == ROOF_OPEN ? "OPEN" : "CLOSED");
+      } else if (currentTime - limitLostSince > movementTimeout) {
+        roofErrorReason = String(which) + " limit switch lost while idle for " + String(movementTimeout / 1000) +
+                          " seconds, and no limit has triggered since. The roof wasn't commanded to move: "
+                          "check the switch and its wiring, or move the roof to a limit.";
+        statusMessage = "ERROR: " + String(which) + " limit sensor fault";
+        roofStatus = ROOF_ERROR;
+        limitLostSince = 0;
+      }
     }
-    else if (roofStatus == ROOF_OPEN) {
-      roofStatus = ROOF_CLOSING;
-      movementStartTime = currentTime;
-      movementInferred = true;
-      statusMessage = "Roof state changed from OPEN, now CLOSING";
-    }
-    else if (roofStatus == ROOF_CLOSED) {
-      roofStatus = ROOF_OPENING;
-      movementStartTime = currentTime;
-      movementInferred = true;
-      statusMessage = "Roof state changed from CLOSED, now OPENING";
-    }
-    // Otherwise, maintain the current state (OPENING, CLOSING, or ERROR)
+    // Otherwise maintain the current state (OPENING, CLOSING, or ERROR)
   }
   
   // If status has changed, publish to MQTT immediately
@@ -441,8 +485,8 @@ void updateRoofStatus() {
 // Check for movement timeout
 void checkMovementTimeout() {
   // Skip timeout check if monitoring is disabled
-  if (!movementTimeoutEnabled) {
-    return;
+  if (!movementTimeoutEnabled || roofStartupInProgress()) {
+    return;  // the timeout runs from K2, not from when the move was accepted
   }
 
   // Check for timeout during roof movement
@@ -490,17 +534,36 @@ static bool newMoveBlocked(const char* direction) {
   return false;
 }
 
+// Report an accepted move from the moment it's accepted (ASCOM: ShutterStatus is
+// Opening/Closing and Slewing is true as soon as OpenShutter/CloseShutter returns).
+// The limit checks and movement timeout start from K2 (OP_ROOF_BUTTON_RELEASE).
+static void reportMoveAccepted(RoofStatus moving) {
+  roofStatus = moving;
+  roofErrorReason = "";
+  limitLostSince = 0;
+  roofStopPending = false;
+  movementStartTime = millis();
+  roofMarkChanged();
+  lastPublishedStatus = roofStatus;
+}
+
 bool startOpeningRoof() {
   RoofLock lock;
+  // A repeat of the move in progress is accepted (ASCOM); the opposite one isn't -
+  // clients stop first with AbortSlew
+  if (roofStatus == ROOF_OPENING) {
+    Debug.println("Open requested while already opening - accepted");
+    return true;
+  }
+  if (roofStatus == ROOF_CLOSING) {
+    Debug.println("Open refused: roof is closing (stop it first)");
+    return false;
+  }
+
   // Check if roof is already open
   if (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED) {
     roofStatus = ROOF_OPEN;
     return true;
-  }
-
-  // Check if we're currently moving
-  if (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) {
-    return false; // Already in motion
   }
 
   // Check if an operation is already in progress
@@ -534,6 +597,7 @@ bool startOpeningRoof() {
 
   // Set target direction
   roofOpTarget = TARGET_OPEN;
+  reportMoveAccepted(ROOF_OPENING);
 
   // Determine if we need the soft-power button press
   if (inverterSoftPwrEnabled) {
@@ -586,15 +650,20 @@ bool startOpeningRoof() {
 // The actual relay operations are performed by processRoofOperation() in the main loop.
 bool startClosingRoof() {
   RoofLock lock;
+  // A repeat of the move in progress is accepted (ASCOM); the opposite one isn't
+  if (roofStatus == ROOF_CLOSING) {
+    Debug.println("Close requested while already closing - accepted");
+    return true;
+  }
+  if (roofStatus == ROOF_OPENING) {
+    Debug.println("Close refused: roof is opening (stop it first)");
+    return false;
+  }
+
   // Check if roof is already closed
   if (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED) {
     roofStatus = ROOF_CLOSED;
     return true;
-  }
-
-  // Check if we're currently moving
-  if (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) {
-    return false; // Already in motion
   }
 
   // Check if an operation is already in progress
@@ -621,6 +690,7 @@ bool startClosingRoof() {
 
   // Set target direction
   roofOpTarget = TARGET_CLOSE;
+  reportMoveAccepted(ROOF_CLOSING);
 
   // Determine if we need the soft-power button press
   if (inverterSoftPwrEnabled) {
@@ -673,12 +743,31 @@ bool startClosingRoof() {
 //               if false, preserves current status (used during timeout to keep ERROR state)
 bool stopRoofMovement(bool updateStatus) {
   RoofLock lock;
-  // If an operation is in progress, we need to abort it and do a stop
-  if (roofOpState != OP_IDLE) {
-    Debug.println("Aborting in-progress operation for stop");
-    // Make sure all relays are released first
+  // Start-up sequence before K2: the opener hasn't been told to move, so cancel the
+  // sequence. Pressing K2 here would start the roof, not stop it.
+  if (roofOpState == OP_INVERTER_POWER_ON || roofOpState == OP_INVERTER_BUTTON_PRESS ||
+      roofOpState == OP_INVERTER_BUTTON_RELEASE || roofOpState == OP_INVERTER_DELAY2) {
+    Debug.println("Stop: start-up cancelled before K2 - roof never started");
     digitalWrite(ROOF_CONTROL_PIN, LOW);
     digitalWrite(INVERTER_BUTTON_PIN, LOW);
+    roofOpState = OP_IDLE;
+    roofOpTarget = TARGET_NONE;
+    setStatusFromLimits();
+    shutdownInverterPower();
+    return true;
+  }
+
+  // K2's start press is under way, so the opener is starting: let the press finish,
+  // then stop (OP_ROOF_BUTTON_RELEASE)
+  if (roofOpState == OP_ROOF_BUTTON_PRESS || roofOpState == OP_ROOF_BUTTON_RELEASE) {
+    Debug.println("Stop: requested during the K2 start press - stopping once it completes");
+    roofStopPending = true;
+    return true;
+  }
+
+  // Already stopping
+  if (roofOpState == OP_STOP_BUTTON_PRESS || roofOpState == OP_STOP_BUTTON_RELEASE) {
+    return true;
   }
 
   // If not currently moving, just shutdown inverter and return
@@ -698,12 +787,7 @@ bool stopRoofMovement(bool updateStatus) {
   roofOpStepStartTime = millis();
 
   // Note: The actual button release and inverter shutdown happens in processRoofOperation()
-
-  // If caller wants to preserve status (timeout case), set error before state machine completes
-  if (!updateStatus) {
-    // Status will be preserved - the state machine won't call updateRoofStatus()
-    // Actually we need to handle this differently - let's add a flag
-  }
+  // (updateStatus=false callers have already set ERROR, so they never get this far)
 
   Debug.println("Stop sequence initiated (non-blocking)");
   return true;
@@ -963,7 +1047,11 @@ void processRoofOperation() {
       break;
 
     case OP_ROOF_BUTTON_RELEASE:
-      // K2 released, operation sequence complete
+      // K2 released, operation sequence complete. If a stop came in during the press,
+      // give the opener time to see the release before K2 is pressed again to stop.
+      if (roofStopPending && elapsed < 500) {
+        break;
+      }
       {
         // Update roof status based on target
         roofErrorReason = "";  // Clear any previous error
@@ -975,7 +1063,6 @@ void processRoofOperation() {
           Debug.println("Roof closing started");
         }
         movementStartTime = currentTime;
-        movementInferred = false;
         lastSwitchTime = currentTime;  // Debounce after button press
         roofMotorCommandedRunning = true;  // Movement confirmed commanded
 
@@ -986,6 +1073,11 @@ void processRoofOperation() {
         // Return to idle
         roofOpState = OP_IDLE;
         roofOpTarget = TARGET_NONE;
+
+        if (roofStopPending) {
+          roofStopPending = false;
+          stopRoofMovement();
+        }
       }
       break;
 
@@ -1004,6 +1096,11 @@ void processRoofOperation() {
       {
         // Update status based on limit switches
         updateRoofStatus();
+        // Stopped part-way (or too soon after K2 for the limits to be judged):
+        // take the position from the switches as they read now
+        if (roofStatus == ROOF_OPENING || roofStatus == ROOF_CLOSING) {
+          setStatusFromLimits();
+        }
 
         // Publish status change
         roofMarkChanged();
@@ -1220,6 +1317,7 @@ void checkParkSensorInterlock() {
   roofStatus = ROOF_ERROR;
   roofErrorNeedsAck = true;  // never auto-clears: someone must check the telescope
   roofOpTarget = TARGET_NONE;
+  roofStopPending = false;
 
   // Abort any in-progress relay sequence and release all relays
   if (roofOpState != OP_IDLE) {

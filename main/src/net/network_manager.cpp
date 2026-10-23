@@ -40,6 +40,12 @@ static bool wifiActive = false;   // STA wanted (false = radio off / standby)
 // Mode actually running: netMode, or WiFi-only if the W5500 failed to start
 static int runMode = NET_MODE_WIFI_ONLY;
 
+// WiFi disconnect diagnostics (#13 phase 1). The event handler runs on the network
+// event task, so it only records; logTransitions() logs from loop().
+static volatile uint8_t wifiLastDisconnectReason = 0;
+static volatile uint32_t wifiDisconnectEvents = 0;   // since WiFi last came up
+static int wifiLastRssi = 0;                         // sampled while up, for the "down" line
+
 // WiFi reconnection state (non-blocking)
 static bool wifiReconnecting = false;
 static unsigned long wifiReconnectStartTime = 0;
@@ -578,9 +584,31 @@ static void logTransitions() {
     else       Debug.println("Ethernet lost IP");
     lastEthIP = ethIP;
   }
+  // Signal strength while up, so a drop can be logged with the last reading before it
+  static unsigned long lastRssiSample = 0;
+  if (wifiUp && millis() - lastRssiSample >= 5000) {
+    wifiLastRssi = WiFi.RSSI();
+    lastRssiSample = millis();
+  }
   if (wifiUp != lastWifiUp) {
-    if (wifiUp) Debug.printf("WiFi up: %s (%d dBm)\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
-    else        Debug.println(wifiActive ? "WiFi down" : "WiFi off");
+    uint8_t reason = wifiLastDisconnectReason;
+    if (wifiUp) {
+      uint32_t events = wifiDisconnectEvents;
+      wifiDisconnectEvents = 0;
+      wifiLastRssi = WiFi.RSSI();
+      if (events > 0) {
+        Debug.printf("WiFi up: %s (%d dBm) after %lu disconnect event(s), last reason %u %s\n",
+                     WiFi.localIP().toString().c_str(), wifiLastRssi, (unsigned long)events,
+                     reason, WiFi.disconnectReasonName((wifi_err_reason_t)reason));
+      } else {
+        Debug.printf("WiFi up: %s (%d dBm)\n", WiFi.localIP().toString().c_str(), wifiLastRssi);
+      }
+    } else if (wifiActive) {
+      Debug.printf("WiFi down: reason %u %s, last signal %d dBm\n",
+                   reason, WiFi.disconnectReasonName((wifi_err_reason_t)reason), wifiLastRssi);
+    } else {
+      Debug.println("WiFi off");
+    }
     lastWifiUp = wifiUp;
   }
   String active = String(netActiveInterfaceName());
@@ -595,6 +623,10 @@ static void logTransitions() {
 void initNetwork() {
   runMode = netMode;
   Network.setHostname(netHostname);
+  WiFi.onEvent([](arduino_event_id_t, arduino_event_info_t info) {
+    wifiLastDisconnectReason = info.wifi_sta_disconnected.reason;
+    wifiDisconnectEvents = wifiDisconnectEvents + 1;
+  }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   // Ethernet first: its DHCP completes while WiFi is connecting, so a failed
   // WiFi join can see that Ethernet is up and skip AP mode.
   initEthernet();
