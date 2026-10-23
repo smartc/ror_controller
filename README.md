@@ -314,7 +314,9 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
   - AbortSlew during the relay start-up cancels the move before K2, instead of pressing K2 (which would start the roof). During the K2 press it waits for the press to finish, then stops. AbortSlew also clears Slaved.
   - A stop between the limits reports Error (position unknown) but Slewing reads false, since nothing failed. Before, the roof stayed Opening/Closing until the 90 s timeout.
 - **Limit lost while idle (#11, decision 2)**: no longer inferred as a move. The last known position is held with a logged warning. A sensor fault is reported only if no limit triggers within the movement timeout, and it clears itself when a limit returns.
-- Alpaca open, close, abort and connection writes are logged with the client IP and ClientID; per-poll Slewing lines are verbose-only (they were persisted on every poll).
+- **Who did what, in the log (#13 phase 1)**: Alpaca open, close, abort and connection writes are logged with the client IP and ClientID; web UI actions that move the roof or change a safety setting (open/close/stop, relay buttons, clear error, park/safety bypasses, restart) with the browser's IP; MQTT OPEN/CLOSE/STOP with the topic. Per-poll Slewing lines are verbose-only (they were persisted on every poll).
+- **WiFi drops in the log**: "WiFi down" now gives the disconnect reason code and name and the last signal strength; "WiFi up" after a drop says how many disconnect events there were.
+- `CanSlave` is false (a roll-off roof can't be slaved); writing `Slaved` returns PropertyNotImplemented.
 - Fix: ShutterStatus and Slewing ran `updateRoofStatus()` from the web task without the roof lock; the roof task keeps the status current.
 
 ### v4.0.2 (2026-10-23)

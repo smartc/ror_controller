@@ -161,8 +161,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("] ");
   Serial.println(message);
   
-  // Handle commands
+  // Handle commands (logged with their source, #13 phase 1)
   if (String(topic) == mqttTopicCommand) {
+    if (message == "OPEN" || message == "CLOSE" || message == "STOP") {
+      Debug.printf("MQTT: %s on %s (roof %s)\n", message.c_str(), topic, getRoofStatusString().c_str());
+    }
     if (message == "OPEN") {
       startOpeningRoof();
     } else if (message == "CLOSE") {

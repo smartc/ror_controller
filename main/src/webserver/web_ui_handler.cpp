@@ -41,6 +41,12 @@ public:
 // Standard Web Server
 WebServer webUiServer(WEB_UI_PORT);
 
+// Who did it: every web UI action that moves the roof or changes a safety setting is
+// logged with the browser's IP (#13 phase 1)
+static void logWebAction(const char* action) {
+  Debug.printf("Web UI: %s from %s\n", action, webUiServer.client().remoteIP().toString().c_str());
+}
+
 // Preferences instance
 Preferences preferences;
 
@@ -576,7 +582,7 @@ void initWebUI() {
   // Restart handler
   webUiServer.on("/restart", HTTP_POST, []() {
     webUiServer.send(200, "text/plain", "Restarting device...");
-    Debug.println("Device restart requested via web interface");
+    logWebAction("restart");
     logArchiveFlushNow();  // archive the FRAM backlog first (skipped if the roof is moving)
     delay(1000);
     ESP.restart();
@@ -926,6 +932,7 @@ void handleWifiConfigPost() {
 
 // Handler for bypass toggle
 void handleBypassToggle() {
+  logWebAction(("park sensor bypass=" + webUiServer.arg("bypass")).c_str());
   if (webUiServer.hasArg("bypass")) {
     bypassParkSensor = (webUiServer.arg("bypass") == "true");
     
@@ -960,6 +967,7 @@ void handleParkSensorEnabled() {
 
 // Handler for park sensor bypass toggle
 void handleParkSensorBypass() {
+  logWebAction(("park sensor " + webUiServer.arg("uuid") + " bypass=" + webUiServer.arg("bypass")).c_str());
   if (webUiServer.hasArg("uuid") && webUiServer.hasArg("bypass")) {
     String uuid = webUiServer.arg("uuid");
     bool bypassed = (webUiServer.arg("bypass") == "true");
@@ -1003,6 +1011,7 @@ void handleParkSensorRemoveAll() {
 
 // Handler for global safety sensor bypass toggle
 void handleSafetyBypassToggle() {
+  logWebAction(("safety bypass=" + webUiServer.arg("bypass")).c_str());
   if (webUiServer.hasArg("bypass")) {
     bypassSafetySensor = (webUiServer.arg("bypass") == "true");
     saveSafetySensorConfiguration();
@@ -1027,6 +1036,7 @@ void handleSafetySensorEnabled() {
 
 // Handler for per-sensor bypass toggle
 void handleSafetySensorBypass() {
+  logWebAction(("safety sensor " + webUiServer.arg("serial") + " bypass=" + webUiServer.arg("bypass")).c_str());
   if (webUiServer.hasArg("serial") && webUiServer.hasArg("bypass")) {
     String serial = webUiServer.arg("serial");
     bool bypassed = (webUiServer.arg("bypass") == "true");
@@ -1109,6 +1119,7 @@ void handleParkSensorType() {
 
 // Handler for toggling K1 inverter power relay
 void handleInverterToggle() {
+  logWebAction("K1 inverter relay toggle");
   toggleInverterPower();
 
   bool state = getInverterRelayState();
@@ -1120,6 +1131,7 @@ void handleInverterToggle() {
 
 // Handler for sending K3 soft-power button press
 void handleInverterButton() {
+  logWebAction("K3 inverter button press");
   sendInverterButtonPress();
 
   Debug.println("Inverter button press sent via web interface");
@@ -1148,6 +1160,7 @@ void handleControl() {
 
 // Handler for roof control commands
 void handleRoofControl() {
+  logWebAction(("roof " + webUiServer.arg("action")).c_str());
   if (webUiServer.hasArg("action")) {
     String action = webUiServer.arg("action");
 
@@ -1185,7 +1198,7 @@ void handleRoofControl() {
 
 // Handle single roof button press (mimics physical button)
 void handleRoofButton() {
-  Debug.println("Roof button pressed via web interface");
+  logWebAction("K2 roof button press");
 
   // Check telescope safety interlock - only if bypass is not enabled
   if (!bypassParkSensor && !telescopeParked) {
@@ -1204,7 +1217,7 @@ void handleRoofButton() {
 
 // Handle intelligent open/close command (replicates ASCOM/MQTT logic)
 void handleRoofOpenClose() {
-  Debug.println("Intelligent roof control via web interface");
+  logWebAction(("roof open/close toggle (roof " + getRoofStatusString() + ")").c_str());
 
   // Check telescope safety interlock - only if bypass is not enabled
   if (!bypassParkSensor && !telescopeParked) {
@@ -1255,7 +1268,7 @@ void handleRoofOpenClose() {
 
 // Handle clear error request
 void handleClearError() {
-  Debug.println("Clear error request via web interface");
+  logWebAction("clear error");
 
   if (roofStatus != ROOF_ERROR) {
     webUiServer.send(200, "text/plain", "No error to clear");

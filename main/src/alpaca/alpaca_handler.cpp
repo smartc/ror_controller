@@ -661,8 +661,8 @@ void handleCanSlave() {
   uint32_t clientID = alpacaUIntArg("ClientID");
   uint32_t clientTransactionID = alpacaUIntArg("ClientTransactionID");
   
-  // We can slave the roof to the telescope
-  sendAlpacaResponse(clientID, clientTransactionID, 0, "", "true");
+  // A roll-off roof can't follow the telescope's azimuth
+  sendAlpacaResponse(clientID, clientTransactionID, 0, "", "false");
 }
 
 void handleCanSyncAzimuth() {
@@ -707,8 +707,8 @@ void handleSetSlaved() {
     alpacaBadRequest("Slaved must be True or False");
     return;
   }
-  slaved = value.equalsIgnoreCase("true");
-  sendAlpacaResponse(clientID, clientTransactionID, 0, "", "");
+  // CanSlave is false, so Slaved can't be set (ASCOM: PropertyNotImplementedException)
+  sendAlpacaResponse(clientID, clientTransactionID, 1024, "Slaved is not implemented: a roll-off roof can't be slaved", "");
 }
 
 void handleSlewing() {
