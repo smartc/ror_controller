@@ -167,6 +167,87 @@ inline String getPageHeader(String pageTitle) {
   return header;
 }
 
+// GPS position rows (latitude, longitude, altitude). Click a value, or the icon beside it,
+// to copy that value; the DEC / DMS switch on the latitude row changes the coordinate
+// format, remembered per browser. Used on Home and Setup.
+inline String getGPSPositionRows(double lat, double lon, double alt) {
+  char latStr[16], lonStr[16], altStr[16];
+  snprintf(latStr, sizeof(latStr), "%.6f", lat);
+  snprintf(lonStr, sizeof(lonStr), "%.6f", lon);
+  snprintf(altStr, sizeof(altStr), "%.1f", alt);
+
+  // Value + unit + copy icon (two overlapping squares). attrs mark a coordinate for the
+  // format switch; the unit sits outside the value span so it isn't copied.
+  auto copyCell = [](const String& attrs, const char* value, const char* unit) {
+    return String("<span ") + attrs + " title='Click to copy'"
+           " style='cursor:pointer' onclick='gpsCoordCopy(this)'>" + value + "</span>" + unit +
+           "<span data-coord-icon title='Copy' style='cursor:pointer;color:#8899aa;margin-left:8px;font-size:0.8em'"
+           " onclick='gpsCoordCopy(this.previousElementSibling)'>"
+           "<svg width='13' height='13' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5'"
+           " style='vertical-align:-2px'><rect x='5' y='5' width='9' height='9' rx='1.5'/>"
+           "<path d='M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5'/></svg></span>";
+  };
+  String fmtSwitch =
+    "<span style='margin-left:16px;font-size:0.8em;color:#8899aa'>"
+    "<span data-fmt='dd' style='cursor:pointer' onclick='gpsCoordFormat(false)'>DEC</span> / "
+    "<span data-fmt='dms' style='cursor:pointer' onclick='gpsCoordFormat(true)'>DMS</span></span>";
+
+  String html;
+  html += "<tr><th>Latitude</th><td>" + copyCell("data-coord='lat' data-v='" + String(latStr) + "'", latStr, "") +
+          fmtSwitch + "</td></tr>\n";
+  html += "<tr><th>Longitude</th><td>" + copyCell("data-coord='lon' data-v='" + String(lonStr) + "'", lonStr, "") +
+          "</td></tr>\n";
+  html += "<tr><th>Altitude</th><td>" + copyCell("data-alt", altStr, " m") + "</td></tr>\n";
+  // Template strings are ASCII-only, so the degree sign is a JS escape
+  html += "<script>\n"
+    "function gpsDms(v, pos, neg) {\n"
+    "  var t = Math.round(Math.abs(v) * 360000);\n"  // hundredths of an arcsecond
+    "  var d = Math.floor(t / 360000), m = Math.floor(t % 360000 / 6000), s = (t % 6000) / 100;\n"
+    "  return d + '\u00B0 ' + (m < 10 ? '0' : '') + m + \"' \" + (s < 10 ? '0' : '') + s.toFixed(2) + '\" ' + (v < 0 && t > 0 ? neg : pos);\n"
+    "}\n"
+    "function gpsCoordText(el, dms) {\n"
+    "  var v = parseFloat(el.getAttribute('data-v'));\n"
+    "  if (!dms) return el.getAttribute('data-v');\n"
+    "  return el.getAttribute('data-coord') == 'lat' ? gpsDms(v, 'N', 'S') : gpsDms(v, 'E', 'W');\n"
+    "}\n"
+    "function gpsCoordDms() { try { return localStorage.getItem('gpsFormat') == 'dms'; } catch (e) { return window.gpsFmtDms === true; } }\n"
+    "function gpsCoordRender() {\n"
+    "  var dms = gpsCoordDms();\n"
+    "  document.querySelectorAll('[data-coord]').forEach(function(el) { el.textContent = gpsCoordText(el, dms); });\n"
+    "  document.querySelectorAll('[data-fmt]').forEach(function(s) {\n"
+    "    var on = (s.getAttribute('data-fmt') == 'dms') == dms;\n"
+    "    s.style.color = on ? '#a0c4ff' : '';\n"
+    "    s.style.fontWeight = on ? 'bold' : '';\n"
+    "  });\n"
+    "}\n"
+    "function gpsCoordFormat(dms) {\n"
+    "  window.gpsFmtDms = dms;\n"
+    "  try { localStorage.setItem('gpsFormat', dms ? 'dms' : 'dd'); } catch (e) {}\n"
+    "  gpsCoordRender();\n"
+    "}\n"
+    "function gpsCoordCopy(el) {\n"
+    "  var text = el.textContent, icon = el.nextElementSibling, html = icon.innerHTML;\n"
+    "  var show = function(msg) {\n"
+    "    icon.textContent = msg;\n"
+    "    setTimeout(function() { icon.innerHTML = html; }, 1200);\n"
+    "  };\n"
+    // navigator.clipboard only exists on HTTPS or localhost, and the device is plain HTTP
+    "  var fallback = function() {\n"
+    "    var ta = document.createElement('textarea');\n"
+    "    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';\n"
+    "    document.body.appendChild(ta); ta.select();\n"
+    "    var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}\n"
+    "    document.body.removeChild(ta);\n"
+    "    show(ok ? 'Copied' : 'Copy failed');\n"
+    "  };\n"
+    "  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function() { show('Copied'); }, fallback);\n"
+    "  else fallback();\n"
+    "}\n"
+    "gpsCoordRender();\n"
+    "</script>\n";
+  return html;
+}
+
 // Navigation bar
 inline String getNavBar() {
   String navbar =
@@ -835,13 +916,7 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
 
       // GPS Position (if fix available)
       if (gpsStatusData.hasFix) {
-        char latStr[16], lonStr[16], altStr[16];
-        snprintf(latStr, sizeof(latStr), "%.6f", gpsStatusData.latitude);
-        snprintf(lonStr, sizeof(lonStr), "%.6f", gpsStatusData.longitude);
-        snprintf(altStr, sizeof(altStr), "%.1f m", gpsStatusData.altitude);
-        html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>\n";
-        html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>\n";
-        html += "<tr><th>Altitude</th><td>" + String(altStr) + "</td></tr>\n";
+        html += getGPSPositionRows(gpsStatusData.latitude, gpsStatusData.longitude, gpsStatusData.altitude);
       }
     }
 
@@ -1844,6 +1919,29 @@ inline String getGPSConfigCard() {
   html += rtcPresent ? "Present (I2C 0x68)" : "Not detected";
   html += "</td></tr>";
 
+  // RTC measured against PPS: offset now, drift since the last resync (needs 10 min of data)
+  if (rtcPresent) {
+    float rtcOffsetMs, rtcDriftPpm;
+    uint32_t rtcSyncAgeS;
+    html += "<tr><th>RTC Calibration</th><td>";
+    if (getRTCCalibration(&rtcOffsetMs, &rtcDriftPpm, &rtcSyncAgeS)) {
+      char buf[96];
+      String age = rtcSyncAgeS < 60 ? String(rtcSyncAgeS) + " s" : String(rtcSyncAgeS / 60) + " min";
+      snprintf(buf, sizeof(buf), "Offset %+.1f ms vs PPS", rtcOffsetMs);
+      html += buf;
+      if (isnan(rtcDriftPpm)) {
+        html += ", drift: measuring";
+      } else {
+        snprintf(buf, sizeof(buf), ", drift %+.2f ppm", rtcDriftPpm);
+        html += buf;
+      }
+      if (rtcSyncAgeS > 0) html += ", resynced " + age + " ago";
+    } else {
+      html += "<span style='color:#8899aa'>Not measured (needs GPS with PPS)</span>";
+    }
+    html += "</td></tr>";
+  }
+
   // GPS Enabled status
   html += "<tr><th>GPS Module</th><td>";
   html += "<span class='status-indicator " + String(gpsEnabled ? "green" : "red") + "'></span> ";
@@ -1872,12 +1970,7 @@ inline String getGPSConfigCard() {
 
     // Position (if available)
     if (status.hasFix) {
-      char latStr[16], lonStr[16];
-      snprintf(latStr, sizeof(latStr), "%.6f", status.latitude);
-      snprintf(lonStr, sizeof(lonStr), "%.6f", status.longitude);
-      html += "<tr><th>Latitude</th><td>" + String(latStr) + "</td></tr>";
-      html += "<tr><th>Longitude</th><td>" + String(lonStr) + "</td></tr>";
-      html += "<tr><th>Altitude</th><td>" + String(status.altitude, 1) + " m</td></tr>";
+      html += getGPSPositionRows(status.latitude, status.longitude, status.altitude);
     }
 
     // Last update

@@ -296,6 +296,14 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 
 ## Changelog
 
+### v4.0.2 (2026-10-23)
+- **RTC kept in step with GPS**: the DS3231 is rewritten just after a PPS edge (within 20 ms), at the first edge and then hourly, instead of once per boot from NMEA. While PPS isn't active (no PPS pin, not wired, or lost) it's rewritten hourly from NMEA instead.
+- **RTC corrected from network time when there's no GPS**: after each SNTP sync (hourly), if GPS is disabled or has had no fix for the holdover period, the RTC is rewritten at a network second boundary when it's 100 ms or more off. Previously SNTP only set an RTC that had no valid time, so a GPS-less RTC drifted forever.
+- **RTC used as the clock when GPS is lost**: once a minute the controller times an RTC seconds rollover and, while PPS is live, measures the RTC's offset and drift against it. When GPS goes stale the time source drops to the RTC (temperature-compensated) instead of counting on the ESP32 crystal from the last NMEA second, and NTP holdover serves RTC time corrected by the measured offset. `rtc_offset_ms`, `rtc_drift_ppm` and `rtc_sync_age_s` in `/api/gps_status`.
+- Log lines for PPS acquired/restored and GPS time lost/restored. RTC resyncs are logged only when the RTC had drifted 15 ms or more.
+- Fix: UTC time and date froze at the last GPS fix after the fix was lost.
+- Telescope park changes are logged once (the debounced change); the raw "park state CHANGED" line is verbose-only.
+
 ### v4.0.1 (2026-10-18)
 - **NTP server follows RFC 5905 when GPS is lost**: stratum 1 (`PPS`/`GPS`) while GPS time is fresh; then a 1-hour holdover at stratum 1, extrapolating sub-second time from the last PPS edge on the local crystal, with root dispersion growing 15 µs/s; then unsynchronized (LI=3, stratum 0, refid `INIT`) so clients fail over to their other servers. RTC-only time after boot is served as unsynchronized. Holdover length: `NTP_HOLDOVER_SECONDS` in `config.h`.
 - Fix: PPS edges kept PPS "active" without a fresh GPS fix, which froze the served time at the last fix.

@@ -24,7 +24,7 @@
 #endif
 
 // Version Information
-#define DEVICE_VERSION "4.0.1"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
+#define DEVICE_VERSION "4.0.2"  // v4.0: W5500 Ethernet, FRAM + flash logging, tabbed setup, 16MB layout
 #define DEVICE_MANUFACTURER "Corey Smart"
 #define DEVICE_NAME "ESP32-S3 Roll-Off Roof Controller"
 

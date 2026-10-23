@@ -828,7 +828,8 @@ void updateTelescopeStatus() {
   if (currentParkedState != lastTelescopeParkedState) {
     lastTelescopeParkedState = currentParkedState;
     lastTelescopeParkedStateTime = currentTime;
-    Debug.println("Telescope park state CHANGED to: " + String(currentParkedState ? "PARKED" : "NOT PARKED"));
+    // Verbose only: the debounced change below is the one that's logged
+    Debug.println("Telescope park state CHANGED to: " + String(currentParkedState ? "PARKED" : "NOT PARKED"), 2);
   }
   
   // Only consider the state change valid if it has been stable for SWITCH_STABLE_TIME
