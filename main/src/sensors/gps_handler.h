@@ -76,6 +76,9 @@ bool readRTCOscillatorStopped();          // DS3231 OSF flag: true = stored time
 bool readRTC(GPSTime* time);              // Read time from RTC
 bool writeRTC(const GPSTime* time);       // Write time to RTC
 void syncRTCFromGPS();                    // Sync RTC from GPS when GPS has fix
+// RTC offset from PPS time (ms), drift rate (ppm, NaN until measured) and seconds since the
+// last PPS-aligned write; false until the RTC has been measured against PPS
+bool getRTCCalibration(float* offsetMs, float* driftPpm, uint32_t* syncAgeS);
 
 // Function prototypes - NTP
 void initNetworkTime();                   // Start the SNTP client (fallback time source)

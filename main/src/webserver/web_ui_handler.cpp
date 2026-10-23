@@ -1435,6 +1435,13 @@ void handleGPSStatus() {
 
   // RTC status
   doc["rtc_present"] = rtcPresent;
+  float rtcOffsetMs, rtcDriftPpm;
+  uint32_t rtcSyncAgeS;
+  if (getRTCCalibration(&rtcOffsetMs, &rtcDriftPpm, &rtcSyncAgeS)) {
+    doc["rtc_offset_ms"] = rtcOffsetMs;
+    if (!isnan(rtcDriftPpm)) doc["rtc_drift_ppm"] = rtcDriftPpm;
+    doc["rtc_sync_age_s"] = rtcSyncAgeS;
+  }
 
   // GPS status
   doc["gps_enabled"] = gpsEnabled;

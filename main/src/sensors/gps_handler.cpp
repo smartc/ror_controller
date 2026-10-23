@@ -10,6 +10,7 @@
 #include "../hw/i2c_bus.h"
 #include <Preferences.h>
 #include <esp_timer.h>
+#include <esp_sntp.h>
 
 // GPS Serial port (using HardwareSerial 1)
 HardwareSerial GPSSerial(1);
@@ -70,6 +71,33 @@ static void IRAM_ATTR ppsInterruptHandler() {
 
 // Track if we've synced RTC from GPS
 static bool rtcSyncedFromGPS = false;
+static unsigned long lastRtcGpsWriteMillis = 0;       // last RTC write from GPS (NMEA or PPS)
+static int64_t rtcLastPpsSyncUs = 0;                  // esp_timer of the last PPS-aligned RTC write (0 = none)
+static bool rtcPpsAligned = false;                    // last GPS write was PPS-aligned (an NMEA write isn't)
+
+// RTC tracking. The DS3231 only reports whole seconds, so once a minute the loop times a
+// seconds rollover on esp_timer. Time between rollovers is then extrapolated over at most
+// a minute of the ESP32 crystal, while the long-term rate comes from the DS3231's
+// temperature-compensated oscillator.
+static int64_t rtcPhaseUs = 0;        // esp_timer of an RTC second boundary, coarse or exact (0 = unknown)
+static int64_t rtcEdgeUs = 0;         // esp_timer of the last exactly timed boundary (0 = none)
+static uint32_t rtcEdgeUnix = 0;      // RTC time that began at that boundary
+static int64_t rtcNextTrackUs = 0;    // when to time the next boundary
+static uint8_t rtcCatchFails = 0;
+static int8_t rtcCoarseSecond = -1;   // coarse acquisition: last polled seconds value
+static int64_t rtcCoarseUs = 0;
+
+// RTC offset from true time (RTC minus PPS), measured whenever a boundary is timed with PPS live.
+// Holdover subtracts it, so the RTC's phase error after a write doesn't matter.
+static bool rtcOffsetValid = false;
+static int64_t rtcOffsetUs = 0;
+static int64_t rtcOffsetRefUs = 0;    // first offset measured after the last RTC write...
+static int64_t rtcOffsetRefAtUs = 0;  // ...and when, for the drift rate
+static float rtcDriftPpm = 0;
+static bool rtcDriftValid = false;
+
+static bool ppsEverActive = false;    // for "acquired" vs "restored" log lines
+static bool gpsTimeLost = false;      // time source dropped from GPS to the RTC
 
 // Set once GPS has given a valid fix this boot; until then the NTP server is unsynchronized
 static bool gpsFixSeen = false;
@@ -83,6 +111,15 @@ static bool gpsFixSeen = false;
 #define PPS_PERIOD_MAX_US 1050000      // Maximum valid PPS period (1050ms)
 #define PPS_NMEA_MAX_AGE_MS 2000       // PPS edge is only labelled from NMEA time this fresh
 #define GPS_FRESH_MS 5000              // GPS time older than this puts the NTP server in holdover
+
+// RTC sync and tracking constants
+#define RTC_RESYNC_INTERVAL_US (3600LL * 1000000)  // Rewrite the RTC from PPS hourly
+#define RTC_SYNC_MAX_LATE_US 20000                 // Only write the RTC this soon after a PPS edge
+#define RTC_TRACK_INTERVAL_US (60LL * 1000000)     // Time an RTC second boundary once a minute
+#define RTC_TRACK_MAX_AGE_US (300LL * 1000000)     // RTC phase older than this isn't used for time
+#define RTC_EDGE_WINDOW_US 30000                   // Poll from this long before to after a predicted boundary
+#define RTC_DRIFT_MIN_SPAN_US (600LL * 1000000)    // Drift rate needs offsets this far apart
+#define RTC_NET_TOLERANCE_US 100000                // Without GPS, correct the RTC from SNTP past this
 
 // NTP root dispersion (16.16 fixed-point seconds)
 #define NTP_DISP_PPS 0x00000001UL      // ~15 us
@@ -100,6 +137,7 @@ static uint32_t dateTimeToUnix(uint16_t year, uint8_t month, uint8_t day,
                                 uint8_t hour, uint8_t minute, uint8_t second);
 static uint8_t bcdToDec(uint8_t val);
 static uint8_t decToBcd(uint8_t val);
+static void rtcPhaseReset();
 
 // ============== RTC Functions (DS3231) ==============
 
@@ -243,25 +281,227 @@ bool writeRTC(const GPSTime* time) {
     }
   }
 
-  Debug.printf("RTC time set to: %04d-%02d-%02d %02d:%02d:%02d\n",
+  // Callers log the sync itself; this runs hourly
+  Debug.printf(2, "RTC time set to: %04d-%02d-%02d %02d:%02d:%02d\n",
                time->year, time->month, time->day,
                time->hour, time->minute, time->second);
+
+  // The write restarted the RTC's second, so its phase and offset must be measured again
+  rtcTime = *time;
+  rtcPhaseReset();
   return true;
 }
 
-// Sync RTC from GPS when GPS has fix
+// Sync RTC from NMEA time: once per boot as a first coarse set, then hourly while PPS isn't
+// active (no PPS pin, PPS not wired, or PPS lost). With PPS, syncRTCFromPPS() keeps it aligned.
 void syncRTCFromGPS() {
   if (!rtcPresent || !gpsStatus.hasFix || !gpsStatus.time.valid) {
     return;
   }
 
-  // Only sync once per session (or when GPS time changes significantly)
-  if (!rtcSyncedFromGPS) {
-    if (writeRTC(&gpsStatus.time)) {
-      rtcSyncedFromGPS = true;
+  bool due = !rtcSyncedFromGPS ||
+             (!ppsActive && millis() - lastRtcGpsWriteMillis >= RTC_RESYNC_INTERVAL_US / 1000);
+  // Write right after a sentence is parsed, so the RTC lags true time by the NMEA latency only
+  if (!due || millis() - lastGPSSecondMillis > 100) return;
+  if (writeRTC(&gpsStatus.time)) {
+    if (!rtcSyncedFromGPS) {
       Debug.println("RTC synced from GPS");
+    } else {
+      Debug.printf(2, "RTC resynced from GPS (no PPS)\n");
+    }
+    rtcSyncedFromGPS = true;
+    rtcPpsAligned = false;
+    lastRtcGpsWriteMillis = millis();
+  }
+}
+
+static GPSTime unixToGPSTime(uint32_t unixTime) {
+  time_t t = unixTime;
+  struct tm tmUtc;
+  gmtime_r(&t, &tmUtc);
+  GPSTime g = {(uint16_t)(tmUtc.tm_year + 1900), (uint8_t)(tmUtc.tm_mon + 1), (uint8_t)tmUtc.tm_mday,
+               (uint8_t)tmUtc.tm_hour, (uint8_t)tmUtc.tm_min, (uint8_t)tmUtc.tm_sec, true};
+  return g;
+}
+
+// Rewrite the RTC just after a labelled PPS edge. Writing the seconds register restarts the
+// DS3231's second, so it starts within RTC_SYNC_MAX_LATE_US of true time. Called from
+// handleGPS() for each labelled edge; acts at the first edge (or the first after an NMEA
+// write), then hourly.
+static void syncRTCFromPPS() {
+  if (!rtcPresent) return;
+  int64_t now = esp_timer_get_time();
+  bool first = (rtcLastPpsSyncUs == 0);
+  if (rtcPpsAligned && now - rtcLastPpsSyncUs < RTC_RESYNC_INTERVAL_US) return;
+  if (now - ppsAnchorUs > RTC_SYNC_MAX_LATE_US) return;  // loop was slow; try a later edge
+
+  // Last measured error, before the write discards it
+  bool hadOffset = rtcOffsetValid && (now - rtcEdgeUs < RTC_TRACK_MAX_AGE_US);
+  float offsetMs = rtcOffsetUs / 1000.0f;
+  bool hadDrift = rtcDriftValid;
+  float driftPpm = rtcDriftPpm;
+
+  GPSTime t = unixToGPSTime(ppsAnchorUnix);
+  if (!writeRTC(&t)) return;
+  rtcLastPpsSyncUs = now;
+  rtcSyncedFromGPS = true;
+  rtcPpsAligned = true;
+  lastRtcGpsWriteMillis = millis();
+
+  if (first) {
+    Debug.println("RTC aligned to GPS PPS");
+  } else if (hadOffset) {
+    // An hour at the DS3231's +/-3.5 ppm is ~13 ms; more than that is worth a log line
+    int level = fabsf(offsetMs) >= 15.0f ? 1 : 2;
+    if (hadDrift) {
+      Debug.printf(level, "RTC resynced from PPS: was %+.1f ms, drift %+.2f ppm\n", offsetMs, driftPpm);
+    } else {
+      Debug.printf(level, "RTC resynced from PPS: was %+.1f ms\n", offsetMs);
     }
   }
+}
+
+// ============== RTC tracking ==============
+
+// Forget the RTC's phase and offset (after a write, or repeated failed catches)
+static void rtcPhaseReset() {
+  rtcPhaseUs = 0;
+  rtcEdgeUs = 0;
+  rtcNextTrackUs = 0;
+  rtcCatchFails = 0;
+  rtcCoarseSecond = -1;
+  rtcOffsetValid = false;
+  rtcOffsetRefAtUs = 0;
+  rtcDriftValid = false;
+}
+
+// Seconds register only (one short I2C read); -1 on failure
+static int readRTCSecondsReg() {
+  I2CLock lock;
+  Wire.beginTransmission(DS3231_ADDRESS);
+  Wire.write(0x00);
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom(DS3231_ADDRESS, (uint8_t)1) != 1) {
+    return -1;
+  }
+  return bcdToDec(Wire.read() & 0x7F);
+}
+
+static void rtcCatchFailed() {
+  if (++rtcCatchFails >= 3) {
+    rtcPhaseUs = 0;      // prediction may be off: go back to coarse acquisition
+    rtcCatchFails = 0;
+    rtcCoarseSecond = -1;
+  }
+}
+
+// An RTC second boundary was timed at edgeUs: read the second that began there
+static void rtcEdgeCaught(int64_t edgeUs) {
+  GPSTime t;
+  if (!readRTC(&t) || !t.valid) {
+    rtcCatchFailed();
+    return;
+  }
+  uint32_t unixTime = dateTimeToUnix(t.year, t.month, t.day, t.hour, t.minute, t.second);
+  rtcPhaseUs = edgeUs;
+  rtcEdgeUs = edgeUs;
+  rtcEdgeUnix = unixTime;
+  rtcCatchFails = 0;
+  rtcNextTrackUs = edgeUs + RTC_TRACK_INTERVAL_US;
+  rtcTime = t;
+  lastRTCUnixTime = unixTime;
+  lastRTCReadMillis = millis() - (unsigned long)((esp_timer_get_time() - edgeUs) / 1000);
+
+  // With PPS live, measure the RTC against true time, and its drift since the first measurement
+  if (ppsActive && ppsAnchorUnix != 0 && llabs(edgeUs - ppsAnchorUs) < 2000000) {
+    int64_t trueUs = (int64_t)ppsAnchorUnix * 1000000 + (edgeUs - ppsAnchorUs);
+    rtcOffsetUs = (int64_t)unixTime * 1000000 - trueUs;
+    rtcOffsetValid = true;
+    if (rtcOffsetRefAtUs == 0) {
+      rtcOffsetRefUs = rtcOffsetUs;
+      rtcOffsetRefAtUs = edgeUs;
+    } else if (edgeUs - rtcOffsetRefAtUs >= RTC_DRIFT_MIN_SPAN_US) {
+      rtcDriftPpm = (float)(rtcOffsetUs - rtcOffsetRefUs) * 1e6f / (float)(edgeUs - rtcOffsetRefAtUs);
+      rtcDriftValid = true;
+    }
+  }
+}
+
+// Coarse acquisition: poll once per loop pass until the seconds value changes
+static void rtcCoarsePoll() {
+  int sec = readRTCSecondsReg();
+  int64_t t = esp_timer_get_time();
+  if (sec < 0) {
+    rtcCoarseSecond = -1;
+    return;
+  }
+  // Only accept a change seen between passes close enough to land inside the catch window
+  if (rtcCoarseSecond >= 0 && sec != rtcCoarseSecond && t - rtcCoarseUs <= RTC_EDGE_WINDOW_US / 2) {
+    rtcPhaseUs = (rtcCoarseUs + t) / 2;
+    rtcNextTrackUs = 0;  // time the next boundary exactly
+  }
+  rtcCoarseSecond = sec;
+  rtcCoarseUs = t;
+}
+
+// Time one boundary to a fraction of a millisecond by polling the seconds register
+// across it. Blocks the loop for at most 2 x RTC_EDGE_WINDOW_US, once a minute.
+static void rtcBurstCatch(int64_t predictedUs) {
+  I2CLock lock;  // hold the bus for the whole burst
+  int64_t deadline = predictedUs + RTC_EDGE_WINDOW_US;
+  int prev = readRTCSecondsReg();
+  int64_t prevUs = esp_timer_get_time();
+  if (prev < 0) {
+    rtcCatchFailed();
+    return;
+  }
+  for (;;) {
+    int sec = readRTCSecondsReg();
+    int64_t t = esp_timer_get_time();
+    if (sec < 0 || t > deadline) {
+      rtcCatchFailed();
+      return;
+    }
+    if (sec != prev) {
+      rtcEdgeCaught((prevUs + t) / 2);
+      return;
+    }
+    prevUs = t;
+  }
+}
+
+static void handleRTCTracking() {
+  if (!rtcPresent || !rtcTime.valid) return;
+  if (rtcPhaseUs == 0) {
+    rtcCoarsePoll();
+    return;
+  }
+  int64_t now = esp_timer_get_time();
+  if (now < rtcNextTrackUs) return;
+  int64_t toEdge = 1000000 - (now - rtcPhaseUs) % 1000000;
+  if (toEdge > RTC_EDGE_WINDOW_US) return;  // wait for the window before the next boundary
+  rtcBurstCatch(now + toEdge);
+}
+
+// True time (us since epoch) from the RTC: its last timed second plus at most a few
+// minutes on the ESP32 crystal, corrected by the offset measured against PPS.
+// False if no boundary has been timed recently.
+static bool rtcTrueTimeUs(int64_t nowUs, int64_t* unixUs) {
+  if (rtcEdgeUs == 0 || nowUs - rtcEdgeUs > RTC_TRACK_MAX_AGE_US) return false;
+  *unixUs = (int64_t)rtcEdgeUnix * 1000000 + (nowUs - rtcEdgeUs) - (rtcOffsetValid ? rtcOffsetUs : 0);
+  return true;
+}
+
+bool getRTCCalibration(float* offsetMs, float* driftPpm, uint32_t* syncAgeS) {
+  if (!rtcOffsetValid) return false;
+  *offsetMs = rtcOffsetUs / 1000.0f;
+  *driftPpm = rtcDriftValid ? rtcDriftPpm : NAN;
+  *syncAgeS = rtcLastPpsSyncUs ? (uint32_t)((esp_timer_get_time() - rtcLastPpsSyncUs) / 1000000) : 0;
+  return true;
+}
+
+// GPS has given a fix recently enough to be the time source
+static bool gpsTimeFresh() {
+  return gpsStatus.hasFix && gpsStatus.time.valid && (millis() - gpsStatus.lastUpdate <= GPS_FRESH_MS);
 }
 
 // BCD conversion helpers
@@ -374,12 +614,18 @@ void handleGPS() {
       ppsUnixTimeAtEdge = nmeaIsCurrentSecond ? lastGPSUnixTime : (lastGPSUnixTime + 1);
       ppsAnchorUs = esp_timer_get_time() - (int64_t)(unsigned long)(micros() - lastMicros);
       ppsAnchorUnix = ppsUnixTimeAtEdge;
+      if (!ppsActive) {
+        Debug.println(ppsEverActive ? "PPS signal restored" : "PPS signal acquired");
+        ppsEverActive = true;
+      }
       ppsActive = true;
       ppsLastValidMillis = millis();
 
       Debug.printf(2, "PPS #%lu: period=%lu us, time=%lu, nmea=%s\n",
                    (unsigned long)ppsCount, period, ppsUnixTimeAtEdge,
                    nmeaIsCurrentSecond ? "current" : "previous");
+
+      syncRTCFromPPS();
     }
     // Pulses without fresh NMEA time don't keep PPS active; it times out below
   }
@@ -390,8 +636,13 @@ void handleGPS() {
     Debug.println("PPS signal lost");
   }
 
-  // Update time source and sync RTC if GPS has fix
-  if (gpsStatus.hasFix && gpsStatus.time.valid) {
+  // Update time source and sync RTC if GPS has fix (handleTimeSync() drops to the RTC
+  // when it goes stale)
+  if (gpsTimeFresh()) {
+    if (gpsTimeLost) {
+      Debug.println("GPS time restored");
+      gpsTimeLost = false;
+    }
     timeSynced = true;
     currentTimeSource = TIME_SOURCE_GPS;
     syncRTCFromGPS();
@@ -472,10 +723,17 @@ static bool getPPSNTPTimestamp(uint32_t* ntpSeconds, uint32_t* ntpFraction) {
   return true;
 }
 
-// Holdover timestamp: extrapolate from the last PPS edge on the local crystal, or from the
-// last NMEA second if PPS was never seen. Independent of the current time source, which
-// may have dropped to the RTC. Returns true if PPS-based.
+// Holdover timestamp: from the RTC when its offset has been measured against PPS (the
+// DS3231 is temperature-compensated, the ESP32 crystal isn't), else extrapolate from the
+// last PPS edge on the local crystal, or from the last NMEA second if PPS was never seen.
+// Returns true if PPS-based.
 static bool getHoldoverNTPTimestamp(uint32_t* ntpSeconds, uint32_t* ntpFraction) {
+  int64_t rtcUs;
+  if (rtcOffsetValid && rtcTrueTimeUs(esp_timer_get_time(), &rtcUs)) {
+    *ntpSeconds = (uint32_t)(rtcUs / 1000000) + NTP_TIMESTAMP_DELTA;
+    *ntpFraction = microsToNTPFraction((unsigned long)(rtcUs % 1000000));
+    return true;
+  }
   if (ppsAnchorUnix != 0) {
     int64_t elapsed = esp_timer_get_time() - ppsAnchorUs;
     *ntpSeconds = ppsAnchorUnix + (uint32_t)(elapsed / 1000000) + NTP_TIMESTAMP_DELTA;
@@ -731,7 +989,8 @@ GPSStatus getGPSStatus() {
 
 // Get formatted time string from best source (HH:MM:SS)
 String getTimeString() {
-  if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
+  // The last NMEA time freezes when the fix is lost, so only show it while fresh
+  if (currentTimeSource == TIME_SOURCE_GPS && gpsTimeFresh()) {
     return getGPSTimeString();
   }
   uint32_t currentUnix = getCurrentUnixTime();
@@ -747,7 +1006,7 @@ String getTimeString() {
 
 // Get formatted date string from best source (YYYY-MM-DD)
 String getDateString() {
-  if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
+  if (currentTimeSource == TIME_SOURCE_GPS && gpsTimeFresh()) {
     return getGPSDateString();
   }
   // Derived from the interpolated timestamp so the date rolls over at midnight
@@ -790,6 +1049,10 @@ uint32_t getCurrentUnixTime() {
   if (currentTimeSource == TIME_SOURCE_GPS && gpsStatus.time.valid) {
     return getGPSUnixTime();
   } else if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
+    int64_t rtcUs;
+    if (rtcTrueTimeUs(esp_timer_get_time(), &rtcUs)) {
+      return (uint32_t)(rtcUs / 1000000);
+    }
     // Interpolate from last RTC read
     unsigned long elapsed = (millis() - lastRTCReadMillis) / 1000;
     return lastRTCUnixTime + elapsed;
@@ -810,6 +1073,10 @@ uint64_t getCurrentUnixMillis() {
     return (uint64_t)lastGPSUnixTime * 1000 + (millis() - lastGPSSecondMillis);
   }
   if (currentTimeSource == TIME_SOURCE_RTC && rtcTime.valid) {
+    int64_t rtcUs;
+    if (rtcTrueTimeUs(esp_timer_get_time(), &rtcUs)) {
+      return (uint64_t)(rtcUs / 1000);
+    }
     return (uint64_t)lastRTCUnixTime * 1000 + (millis() - lastRTCReadMillis);
   }
   if (currentTimeSource == TIME_SOURCE_NETWORK) {
@@ -829,17 +1096,76 @@ static bool networkTimeValid() {
   return time(nullptr) > NETWORK_TIME_VALID_AFTER;
 }
 
+// Set by the SNTP client (lwIP task) after each sync, hourly by default
+static volatile bool sntpSynced = false;
+static void onSntpSync(struct timeval*) { sntpSynced = true; }
+
 void initNetworkTime() {
   configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+  sntp_set_time_sync_notification_cb(onSntpSync);
   Debug.println("SNTP client started (fallback time source)");
+}
+
+// Without GPS nothing else corrects the RTC, so after each SNTP sync compare the two and
+// rewrite the RTC if it has drifted past RTC_NET_TOLERANCE_US (SNTP over WiFi is good to a
+// few tens of ms, so smaller errors aren't worth chasing). Runs every loop pass: the write
+// waits for the start of a network second so the RTC's second starts in step.
+static void correctRTCFromNetwork() {
+  static bool pending = false;
+  if (sntpSynced) {
+    sntpSynced = false;
+    pending = true;
+  }
+  if (!pending) return;
+
+  // GPS (live, or within the holdover window) keeps the RTC itself
+  bool gpsAvailable = gpsEnabled && gpsFixSeen && (millis() - gpsStatus.lastUpdate <= NTP_HOLDOVER_SECONDS * 1000UL);
+  // An RTC without valid time is set by handleTimeSync() when network time takes over
+  if (!rtcPresent || !rtcTime.valid || gpsAvailable || !networkTimeValid()) {
+    pending = false;
+    return;
+  }
+  int64_t nowUs = esp_timer_get_time();
+  if (rtcEdgeUs == 0 || nowUs - rtcEdgeUs > RTC_TRACK_MAX_AGE_US) return;  // wait for an RTC second to be timed
+
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  int64_t netUs = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+  int64_t rtcUs = (int64_t)rtcEdgeUnix * 1000000 + (nowUs - rtcEdgeUs);  // raw RTC, no PPS offset
+  int64_t errUs = rtcUs - netUs;
+  if (llabs(errUs) < RTC_NET_TOLERANCE_US) {
+    pending = false;
+    return;
+  }
+  if (tv.tv_usec > RTC_SYNC_MAX_LATE_US) return;  // try again on a later pass
+
+  GPSTime t = unixToGPSTime((uint32_t)tv.tv_sec);
+  if (writeRTC(&t)) {
+    Debug.printf("RTC corrected from network time: was %+.0f ms\n", errUs / 1000.0);
+  }
+  pending = false;
 }
 
 // GPS and a trusted RTC win; network time only fills in when neither has time.
 // When it does, it also repairs an untrusted RTC so the next boot has time early.
 void handleTimeSync() {
+  handleRTCTracking();     // every pass: it times RTC second boundaries
+  correctRTCFromNetwork();  // every pass: it waits for a network second boundary
+
   static unsigned long lastCheck = 0;
   if (millis() - lastCheck < 5000 && lastCheck != 0) return;
   lastCheck = millis();
+
+  // GPS gone quiet: keep time from the RTC rather than extrapolating the last NMEA
+  // second on the ESP32 crystal. handleGPS() switches back once GPS is fresh.
+  int64_t rtcUs;
+  if (currentTimeSource == TIME_SOURCE_GPS && !gpsTimeFresh() &&
+      rtcTrueTimeUs(esp_timer_get_time(), &rtcUs)) {
+    currentTimeSource = TIME_SOURCE_RTC;
+    gpsTimeLost = true;
+    Debug.println(rtcOffsetValid ? "GPS time lost - holding time on the RTC (PPS-calibrated)"
+                                 : "GPS time lost - holding time on the RTC");
+  }
 
   if (currentTimeSource != TIME_SOURCE_NONE || !networkTimeValid()) return;
 
