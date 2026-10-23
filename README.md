@@ -28,7 +28,8 @@ ASCOM Alpaca compatible roll-off roof controller for remote observatory automati
 - **Weather/sky safety**: receives UDP broadcasts from safety sensor devices; blocks roof opening when any enabled sensor reports unsafe conditions. Fail-safe: an enabled sensor that goes offline is treated as unsafe
 - **Auto-close**: optionally closes the roof automatically when weather becomes unsafe (requires telescope parked)
 - All safety interlocks have bypass toggles accessible from both the Setup and Roof Control pages
-- **Error auto-recovery**: an error (e.g. movement timeout, or a manual move that left the roof between limits) clears itself once the roof reaches a limit switch *after* the error began; the original reason is kept in the log. Errors where the switch never changed ("failed to start", both limits triggered) and the park-interlock emergency stop still need a manual clear
+- **Limit lost while idle**: if the limit switch the roof is resting on stops reading triggered, no move is assumed (a sensor dropout and a hand move look the same). The roof keeps its last known position and a warning is logged. If the other limit triggers, the roof was moved by hand and the status follows. If no limit triggers within the movement timeout, the controller reports a limit sensor fault (ERROR), which clears itself when a limit returns
+- **Error auto-recovery**: an error (e.g. movement timeout, a limit sensor fault, or a stop that left the roof between limits) clears itself once the roof reaches a limit switch *after* the error began; the original reason is kept in the log. Errors where the switch never changed ("failed to start", both limits triggered) and the park-interlock emergency stop still need a manual clear
 - **Firmware updates blocked while moving**: OTA uploads are refused (HTTP 409) while the roof is moving or a relay sequence is running, and an upload in progress is aborted if a move starts (flash writes stall both CPU cores)
 
 > **CAUTION — Shore-power openers with no relay on K1:**
@@ -240,16 +241,21 @@ mqtt:
 
 - Discovery: UDP port 32227, responds to `alpacadiscovery1`
 - API base: `http://<device-ip>:11111/api/v1/dome/0/`
-- Device type: Dome (RollOffRoof)
+- Device type: Dome (RollOffRoof), **IDomeV3** (`InterfaceVersion` = 3, ASCOM Platform 7)
 
 | Method | Description |
 |--------|-------------|
-| `GET shutterstatus` | 0=Open, 1=Closed, 2=Opening, 3=Closing, 4=Error |
-| `PUT openshutter` | Open roof (checks park + weather safety) |
-| `PUT closeshutter` | Close roof |
-| `PUT abortslew` | Stop movement |
-| `GET athome` | True when closed |
-| `GET atpark` | True when open |
+| `GET shutterstatus` | 0=Open, 1=Closed, 2=Opening, 3=Closing, 4=Error. Opening/Closing from the moment a move is accepted |
+| `GET slewing` | True while opening/closing. Raises (0x500, with the reason) when the roof has a fault; false after a deliberate stop between the limits |
+| `PUT openshutter` | Open roof (checks park + weather safety). A repeat while opening succeeds; while closing it's refused (1035) |
+| `PUT closeshutter` | Close roof (checks park). A repeat while closing succeeds; while opening it's refused (1035) |
+| `PUT abortslew` | Stop movement. During the relay start-up it cancels the move before the opener is started |
+| `GET devicestate` | AtHome, AtPark, ShutterStatus, Slewing (omitted on a fault) and TimeStamp in one call |
+| `GET`/`PUT connected`, `PUT connect`/`disconnect`, `GET connecting` | Shared connection (ASCOM hub model): the roof is always connected, so one client disconnecting never disconnects the others. Each client (by ClientID) reads back the `Connected` value it set; nothing is refused because of it. `Connecting` is always false. Writes are logged with the client's IP and ClientID |
+| `GET athome` | Always false |
+| `GET atpark` | True when closed |
+
+Open, close, abort and connection writes are logged with the caller's IP and ClientID.
 
 ---
 
@@ -295,6 +301,21 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 ---
 
 ## Changelog
+
+### v4.1.0 (2026-10-23)
+- **IDomeV3 (ASCOM Platform 7)**: `InterfaceVersion` 3, with `Connect()`, `Disconnect()`, `Connecting` and `DeviceState`.
+- **Shared connection (#12)**: one client disconnecting no longer disconnects every other client (ASCOM hub model). Each client reads back the `Connected` value it set (by ClientID), but nothing is refused because of it: ShutterStatus, Slewing and AbortSlew never return 1031 "Not connected".
+- **Alpaca protocol fixes**: GET parameter names match case-insensitively. ClientID and ClientTransactionID are read as unsigned 32-bit, so negative or non-numeric values become 0. A bad or missing `Connected`/`Slaved` value gets HTTP 400. A successful call carries no error message ("Roof already open" was being sent). DriverVersion returns the full string (it was being returned as the number 4).
+- Passes ConformU 4.5.3 (conformance and Alpaca protocol: 0 issues, 0 errors) on the bench unit; the open/close shutter tests need a real roof.
+- **ASCOM shutter behaviour (#13 phase 2)**:
+  - ShutterStatus reads Opening/Closing and Slewing reads true as soon as a move is accepted, instead of after the 3–4 s relay start-up.
+  - A repeat of the move in progress succeeds instead of returning 1035. The opposite move while moving is still refused (use AbortSlew).
+  - The 5 s start check and the movement timeout run from K2, so the earlier status doesn't shorten them.
+  - AbortSlew during the relay start-up cancels the move before K2, instead of pressing K2 (which would start the roof). During the K2 press it waits for the press to finish, then stops. AbortSlew also clears Slaved.
+  - A stop between the limits reports Error (position unknown) but Slewing reads false, since nothing failed. Before, the roof stayed Opening/Closing until the 90 s timeout.
+- **Limit lost while idle (#11, decision 2)**: no longer inferred as a move. The last known position is held with a logged warning. A sensor fault is reported only if no limit triggers within the movement timeout, and it clears itself when a limit returns.
+- Alpaca open, close, abort and connection writes are logged with the client IP and ClientID; per-poll Slewing lines are verbose-only (they were persisted on every poll).
+- Fix: ShutterStatus and Slewing ran `updateRoofStatus()` from the web task without the roof lock; the roof task keeps the status current.
 
 ### v4.0.2 (2026-10-23)
 - **RTC kept in step with GPS**: the DS3231 is rewritten just after a PPS edge (within 20 ms), at the first edge and then hourly, instead of once per boot from NMEA. While PPS isn't active (no PPS pin, not wired, or lost) it's rewritten hourly from NMEA instead.

@@ -21,7 +21,7 @@ extern bool bypassParkSensor;  // Add bypass park sensor reference
 void setupAlpacaAPI();
 void handleAlpacaDiscovery();
 void setupAlpacaRoutes();
-void sendAlpacaResponse(int clientID, int clientTransactionID, int errorNumber, String errorMessage, String value = "");
+void sendAlpacaResponse(uint32_t clientID, uint32_t clientTransactionID, int errorNumber, String errorMessage, String value = "");
 
 // Management API handlers
 void handleApiVersions();
@@ -36,6 +36,10 @@ void handleRedirectSetup();
 // ASCOM Alpaca Common handlers
 void handleConnected();
 void handleSetConnected();
+void handleConnect();       // IDomeV3
+void handleDisconnect();    // IDomeV3
+void handleConnecting();    // IDomeV3
+void handleDeviceState();   // IDomeV3
 void handleDeviceDescription();
 void handleDriverInfo();
 void handleDriverVersion();
