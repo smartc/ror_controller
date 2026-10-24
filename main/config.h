@@ -223,4 +223,14 @@ enum RoofStatus {
   ROOF_ERROR = 4       // ShutterStatus.shutterError
 };
 
+// Why the firmware is about to restart itself. ESP.restart() always reads back as
+// "Software reset"; noting the cause first lets the next boot name it.
+enum RestartCause : uint8_t {
+  RESTART_CAUSE_NONE = 0,
+  RESTART_CAUSE_OTA,
+  RESTART_CAUSE_WEB,
+  RESTART_CAUSE_FACTORY_RESET
+};
+void noteRestartCause(RestartCause cause);  // main.ino; call just before ESP.restart()
+
 #endif // CONFIG_H

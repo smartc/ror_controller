@@ -62,13 +62,40 @@ unsigned long lastStatusUpdate = 0;
 String lastResetReason = "Unknown";
 uint32_t rebootCount = 0;
 
+// Cause of a deliberate restart, kept in RTC memory: it survives a software reset
+// but not a power cycle, so it's only trusted with the magic and ESP_RST_SW.
+#define RESTART_CAUSE_MAGIC 0x52535400UL  // "RST\0" + cause in the low byte
+RTC_NOINIT_ATTR static uint32_t restartCauseWord;
+
+void noteRestartCause(RestartCause cause) {
+  restartCauseWord = RESTART_CAUSE_MAGIC | cause;
+}
+
+// Reads and clears the noted cause (one boot only)
+static RestartCause takeRestartCause() {
+  uint32_t word = restartCauseWord;
+  restartCauseWord = 0;
+  if ((word & 0xFFFFFF00UL) != RESTART_CAUSE_MAGIC) return RESTART_CAUSE_NONE;
+  return (RestartCause)(word & 0xFF);
+}
+
+static String softwareResetString(RestartCause cause) {
+  switch (cause) {
+    case RESTART_CAUSE_OTA:           return "Software reset (OTA update)";
+    case RESTART_CAUSE_WEB:           return "Software reset (Web UI restart)";
+    case RESTART_CAUSE_FACTORY_RESET: return "Software reset (factory reset)";
+    default:                          return "Software reset";
+  }
+}
+
 // Get human-readable reset reason
 String getResetReasonString() {
   esp_reset_reason_t reason = esp_reset_reason();
+  RestartCause cause = takeRestartCause();
   switch (reason) {
     case ESP_RST_POWERON:   return "Power-on reset";
     case ESP_RST_EXT:       return "External reset (pin)";
-    case ESP_RST_SW:        return "Software reset";
+    case ESP_RST_SW:        return softwareResetString(cause);
     case ESP_RST_PANIC:     return "Exception/panic reset";
     case ESP_RST_INT_WDT:   return "Interrupt watchdog reset";
     case ESP_RST_TASK_WDT:  return "Task watchdog reset";

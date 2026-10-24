@@ -307,6 +307,7 @@ The `PCB Files/` directory contains v3.0 manufacturing files: schematic, layout,
 - **Log flood fixed**: the both-limits error is raised once, instead of re-running the inverter shutdown (and logging "K1 OFF") every 10 ms tick.
 - **Longer log lines**: lines are kept up to 239 characters (was 119) in the console, FRAM and the archive, so long error reasons are no longer cut off.
 - **Complete single-file downloads**: downloading one log file now flushes FRAM to the archive first (as Download all already did), so the latest lines aren't missing.
+- **Restart cause in the reset reason**: a software reset now says why, e.g. "Software reset (OTA update)", "(Web UI restart)" or "(factory reset)". The cause is noted in RTC memory just before the restart.
 - **Boot diagnostics moved**: boot count and last reset reason are shown on the Console page instead of Home. Setup → System Management has a **Clear Boot Count** button (the next boot is #1).
 
 ### v4.1.0 (2026-10-23)

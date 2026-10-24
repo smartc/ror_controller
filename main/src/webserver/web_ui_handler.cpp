@@ -585,6 +585,7 @@ void initWebUI() {
     logWebAction("restart");
     logArchiveFlushNow();  // archive the FRAM backlog first (skipped if the roof is moving)
     delay(1000);
+    noteRestartCause(RESTART_CAUSE_WEB);
     ESP.restart();
   });
 
@@ -612,6 +613,7 @@ void initWebUI() {
 
     Debug.println("All preferences cleared, restarting device...");
     delay(500);
+    noteRestartCause(RESTART_CAUSE_FACTORY_RESET);
     ESP.restart();
   });
 
@@ -693,7 +695,10 @@ void initWebUI() {
   });
   ElegantOTA.onEnd([](bool success) {
     Debug.printf("OTA update %s\n", success ? "complete - restarting" : "FAILED");
-    if (success) logArchiveFlushNow();
+    if (success) {
+      logArchiveFlushNow();
+      noteRestartCause(RESTART_CAUSE_OTA);  // ElegantOTA restarts shortly after this
+    }
   });
 
   // Start server
