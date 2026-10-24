@@ -585,7 +585,19 @@ void initWebUI() {
     logWebAction("restart");
     logArchiveFlushNow();  // archive the FRAM backlog first (skipped if the roof is moving)
     delay(1000);
+    noteRestartCause(RESTART_CAUSE_WEB);
     ESP.restart();
+  });
+
+  // Clear boot count - the next boot is #1. This boot keeps its number, since
+  // its log lines (FRAM and archive) are already tagged with it.
+  webUiServer.on("/clear_boot_count", HTTP_POST, []() {
+    Preferences bootPrefs;
+    bootPrefs.begin("bootDiag", false);
+    bootPrefs.putULong("rebootCount", 0);
+    bootPrefs.end();
+    logWebAction("clear boot count");
+    webUiServer.send(200, "text/plain", "Boot count cleared. The next boot will be #1.");
   });
 
   // Factory reset handler - clears all saved preferences
@@ -601,6 +613,7 @@ void initWebUI() {
 
     Debug.println("All preferences cleared, restarting device...");
     delay(500);
+    noteRestartCause(RESTART_CAUSE_FACTORY_RESET);
     ESP.restart();
   });
 
@@ -682,7 +695,10 @@ void initWebUI() {
   });
   ElegantOTA.onEnd([](bool success) {
     Debug.printf("OTA update %s\n", success ? "complete - restarting" : "FAILED");
-    if (success) logArchiveFlushNow();
+    if (success) {
+      logArchiveFlushNow();
+      noteRestartCause(RESTART_CAUSE_OTA);  // ElegantOTA restarts shortly after this
+    }
   });
 
   // Start server
@@ -1651,6 +1667,7 @@ void handleLogDownload() {
     webUiServer.send(400, "text/plain", "Invalid log file name");
     return;
   }
+  logArchiveFlushNow();  // archive the FRAM backlog first so the file is complete
   File f = logArchiveFS().open(String(LOG_ARCHIVE_DIR "/") + name, "r");
   if (!f) {
     webUiServer.send(404, "text/plain", "Log file not found");

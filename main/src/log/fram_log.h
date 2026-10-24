@@ -20,7 +20,7 @@
 #include <Arduino.h>
 
 #define FRAM_I2C_ADDRESS      0x50
-#define FRAM_LOG_TEXT_MAX     120
+#define FRAM_LOG_TEXT_MAX     240   // record length is one byte: must stay <= 255
 
 struct FramLogRecord {
   uint32_t utc;        // 0 = no time source when logged

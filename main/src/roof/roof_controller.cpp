@@ -58,6 +58,10 @@ static unsigned long limitLostSince = 0;
 // unknown but nothing failed, so Slewing reads false instead of raising.
 static bool roofStoppedBetweenLimits = false;
 
+// ERROR set because both limits read triggered. Raised once (not every tick), and
+// cleared as soon as exactly one limit reads triggered again - a known-good position.
+static bool roofBothLimitsFault = false;
+
 // Stop asked for while K2's start press was in progress: stop once the press completes
 static bool roofStopPending = false;
 
@@ -138,6 +142,7 @@ bool roofStoppedMidTravel() {
 // Status from the limit switches as they read now, after a stop or a cancelled start.
 // Between the limits the position is unknown: ERROR, but flagged as a deliberate stop.
 static void setStatusFromLimits() {
+  roofBothLimitsFault = false;
   bool openNow = (digitalRead(LIMIT_SWITCH_OPEN_PIN) == TRIGGERED);
   bool closedNow = (digitalRead(LIMIT_SWITCH_CLOSED_PIN) == TRIGGERED);
   if (openNow && !closedNow) {
@@ -148,6 +153,7 @@ static void setStatusFromLimits() {
     roofErrorReason = "Both open and closed limit switches are triggered simultaneously. "
                       "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
     roofStatus = ROOF_ERROR;
+    roofBothLimitsFault = true;
   } else {
     roofErrorReason = "Roof stopped between the limits; position unknown. Open or close it to continue.";
     roofStatus = ROOF_ERROR;
@@ -237,6 +243,8 @@ void initializeRoofController() {
 }
 
 void determineInitialRoofStatus() {
+  roofBothLimitsFault = false;  // re-judged from the switches below
+
   // Read switch states multiple times to ensure stability
   int openTriggeredCount = 0;
   int closedTriggeredCount = 0;
@@ -259,6 +267,7 @@ void determineInitialRoofStatus() {
     roofErrorReason = "Controller startup detected both limit switches triggered. "
                       "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
     roofStatus = ROOF_ERROR;
+    roofBothLimitsFault = true;
     Debug.println("INITIAL STATUS: ERROR - Both limit switches triggered!");
   }
   else if (openTriggeredCount >= 3) {
@@ -294,6 +303,12 @@ static bool limitReachedSinceError(unsigned long switchChangedAt) {
   return !roofErrorNeedsAck && (long)(switchChangedAt - roofErrorSince) > 0;
 }
 
+// True if a both-limits error can clear: the other switch has read NOT triggered for
+// SWITCH_STABLE_TIME, so a one-tick dropout doesn't count as a known position.
+static bool bothLimitsFaultCleared(unsigned long otherSwitchChangedAt, unsigned long now) {
+  return roofBothLimitsFault && !roofErrorNeedsAck && now - otherSwitchChangedAt > SWITCH_STABLE_TIME;
+}
+
 // Update roof status based on limit switches
 void updateRoofStatus() {
   unsigned long currentTime = millis();
@@ -305,6 +320,7 @@ void updateRoofStatus() {
   if (!wasInError) {
     roofErrorNeedsAck = false;
     roofStoppedBetweenLimits = false;
+    roofBothLimitsFault = false;
   }
 
   // An accepted move reads OPENING/CLOSING through its relay start-up; the limits
@@ -352,12 +368,15 @@ void updateRoofStatus() {
 
   // Handle clear terminal states first
   if (isOpenLimitTriggered && isClosedLimitTriggered) {
-    // Both switches triggered is an error condition
-    roofErrorReason = "Both open and closed limit switches are triggered simultaneously. "
-                      "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
-    roofStatus = ROOF_ERROR;
-    shutdownInverterPower();
-    statusMessage = "ERROR: Both limit switches triggered!";
+    // Both switches triggered is an error condition (raised once, not every tick)
+    if (!roofBothLimitsFault) {
+      roofErrorReason = "Both open and closed limit switches are triggered simultaneously. "
+                        "This indicates a hardware fault - check limit switch wiring and mechanical alignment.";
+      roofStatus = ROOF_ERROR;
+      roofBothLimitsFault = true;
+      shutdownInverterPower();
+      statusMessage = "ERROR: Both limit switches triggered!";
+    }
   }
   else if (isOpenLimitTriggered) {
     // Open switch is triggered.
@@ -383,7 +402,8 @@ void updateRoofStatus() {
     else if (roofStatus == ROOF_ERROR) {
       // A switch that was already triggered when the error began (e.g. "failed to
       // start") proves nothing; one reached afterwards is a known-good position.
-      if (limitReachedSinceError(lastOpenStateTime)) {
+      if (limitReachedSinceError(lastOpenStateTime) ||
+          bothLimitsFaultCleared(lastClosedStateTime, currentTime)) {
         statusMessage = "Roof reached open limit - clearing error (was: " + roofErrorReason + ")";
         roofErrorReason = "";
         roofStatus = ROOF_OPEN;
@@ -419,7 +439,8 @@ void updateRoofStatus() {
       shutdownInverterPower();
     }
     else if (roofStatus == ROOF_ERROR) {
-      if (limitReachedSinceError(lastClosedStateTime)) {
+      if (limitReachedSinceError(lastClosedStateTime) ||
+          bothLimitsFaultCleared(lastOpenStateTime, currentTime)) {
         statusMessage = "Roof reached closed limit - clearing error (was: " + roofErrorReason + ")";
         roofErrorReason = "";
         roofStatus = ROOF_CLOSED;

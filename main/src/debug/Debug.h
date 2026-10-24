@@ -24,7 +24,7 @@
 void logAppend(const char* text);
 void logGetJSON(String& out);
 
-#define LOG_LINE_MAX 120
+#define LOG_LINE_MAX 240  // long enough for "clearing error (was: <reason>)"; FRAM records cap at 255
 
 // A completed log line on its way to persistent storage (FRAM)
 struct LogLine {
