@@ -588,6 +588,17 @@ void initWebUI() {
     ESP.restart();
   });
 
+  // Clear boot count - the next boot is #1. This boot keeps its number, since
+  // its log lines (FRAM and archive) are already tagged with it.
+  webUiServer.on("/clear_boot_count", HTTP_POST, []() {
+    Preferences bootPrefs;
+    bootPrefs.begin("bootDiag", false);
+    bootPrefs.putULong("rebootCount", 0);
+    bootPrefs.end();
+    logWebAction("clear boot count");
+    webUiServer.send(200, "text/plain", "Boot count cleared. The next boot will be #1.");
+  });
+
   // Factory reset handler - clears all saved preferences
   webUiServer.on("/factory_reset", HTTP_POST, []() {
     webUiServer.send(200, "text/plain", "Factory reset in progress... Device will restart with default settings.");
@@ -1651,6 +1662,7 @@ void handleLogDownload() {
     webUiServer.send(400, "text/plain", "Invalid log file name");
     return;
   }
+  logArchiveFlushNow();  // archive the FRAM backlog first so the file is complete
   File f = logArchiveFS().open(String(LOG_ARCHIVE_DIR "/") + name, "r");
   if (!f) {
     webUiServer.send(404, "text/plain", "Log file not found");

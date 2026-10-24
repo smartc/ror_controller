@@ -2,7 +2,7 @@
  * ESP32 ASCOM Alpaca Roll-Off Roof Controller
  * Debug Utility Implementation
  *
- * Ring buffer: 200 entries x 120 chars = ~26 KB static RAM.
+ * Ring buffer: 200 entries x 240 chars = ~50 KB static RAM.
  * Consecutive identical lines collapse into a single entry with a repeat count.
  * logSeq increments on every change so the browser can poll cheaply.
  *

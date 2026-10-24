@@ -327,6 +327,17 @@ inline String getControlJS() {
     "}\n"
 
     // Factory reset function
+    "function clearBootCount() {\n"
+    "  if (confirm('Reset the boot count? The next boot will be #1.')) {\n"
+    "    fetch('/clear_boot_count', { method: 'POST' })\n"
+    "      .then(response => response.text())\n"
+    "      .then(text => alert(text))\n"
+    "      .catch(err => {\n"
+    "        console.error('Error:', err);\n"
+    "      });\n"
+    "  }\n"
+    "}\n"
+    "\n"
     "function factoryReset() {\n"
     "  if (confirm('WARNING: This will erase ALL saved settings including WiFi credentials, MQTT settings, and device configuration.\\n\\nThe device will restart and enter AP mode with default settings.\\n\\nAre you sure you want to continue?')) {\n"
     "    if (confirm('This action cannot be undone. Click OK to confirm factory reset.')) {\n"
@@ -637,19 +648,6 @@ inline String getHomePage(RoofStatus status, bool isApMode = false) {
   html += "<tr><th>MAC Address</th><td>" + wifiMacAddress() + "</td></tr>\n";
   html += "<tr><th>Firmware Version</th><td>" + String(DEVICE_VERSION) + "</td></tr>\n";
   html += "<tr><th>Uptime</th><td id='hUptime'>" + String(millis() / 1000 / 60) + " minutes</td></tr>\n";
-
-  // Reset diagnostics - helpful for debugging field issues
-  String resetClass = "green";
-  if (lastResetReason.indexOf("BROWNOUT") >= 0) resetClass = "red";
-  else if (lastResetReason.indexOf("panic") >= 0 || lastResetReason.indexOf("watchdog") >= 0) resetClass = "red";
-  else if (lastResetReason.indexOf("Power-on") >= 0) resetClass = "green";
-
-  html += "<tr><th>Last Reset Reason</th><td>";
-  html += "<span class='status-indicator " + resetClass + "'></span> ";
-  html += lastResetReason;
-  html += "</td></tr>\n";
-  html += "<tr><th>Reboot Count</th><td>" + String(rebootCount) + "</td></tr>\n";
-
   html += "</table>\n";
   html += "</div>\n";
   
@@ -2120,7 +2118,10 @@ inline String getSystemManagementCard() {
   html += "<div class='button-row'>";
   html += "<button onclick='restartDevice()' class='button-danger'>Restart Device</button>";
   html += "<a href='/force_discovery' style='text-decoration: none;'><button class='button-primary'>Force Discovery</button></a>";
+  html += "<button onclick='clearBootCount()' class='button-primary'>Clear Boot Count</button>";
   html += "</div>";
+  html += "<p style='font-size: 0.8em; color: #b0b0b0; margin-top: 5px;'>Boot count: " + String(rebootCount) +
+          ". Clearing it makes the next boot #1 (shown on the Console page and in log lines).</p>";
 
   html += "<div class='button-row' style='margin-top: 15px;'>";
   html += "<button onclick='factoryReset()' class='button-danger' style='background-color: #8b0000;'>Factory Reset</button>";
@@ -2758,6 +2759,19 @@ inline String getConsolePage() {
     "(survives power loss) and copied to flash every 15 minutes. Flash files are kept for 90 days, "
     "2 MB total, oldest deleted first. Downloads and flushes are refused while the roof is moving.</p>\n"
     "</div>\n";
+
+  // Reset diagnostics - helpful for debugging field issues
+  String resetClass = "green";
+  if (lastResetReason.indexOf("BROWNOUT") >= 0) resetClass = "red";
+  else if (lastResetReason.indexOf("panic") >= 0 || lastResetReason.indexOf("watchdog") >= 0) resetClass = "red";
+
+  html += "<div class='card'>\n";
+  html += "<table class='status-table'>\n";
+  html += "<tr><th>Boot Count</th><td>" + String(rebootCount) + "</td></tr>\n";
+  html += "<tr><th>Last Reset Reason</th><td><span class='status-indicator " + resetClass + "'></span> " +
+          lastResetReason + "</td></tr>\n";
+  html += "</table>\n";
+  html += "</div>\n";
 
   html += R"rawjs(
 <style>
